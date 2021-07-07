@@ -1,2 +1,2 @@
 # go-ayame
-An implementation of ayame
+An implementation of ayame by Go language
