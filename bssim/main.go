@@ -65,7 +65,6 @@ func correctEntryRatio(nodes []*BSNode) float64 {
 }*/
 
 func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, count int) float64 {
-
 	src := msg.Sender().(*BSNode)
 	var dst *BSNode
 	for _, dstNode := range msg.root.destinations {
@@ -122,7 +121,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 	//DummyNodes = make([]*MIRONode, 0, numberOfNodes)
 	for i := 0; i < numberOfNodes; i++ {
 		var n *BSNode
-		mv := ayame.NewMembershipVector(2)
+		mv := ayame.NewMembershipVector(byzskip.ALPHA)
 		//dummyNode := NewMIRONode(i, mv)
 		switch FailureType {
 		case F_CALC:
@@ -150,27 +149,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			}
 		}
 		nodes = append(nodes, n)
-		//DummyNodes = append(DummyNodes, dummyNode)
 	}
-
-	//	err := FastJoinAll(DummyNodes)
-	//if err != nil {
-	//		fmt.Printf("join failed:%s\n", err)
-	//	}
-	/*
-		if *verbose {
-			fmt.Printf("==========\n")
-			for _, n := range DummyNodes {
-				fmt.Println("*key=" + strconv.Itoa(n.key) + " [" + strconv.Itoa(n.key) + "]\n" + n.routingTableString())
-			}
-			fmt.Printf("==========\n")
-		}*/
-	// join time none
-
-	// ****
-	//bak := FailureType
-	//FailureType = F_NONE
-	// ****
 
 	if *useCheatJoin {
 		err := FastJoinAll(nodes)
@@ -183,16 +162,6 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			fmt.Printf("join failed:%s\n", err)
 		}
 	}
-
-	/*
-		ayame.Log.Infof("correct-entry-ratio: %d %f\n", convergeTimes, correctEntryRatio(nodes))
-	*/
-	// restore for afterwards
-	// ***
-	//FailureType = bak
-	// ****
-	//aves, _ := stats.Mean(funk.Map(nodes, func(n *KADNode) float64 { return float64(n.routingTable.table.Size()) }).([]float64))
-	//ayame.Log.Infof("avg. routing table size: %f\n", aves)
 	return nodes
 }
 
@@ -206,6 +175,7 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 	sumMsgs := 0
 	sumLMsgs := 0
 	count := 0
+	prev := 0
 	for i, n := range nodes {
 		if !*adversarialNet && n.isFailure {
 			AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
@@ -217,9 +187,11 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 			sumLMsgs += lmsgs
 		}
 		count++
-		if count%100 == 0 {
-			fmt.Printf("%s %d th node\n", time.Now(), count)
+		percent := 100 * count / len(nodes)
+		if percent/10 != prev {
+			fmt.Printf("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
 		}
+		prev = percent / 10
 	}
 	ayame.Log.Infof("avg-join-lookup-msgs: %d %f %f\n", len(nodes), *failureRatio, float64(sumLMsgs)/float64(len(nodes)))
 	if UseIterativeJoin {
@@ -245,18 +217,18 @@ func meanOfPathLength(lst [][]PathEntry) (float64, error) {
 }
 
 func main() {
-	alpha = flag.Int("alpha", 2, "the parallelism parameter")
+	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
-	numberOfTrials = flag.Int("trials", -1, "number of trials (-1 means same as nodes)")
+	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|calc}")
 	failureRatio = flag.Float64("f", 0.2, "failure ratio")
 	useCheatJoin = flag.Bool("cheatjoin", false, "use cheat join (cannot evaluate join)")
 	useIterativeJoin = flag.Bool("i", false, "use iterative search with join (ignored when -cheatjoin)")
 	useRecursive = flag.Bool("r", false, "use recursive routing in unicast (with -type calc)")
-	adversarialNet = flag.Bool("adv", false, "use adversarial net (with -type collab)")
+	adversarialNet = flag.Bool("adv", true, "use adversarial net (with -type collab)")
 	seed = flag.Int64("seed", 2, "give a random seed")
-	verbose = flag.Bool("v", true, "verbose output")
+	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
 
@@ -315,7 +287,6 @@ func main() {
 	}
 
 	if *useRecursive {
-
 		msgs := []*BSUnicastEvent{}
 		for i := 1; i <= trials; i++ {
 			src := rand.Intn(*numberOfNodes)
@@ -406,5 +377,4 @@ func main() {
 	}
 
 	ayame.Log.Infof("avg-table-size: %d %f\n", *numberOfNodes, meanOfInt(table_sizes))
-
 }

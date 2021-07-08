@@ -17,6 +17,7 @@ var dValue *int
 var numberOfNodes *int
 var numberOfTrials *int
 var convergeTimes *int
+var honestJoin *bool
 var failureType *string
 var failureRatio *float64
 var adversarialNet *bool
@@ -51,8 +52,11 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 	}
 	// join time none
 	//****
-	//bak := FailureType
-	//FailureType = F_NONE
+	var bak int
+	if *honestJoin {
+		bak = FailureType
+		FailureType = F_NONE
+	}
 	//****
 
 	//err := FastJoinAll(nodes, alpha)
@@ -61,9 +65,10 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 	if err != nil {
 		fmt.Printf("join failed:%s\n", err)
 	}
-	// restore for afterwards
-	//****
-	//FailureType = bak
+	// restore the failure type for search time
+	if *honestJoin {
+		FailureType = bak
+	}
 	//****
 	//aves, _ := stats.Mean(funk.Map(nodes, func(n *KADNode) float64 { return float64(n.routingTable.table.Size()) }).([]float64))
 	//ayame.Log.Infof("avg. routing table size: %f\n", aves)
@@ -143,14 +148,15 @@ func main() {
 	alpha = flag.Int("alpha", 1, "the parallelism parameter")
 	kValue = flag.Int("k", 8, "the bucket size parameter")
 	dValue = flag.Int("d", 4, "the disjoint path parameter")
-	numberOfNodes = flag.Int("nodes", 10000, "number of nodes")
-	numberOfTrials = flag.Int("trials", -1, "number of trials (-1 means same as nodes)")
-	convergeTimes = flag.Int("c", 3, "converge times")
+	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
+	convergeTimes = flag.Int("c", 1, "converge times")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab}")
-	failureRatio = flag.Float64("f", 0.05, "failure ratio")
+	failureRatio = flag.Float64("f", 0.3, "failure ratio")
+	honestJoin = flag.Bool("hj", true, "join honestly (no failure at join time)")
 	adversarialNet = flag.Bool("adv", true, "use an adversarial network for collaborative attack")
 	seed = flag.Int64("seed", 1, "give a random seed")
-	verbose = flag.Bool("v", true, "verbose output")
+	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
 

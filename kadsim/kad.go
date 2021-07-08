@@ -16,10 +16,6 @@ import (
 	"github.com/thoas/go-funk"
 )
 
-const (
-//	K = 16 // Ethereum's default
-)
-
 var NoOpThreshold = 100 * time.Hour
 
 type KADRoutingTable struct {
