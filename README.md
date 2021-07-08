@@ -9,6 +9,5 @@ Simulators
 
 Libraries
 
-* ayame - An ayame implementation
-* graph - A tiny graph tool
+* ayame - Ayame modules by Go
 * byzskip - ByzSkip modules
