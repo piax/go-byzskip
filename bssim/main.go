@@ -111,7 +111,7 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 			failures++
 			ayame.Log.Debugf("dst node not found\n")
 		} else {
-			ayame.Log.Debugf("reached path: %s\n", NodeSliceString(reached))
+			ayame.Log.Debugf("reached path: %s\n", ayame.SliceString(reached))
 		}
 	}
 	return float64(failures) / float64(count)
@@ -212,7 +212,7 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 		}
 		if index != i {
 			rets, _, msgs, _, lmsgs, _ := FastNodeLookup(n, nodes[index])
-			ayame.Log.Debugf("%d: rets %s\n", n.key, NodeSliceString(rets))
+			ayame.Log.Debugf("%d: rets %s\n", n.key, ayame.SliceString(rets))
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
 		}
@@ -256,7 +256,7 @@ func main() {
 	useRecursive = flag.Bool("r", false, "use recursive routing in unicast (with -type calc)")
 	adversarialNet = flag.Bool("adv", false, "use adversarial net (with -type collab)")
 	seed = flag.Int64("seed", 2, "give a random seed")
-	verbose = flag.Bool("v", false, "verbose output")
+	verbose = flag.Bool("v", true, "verbose output")
 
 	flag.Parse()
 
@@ -342,7 +342,7 @@ func main() {
 				if ContainsKey(msg.targetKey, msg.root.destinations) {
 					success++
 				} else {
-					ayame.Log.Infof("%s->%d: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, NodeSliceString(msg.root.destinations))
+					ayame.Log.Infof("%s->%d: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, ayame.SliceString(msg.root.destinations))
 				}
 				close(msg.root.channel)
 			}(msg)
@@ -388,7 +388,7 @@ func main() {
 			}
 			if failure {
 				failures++
-				ayame.Log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, NodeSliceString(founds))
+				ayame.Log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
 			ayame.Log.Debugf("%d->%d: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 		}

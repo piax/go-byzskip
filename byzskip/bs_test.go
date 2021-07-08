@@ -27,5 +27,5 @@ func TestSorted(t *testing.T) {
 	rt.Add(&IntKeyMV{Intkey: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
 	rt.Add(&IntKeyMV{Intkey: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
 	rslt := rt.GetCloserCandidates()
-	fmt.Println(KeyMVSliceString(rslt))
+	fmt.Println(ayame.SliceString(rslt))
 }

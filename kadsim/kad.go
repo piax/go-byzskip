@@ -186,6 +186,10 @@ func (n *KADNode) equals(m *KADNode) bool {
 	return n.id == m.id
 }
 
+func (n *KADNode) String() string {
+	return strconv.Itoa(n.number)
+}
+
 //func PickNotQueried(from []*KadNode, queried []dht.ID) []*KadNode {
 //	ret := []*KadNode{}
 //	for _, v := range queried {
@@ -249,18 +253,6 @@ func matchNode(id kbucket.ID, nodes []*KADNode) *KADNode {
 		}
 	}
 	return nil
-}
-
-func NodeSliceString(lst []*KADNode) string {
-	ret := "["
-	for i, l := range lst {
-		ret += strconv.Itoa(l.number)
-		if i != len(lst)-1 {
-			ret += ", "
-		}
-	}
-	ret += "]"
-	return ret
 }
 
 var FailureType int

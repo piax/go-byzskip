@@ -150,7 +150,7 @@ func main() {
 	failureRatio = flag.Float64("f", 0.05, "failure ratio")
 	adversarialNet = flag.Bool("adv", true, "use an adversarial network for collaborative attack")
 	seed = flag.Int64("seed", 1, "give a random seed")
-	verbose = flag.Bool("v", false, "verbose output")
+	verbose = flag.Bool("v", true, "verbose output")
 
 	flag.Parse()
 

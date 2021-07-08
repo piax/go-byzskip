@@ -63,7 +63,7 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 	dq.hops++
 	dq.curKNodes = dq.queryTable.getNearestNodes(id, k)
 	dq.updateFinished(queried)
-	ayame.Log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops_to_match, len(curNodes), NodeSliceString(curNodes))
+	ayame.Log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops_to_match, len(curNodes), ayame.SliceString(curNodes))
 	return queried
 }
 
@@ -123,7 +123,7 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 		}
 		maxHops = math.Max(float64(dq.hops), float64(maxHops))
 		msgs += dq.msgs
-		ayame.Log.Debugf("%d th: result=%s\n", dq.index, NodeSliceString(dq.curKNodes))
+		ayame.Log.Debugf("%d th: result=%s\n", dq.index, ayame.SliceString(dq.curKNodes))
 	}
 	qt := NewKADRoutingTableForQuery(id, k)
 	for _, q := range queried {
@@ -132,6 +132,6 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
 	ret := qt.getNearestNodes(id, k)
-	ayame.Log.Debugf("result=%s\n", NodeSliceString(ret))
+	ayame.Log.Debugf("result=%s\n", ayame.SliceString(ret))
 	return ret, maxHops, msgs, minHopsToMatch, !success
 }

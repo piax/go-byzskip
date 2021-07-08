@@ -142,6 +142,6 @@ func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, NodeSliceString(kNodes), level)
+	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs
 }

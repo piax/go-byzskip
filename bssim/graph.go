@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/piax/go-ayame/ayame"
+)
 
 type Array []*BSNode
 type Graph map[int][]*BSNode
@@ -16,7 +20,7 @@ func (arr Array) hasPropertyOf(node *BSNode) bool {
 
 func (graph Graph) Dump() {
 	for k, v := range graph {
-		fmt.Printf("%d: %s\n", k, NodeSliceString(v))
+		fmt.Printf("%d: %s\n", k, ayame.SliceString(v))
 	}
 }
 

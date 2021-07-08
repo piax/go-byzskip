@@ -36,7 +36,11 @@ func (n *BSNode) Equals(m bs.KeyMV) bool {
 }
 
 func (n *BSNode) String() string {
-	return strconv.Itoa(n.Key())
+	ret := strconv.Itoa(n.Key())
+	if n.isFailure {
+		ret += "*"
+	}
+	return ret
 }
 
 type BSRoutingTable struct {
@@ -256,33 +260,6 @@ func appendNodesIfMissing(lst []*BSNode, nodes []*BSNode) []*BSNode {
 	return lst
 }
 
-func NodeSliceString(lst []*BSNode) string {
-	ret := "["
-	for i, l := range lst {
-		ret += l.String()
-		if l.isFailure {
-			ret += "*"
-		}
-		if i != len(lst)-1 {
-			ret += ", "
-		}
-	}
-	ret += "]"
-	return ret
-}
-
-func IntSliceString(lst []int) string {
-	ret := "["
-	for i, l := range lst {
-		ret += strconv.Itoa(l)
-		if i != len(lst)-1 {
-			ret += ", "
-		}
-	}
-	ret += "]"
-	return ret
-}
-
 var FailureType int
 
 func FastLookup(key int, source *BSNode) ([]*BSNode, int, int, int, bool) {
@@ -313,7 +290,7 @@ func FastLookup(key int, source *BSNode) ([]*BSNode, int, int, int, bool) {
 		for _, next := range nexts {
 			msgs++
 			curNeighbors, curLevel := next.FastFindKey(key)
-			ayame.Log.Debugf("neighbors for %d = %s\n", key, NodeSliceString(neighbors))
+			ayame.Log.Debugf("neighbors for %d = %s\n", key, ayame.SliceString(neighbors))
 			msgs++
 			queried = append(queried, next)
 			if curLevel == 0 {
@@ -323,7 +300,7 @@ func FastLookup(key int, source *BSNode) ([]*BSNode, int, int, int, bool) {
 				}
 			}
 			neighbors = appendNodesIfMissing(neighbors, curNeighbors)
-			ayame.Log.Debugf("hops=%d, queried=%d, neighbors=%s\n", hops, len(queried), NodeSliceString(neighbors))
+			ayame.Log.Debugf("hops=%d, queried=%d, neighbors=%s\n", hops, len(queried), ayame.SliceString(neighbors))
 		}
 		hops++ // response
 	}
@@ -345,7 +322,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 	msgs++
 	//neighbors, level, candidates := //source.routingTable.GetNeighborsAndCandidates(target.keyMV)
 	neighbors, level, candidates := source.FastFindNode(target)
-	ayame.Log.Debugf("queried %d, neighbors for %d = %s\n", source.Key(), target.Key(), NodeSliceString(neighbors))
+	ayame.Log.Debugf("queried %d, neighbors for %d = %s\n", source.Key(), target.Key(), ayame.SliceString(neighbors))
 	hops++
 	msgs++ // response
 
@@ -356,7 +333,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		rets = append(rets, neighbors...)
 		if hops_to_match < 0 {
 			hops_to_match = hops
-			ayame.Log.Debugf("found %d's level 0: %s\n", target.Key(), NodeSliceString(rets))
+			ayame.Log.Debugf("found %d's level 0: %s\n", target.Key(), ayame.SliceString(rets))
 		}
 	}
 	for _, c := range candidates {
@@ -372,21 +349,21 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		for _, next := range nexts {
 			msgs++
 			curNeighbors, curLevel, curCandidates := next.FastFindNode(target)
-			ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), NodeSliceString(curCandidates))
+			ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curCandidates))
 			msgs++
 			queried = append(queried, next)
 			if curLevel == 0 {
 				rets = appendIfMissing(rets, next)
 				if hops_to_match < 0 {
 					hops_to_match = hops
-					ayame.Log.Debugf("found %d's level 0: %s\n", target.Key(), NodeSliceString(rets))
+					ayame.Log.Debugf("found %d's level 0: %s\n", target.Key(), ayame.SliceString(rets))
 				}
 			}
 			for _, c := range curCandidates {
 				target.routingTable.Add(c)
 			}
 			neighbors = appendNodesIfMissing(neighbors, curNeighbors)
-			ayame.Log.Debugf("hops=%d, queried=%d, neighbors=%s\n", hops, len(queried), NodeSliceString(neighbors))
+			ayame.Log.Debugf("hops=%d, queried=%d, neighbors=%s\n", hops, len(queried), ayame.SliceString(neighbors))
 		}
 		hops++ // response
 	}
@@ -403,7 +380,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		queried = []*BSNode{}
 	}
 	//processed := []*BSNode{}
-	ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", target.Key(), NodeSliceString(candidates), NodeSliceString(queried))
+	ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", target.Key(), ayame.SliceString(candidates), ayame.SliceString(queried))
 
 	for len(candidates) != 0 {
 		next := candidates[0]
@@ -411,7 +388,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		// XXX use message
 		msgs++
 		newCandidates := next.FastJoinRequest(target)
-		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), NodeSliceString(newCandidates))
+		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), ayame.SliceString(newCandidates))
 		msgs++
 		queried = append(queried, next)
 
@@ -423,7 +400,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		candidates = ksToNs(target.routingTable.GetCloserCandidates()) //append(candidates, newCandidates...)
 		candidates = UnincludedNodes(candidates, queried)
 		//candidates = UnincludedNodes(candidates, processed)
-		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), NodeSliceString(candidates))
+		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
 	}
 	ayame.Log.Debugf("%d: join-msgs %d\n", target.Key(), msgs)
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
@@ -472,7 +449,7 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 			msg.root.finishTime = sev.Time()
 		} else {
 			if len(msg.root.results) >= msg.root.expectedNumberOfResults {
-				ayame.Log.Debugf("redundant result exists: %s\n", NodeSliceString(msg.root.results))
+				ayame.Log.Debugf("redundant result exists: %s\n", ayame.SliceString(msg.root.results))
 			} else {
 				ayame.Log.Debugf("wait for another result: currently %d\n", len(msg.root.destinations))
 			}

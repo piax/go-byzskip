@@ -455,24 +455,12 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 //	return strconv.Itoa(km.key)
 //}
 
-func KeyMVSliceString(lst []KeyMV) string {
-	ret := "["
-	for i, l := range lst {
-		ret += strconv.Itoa(l.Key())
-		if i != len(lst)-1 {
-			ret += ", "
-		}
-	}
-	ret += "]"
-	return ret
-}
-
 func (rts *NeighborList) pickupKNodes(target int) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
 		return closestKNodes(target, nodes), true
 	} else {
-		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, KeyMVSliceString(nodes))
+		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		if len(nodes) < K { // if number of nodes is less than K, return all
 			return nodes, true
 		}
