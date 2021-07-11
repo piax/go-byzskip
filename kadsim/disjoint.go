@@ -92,7 +92,14 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	msgs := 0
 	success := false
 
+	imsgs := 0 // initial find_node msgs
+	ihops := 0
+
+	imsgs++
+	ihops++
 	initialKNodes := source.FastFindNode(id, source, k)
+	imsgs++
+	ihops++
 
 	pos := 0
 	// distribute to d query contexts.
@@ -129,9 +136,13 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	for _, q := range queried {
 		qt.Add(q)
 	}
-
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
 	ret := qt.getNearestNodes(id, k)
 	ayame.Log.Debugf("result=%s\n", ayame.SliceString(ret))
+
+	// initial FIND_NODE
+	maxHops += float64(ihops)
+	msgs += imsgs
+
 	return ret, maxHops, msgs, minHopsToMatch, !success
 }
