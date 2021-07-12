@@ -19,9 +19,9 @@ func (an *LocalNode) SendEvent(ev SchedEvent) {
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 }
 
-func (an *LocalNode) Sched(ev SchedEvent) {
+func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	ev.SetSender(an)
-	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
+	GlobalEventExecutor.RegisterEvent(ev, time)
 }
 
 type LocalNode struct {

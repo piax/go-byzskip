@@ -22,7 +22,7 @@ var failureRatio *float64
 var useIterativeJoin *bool
 var useCheatJoin *bool
 var useRecursive *bool
-var adversarialNet *bool
+var useAdversarialNet *bool
 var seed *int64
 var verbose *bool
 
@@ -141,7 +141,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			//}
 			n = NewBSNode(i, mv, f)
 			if f {
-				if *adversarialNet {
+				if *useAdversarialNet {
 					AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
 				}
 			} else {
@@ -177,7 +177,7 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 	count := 0
 	prev := 0
 	for i, n := range nodes {
-		if !*adversarialNet && n.isFailure {
+		if !*useAdversarialNet && n.isFailure {
 			AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
 		}
 		if index != i {
@@ -193,11 +193,11 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 		}
 		prev = percent / 10
 	}
-	ayame.Log.Infof("avg-join-lookup-msgs: %d %f %f\n", len(nodes), *failureRatio, float64(sumLMsgs)/float64(len(nodes)))
+	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(len(nodes)))
 	if UseIterativeJoin {
-		ayame.Log.Infof("avg-iterative-join-msgs: %d %f %f\n", len(nodes), *failureRatio, float64(sumMsgs)/float64(len(nodes)))
+		ayame.Log.Infof("avg-iterative-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 	} else {
-		ayame.Log.Infof("avg-join-msgs: %d %f %f\n", len(nodes), *failureRatio, float64(sumMsgs)/float64(len(nodes)))
+		ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 	}
 
 	ncount := 0
@@ -216,17 +216,30 @@ func meanOfPathLength(lst [][]PathEntry) (float64, error) {
 	return stats.Mean(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
 }
 
+var paramsString string
+
+func (node *BSNode) FindNeighbors(introducer *BSNode, key int) []*BSNode {
+	msg := NewBSUnicastEvent(introducer, ayame.MembershipVectorSize, key)
+	node.SendEvent(msg)
+	node.Sched(ayame.NewSchedEventWithJob(func() {
+		ayame.Log.Debugf("id=%d,src=%d, dst=%d timed out\n", msg.messageId, introducer, key)
+		msg.root.channel <- true
+	}), 200)
+	<-msg.channel
+	return msg.results
+}
+
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 128, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|calc}")
 	failureRatio = flag.Float64("f", 0.2, "failure ratio")
 	useCheatJoin = flag.Bool("cheatjoin", false, "use cheat join (cannot evaluate join)")
 	useIterativeJoin = flag.Bool("i", false, "use iterative search with join (ignored when -cheatjoin)")
 	useRecursive = flag.Bool("r", false, "use recursive routing in unicast (with -type calc)")
-	adversarialNet = flag.Bool("adv", true, "use adversarial net (with -type collab)")
+	useAdversarialNet = flag.Bool("adv", true, "use adversarial net (with -type collab)")
 	seed = flag.Int64("seed", 2, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -257,6 +270,26 @@ func main() {
 	case "calc":
 		FailureType = F_CALC
 	}
+
+	trials := *numberOfNodes
+	if *numberOfTrials > 0 {
+		trials = *numberOfTrials
+	}
+
+	var advString string
+	if *useAdversarialNet {
+		advString = "adv"
+	} else {
+		advString = "non-adv"
+	}
+	var recString string
+	if *useRecursive {
+		recString = "recur"
+	} else {
+		recString = "iter"
+	}
+	paramsString = fmt.Sprintf("%d %d %d %.2f %s %s %s", *numberOfNodes, *kValue, *alpha, *failureRatio, *failureType, advString, recString)
+
 	/* comment out if we do profiling
 	f, _ := os.Create("cpu.pprof")
 
@@ -280,11 +313,6 @@ func main() {
 	nums_msgs := []int{}
 	match_lengths := []float64{}
 	failures := 0
-
-	trials := *numberOfNodes
-	if *numberOfTrials > 0 {
-		trials = *numberOfTrials
-	}
 
 	if *useRecursive {
 		msgs := []*BSUnicastEvent{}
@@ -328,13 +356,9 @@ func main() {
 			return avg
 		}).([]float64))
 		counts := ayame.GlobalEventExecutor.EventCount
-		if *useRecursive {
-			ayame.Log.Infof("avg-rec-match-hops: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, ave)
-			ayame.Log.Infof("avg-rec-msgs: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, float64(counts)/float64(trials))
-		} else {
-			ayame.Log.Infof("avg-match-hops: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, ave)
-			ayame.Log.Infof("avg-msgs: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, float64(counts)/float64(trials))
-		}
+
+		ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, ave)
+		ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, float64(counts)/float64(trials))
 		if FailureType == F_CALC {
 			// XXX
 			probSum := 0.0
@@ -342,9 +366,9 @@ func main() {
 			for _, msg := range msgs {
 				probSum += ComputeProbabilityMonteCarlo(msg, *failureRatio, count)
 			}
-			ayame.Log.Infof("avg-success-ratio: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, 1-probSum/float64(len(msgs)))
+			ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-probSum/float64(len(msgs)))
 		} else {
-			ayame.Log.Infof("success-ratio: %d %d %f %f\n", *numberOfNodes, *kValue, *failureRatio, float64(success)/float64(trials))
+			ayame.Log.Infof("success-ratio: %s %f\n", paramsString, float64(success)/float64(trials))
 		}
 	} else {
 		for i := 1; i <= trials; i++ {
@@ -364,11 +388,11 @@ func main() {
 			ayame.Log.Debugf("%d->%d: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 		}
 		pmean, _ := stats.Mean(path_lengths)
-		ayame.Log.Infof("avg-paths-length: %d %f %f\n", *numberOfNodes, *failureRatio, pmean)
+		ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
 		hmean, _ := stats.Mean(match_lengths)
-		ayame.Log.Infof("avg-match-hops: %d %f %f\n", *numberOfNodes, *failureRatio, hmean)
-		ayame.Log.Infof("avg-msgs: %d %f %f\n", *numberOfNodes, *failureRatio, meanOfInt(nums_msgs))
-		ayame.Log.Infof("success-ratio: %d %f %f\n", *numberOfNodes, *failureRatio, 1-float64(failures)/float64(trials))
+		ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+		ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 	}
 	table_sizes := []int{}
 	for _, node := range nodes {
@@ -376,5 +400,5 @@ func main() {
 		table_sizes = append(table_sizes, node.routingTable.Size())
 	}
 
-	ayame.Log.Infof("avg-table-size: %d %f\n", *numberOfNodes, meanOfInt(table_sizes))
+	ayame.Log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
 }
