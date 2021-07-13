@@ -262,6 +262,7 @@ func larger(base int, max int, kmx, kmy int) bool {
 	return xval > yval
 }
 
+// much faster version of SortCircular
 func SortC(base int, kms []KeyMV) {
 	max := maxNode(kms).Key()
 	eNum := len(kms)
@@ -274,8 +275,7 @@ func SortC(base int, kms []KeyMV) {
 	}
 }
 
-// nodes is modified
-func sortCircular(base int, kms []KeyMV) {
+func SortCircular(base int, kms []KeyMV) {
 	max := maxNode(kms)
 	sort.Slice(kms, func(x, y int) bool {
 		var xval, yval int
@@ -429,14 +429,22 @@ func min(x, y int) int {
 	return y
 }
 
-func closestKNodes(target int, nodes []KeyMV) []KeyMV {
-	sortedNodes := append([]KeyMV{}, nodes...)
+func closestKNodesDisjoint(target int, nodes []KeyMV) []KeyMV {
+	sortedNodes := uniqueNodes(nodes) //append([]KeyMV{}, nodes...)
 	SortC(target, sortedNodes)
 	leftLen := min(len(sortedNodes), LEFT_HALF_K)
 	rightLen := min(len(sortedNodes)-leftLen, RIGHT_HALF_K)
 	lefts := sortedNodes[len(sortedNodes)-leftLen:]
 	rights := sortedNodes[:rightLen]
 	return append(lefts, rights...)
+}
+
+func uniqueNodes(nodes []KeyMV) []KeyMV {
+	ret := []KeyMV{}
+	for _, n := range nodes {
+		ret = appendIfMissing(ret, n)
+	}
+	return ret
 }
 
 func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
@@ -458,7 +466,8 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 func (rts *NeighborList) pickupKNodes(target int) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
-		return closestKNodes(target, nodes), true
+		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
+		return closestKNodesDisjoint(target, nodes), true
 	} else {
 		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		if len(nodes) < K { // if number of nodes is less than K, return all
@@ -467,6 +476,7 @@ func (rts *NeighborList) pickupKNodes(target int) ([]KeyMV, bool) {
 		for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
 			curNode := nodes[i].Key()
 			nextNode := nodes[i+1].Key()
+			ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
 			if isOrdered(curNode, true, target, nextNode, false) {
 				return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], true
 			}

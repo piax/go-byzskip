@@ -1,6 +1,8 @@
 package ayame
 
-import "container/heap"
+import (
+	"container/heap"
+)
 
 type EventExecutor struct {
 	scheduled  EventQueue
@@ -20,14 +22,15 @@ func NewEventExecutor() *EventExecutor {
 
 func (ee *EventExecutor) Reset() {
 	ee.EventCount = 0
+	ee.finishCh = make(chan bool)
+	ee.time = 0
 }
 
 func (ee *EventExecutor) RunForever() {
 	ee.running = true
 	for ee.scheduled.Len() > 0 && ee.running {
 		sev := heap.Pop(&ee.scheduled).(SchedEvent)
-		//Log.Debugf("got next event time:%d\n", sev.Time())
-		if sev.Receiver() != nil {
+		if sev.Receiver() != nil { // not a timeout event
 			ee.EventCount++
 		}
 		ee.time = sev.Time()

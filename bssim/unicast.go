@@ -135,8 +135,10 @@ func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
 		}
 	}*/
 
-	ks, lv := myNode.routingTable.GetNeighbors(ev.targetKey)
-	kNodes = ksToNs(ks)
+	//ks, lv := myNode.routingTable.GetNeighbors(ev.targetKey)
+	//kNodes = ksToNs(ks)
+	ks, lv := myNode.GetNeighbors(ev.targetKey)
+	kNodes = ks
 	level = lv
 
 	for _, n := range kNodes {

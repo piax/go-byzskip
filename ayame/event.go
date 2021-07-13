@@ -74,6 +74,11 @@ type AbstractSchedEvent struct {
 	AbstractEvent
 }
 
+type AsyncJobEvent struct {
+	asyncJob func(chan bool)
+	AbstractSchedEvent
+}
+
 //func (n LocalNode) Sched(delay int64, job func(node Node)) SchedEvent {
 //ev := NewSchedEvent(job)
 //GlobalEventExecutor.RegisterEvent(ev, delay)
@@ -86,6 +91,16 @@ func NewSchedEvent() *AbstractSchedEvent {
 
 func NewSchedEventWithJob(job func()) *AbstractSchedEvent {
 	return &AbstractSchedEvent{AbstractEvent: *NewEvent(), job: job, isCanceled: false}
+}
+
+func NewAsyncJobEvent(job func(chan bool)) *AsyncJobEvent {
+	return &AsyncJobEvent{AbstractSchedEvent: *NewSchedEvent(), asyncJob: job}
+}
+
+func (aj *AsyncJobEvent) Run(node Node) {
+	ch := make(chan bool)
+	aj.asyncJob(ch)
+	<-ch // wait for the job
 }
 
 func (se *AbstractSchedEvent) Run(node Node) {

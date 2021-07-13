@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/piax/go-ayame/ayame"
 )
@@ -87,4 +88,41 @@ func (graph Graph) PathExists(start *BSNode, end *BSNode, path Array) (Array, bo
 		}
 	}
 	return nil, false
+}
+
+func CalcProbabilityMonteCarlo(paths [][]PathEntry, src *BSNode, dst *BSNode, failureRatio float64, count int) float64 {
+
+	graph := make(Graph)
+	for _, pes := range paths {
+		fmt.Printf("path: %s\n", ayame.SliceString(pes))
+		var prev *BSNode = nil
+		for _, pe := range pes {
+			this := pe.node.(*BSNode)
+			graph.Register(this)
+			if prev != nil && prev != this {
+				graph.AddChild(prev, this)
+			}
+			prev = this
+		}
+	}
+	failures := 0
+	for i := 0; i < count; i++ {
+		graphCopy := make(Graph)
+		for key, value := range graph {
+			if key != src.key && key != dst.key && rand.Float64() < failureRatio {
+				graphCopy[key] = nil // failure
+			} else {
+				graphCopy[key] = value
+			}
+		}
+		//graphCopy.Dump()
+		path := make(Array, 0, 50)
+		_, exists := graphCopy.PathExists(src, dst, path)
+		//length := len(shortestPath)
+
+		if !exists {
+			failures++
+		}
+	}
+	return float64(failures) / float64(count)
 }

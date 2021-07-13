@@ -6,6 +6,8 @@ github.com/op/go-logging v0.0.0-20160315200505-970db520ece7 h1:lDH9UUVJtmYCjyT0C
 github.com/op/go-logging v0.0.0-20160315200505-970db520ece7/go.mod h1:HzydrMdWErDVzsI23lYNej1Htcns9BCg93Dk0bBINWk=
 github.com/piax/go-ayame/ayame v0.0.0-20210711140148-311c2c956e93 h1:am08vEaA88Jz6LFdvyNm+OG89qchw8+EG1V5YhYyBWs=
 github.com/piax/go-ayame/ayame v0.0.0-20210711140148-311c2c956e93/go.mod h1:5fsnipPz43aaL/ZSi4Ga2OqHMc0RfQ2Zy7A5Jpz7vi4=
+github.com/piax/go-ayame/ayame v0.0.0-20210712013552-37e0882bd092 h1:7Do3+PnIVM/qtNpdRovKb0NSzgYnmsVCH2JyMfTbj+M=
+github.com/piax/go-ayame/ayame v0.0.0-20210712013552-37e0882bd092/go.mod h1:5fsnipPz43aaL/ZSi4Ga2OqHMc0RfQ2Zy7A5Jpz7vi4=
 github.com/piax/go-ayame/byzskip v0.0.0-20210711140148-311c2c956e93 h1:du9A3f8KFAUO0wHNZaLqQGXTxC4/R2FnmWx0WgzM9FI=
 github.com/piax/go-ayame/byzskip v0.0.0-20210711140148-311c2c956e93/go.mod h1:pZfFpa8IpdT8y2fPnISwoNgMKE+eC3FgaGobLg5NxZw=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -16,6 +18,8 @@ github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5Cc
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/thoas/go-funk v0.8.0 h1:JP9tKSvnpFVclYgDM0Is7FD9M4fhPvqA0s0BsXmzSRQ=
 github.com/thoas/go-funk v0.8.0/go.mod h1:+IWnUfUmFO1+WVYQWQtIJHeRRdaIyyYglZN7xzUPe4Q=
+github.com/thoas/go-funk v0.9.0 h1:Yzu8aTjTb1sqHZzSZLBt4qaZrFfjNizhA7IfnefjEzo=
+github.com/thoas/go-funk v0.9.0/go.mod h1:+IWnUfUmFO1+WVYQWQtIJHeRRdaIyyYglZN7xzUPe4Q=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c h1:dUUwHk2QECo/6vqA44rthZ8ie2QXMNeKRTHCNY2nXvo=
