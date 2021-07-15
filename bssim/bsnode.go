@@ -94,16 +94,12 @@ func (rt *BSRoutingTable) GetNeighborsAndCandidates(s *BSNode) ([]*BSNode, int, 
 	return ksToNs(ret), level, ksToNs(can)
 }
 
-func (rt *BSRoutingTable) FindCandidates(s *BSNode) []*BSNode {
-	can := rt.GetCandidates()
-	return ksToNs(can)
-}
-
 // failure type
 const (
 	F_NONE int = iota
 	F_STOP
 	F_COLLAB
+	F_COLLAB_AFTER
 	F_CALC
 )
 
@@ -118,24 +114,40 @@ func NewBSNode(key int, mv *ayame.MembershipVector, isFailure bool) *BSNode {
 	return ret
 }
 
+// if this is the first joined node, return true
+func (node *BSNode) ensureAdvRoutingTable() {
+	/*	if node.advRoutingTable == nil {
+			qt := NewBSRoutingTable(node)
+			for _, q := range AdversaryList {
+				qt.Add(q)
+			}
+			// its a kind of cache
+			node.advRoutingTable = qt
+		}
+	*/
+	qt := NewBSRoutingTable(node)
+	for _, q := range JoinedAdversaryList {
+		qt.Add(q)
+	}
+	// its a kind of cache
+	node.advRoutingTable = qt
+}
+
 // for local
 func (node *BSNode) GetNeighbors(key int) ([]*BSNode, int) {
 	var nb []bs.KeyMV
 	var lv int
 	if node.isFailure {
 		switch FailureType {
+		case F_NONE:
+			nb, lv = node.routingTable.GetNeighbors(key)
 		case F_STOP:
 			nb = []bs.KeyMV{}
 			lv = 0
 		case F_COLLAB:
-			if node.advRoutingTable == nil {
-				qt := NewBSRoutingTable(node)
-				for _, q := range AdversaryList {
-					qt.Add(q)
-				}
-				// its a kind of cache
-				node.advRoutingTable = qt
-			}
+			fallthrough
+		case F_COLLAB_AFTER:
+			node.ensureAdvRoutingTable()
 			nb, lv = node.advRoutingTable.GetNeighbors(key)
 		}
 	} else {
@@ -144,23 +156,40 @@ func (node *BSNode) GetNeighbors(key int) ([]*BSNode, int) {
 	return ksToNs(nb), lv
 }
 
+func (node *BSNode) GetCandidates() []*BSNode {
+	var nb []bs.KeyMV
+	if node.isFailure {
+		switch FailureType {
+		case F_NONE:
+			nb = node.routingTable.GetCandidates()
+		case F_STOP:
+			nb = []bs.KeyMV{}
+		case F_COLLAB:
+			fallthrough
+		case F_COLLAB_AFTER:
+			node.ensureAdvRoutingTable()
+			nb = node.advRoutingTable.GetCandidates()
+		}
+	} else {
+		nb = node.routingTable.GetCandidates()
+	}
+	return ksToNs(nb)
+}
+
 func (node *BSNode) FastFindKey(key int) ([]*BSNode, int) {
 	var nb []bs.KeyMV
 	var lv int
 	if node.isFailure {
 		switch FailureType {
+		case F_NONE:
+			nb, lv = node.routingTable.GetNeighbors(key)
 		case F_STOP:
 			nb = []bs.KeyMV{}
 			lv = 0
 		case F_COLLAB:
-			if node.advRoutingTable == nil {
-				qt := NewBSRoutingTable(node)
-				for _, q := range AdversaryList {
-					qt.Add(q)
-				}
-				// its a kind of cache
-				node.advRoutingTable = qt
-			}
+			fallthrough
+		case F_COLLAB_AFTER:
+			node.ensureAdvRoutingTable()
 			nb, lv = node.advRoutingTable.GetNeighbors(key)
 		}
 	} else {
@@ -175,19 +204,17 @@ func (node *BSNode) FastFindNode(target *BSNode) ([]*BSNode, int, []*BSNode) {
 	var lv int
 	if node.isFailure {
 		switch FailureType {
+		case F_NONE:
+			nb, lv, can = node.routingTable.GetNeighborsAndCandidates(target)
+			node.routingTable.Add(target) //
 		case F_STOP:
 			nb = []*BSNode{}
 			lv = 0
 			can = []*BSNode{}
 		case F_COLLAB:
-			if node.advRoutingTable == nil {
-				qt := NewBSRoutingTable(node)
-				for _, q := range AdversaryList {
-					qt.Add(q)
-				}
-				// its a kind of cache
-				node.advRoutingTable = qt
-			}
+			fallthrough
+		case F_COLLAB_AFTER:
+			node.ensureAdvRoutingTable()
 			nb, lv, can = node.advRoutingTable.GetNeighborsAndCandidates(target)
 		}
 	} else {
@@ -197,9 +224,38 @@ func (node *BSNode) FastFindNode(target *BSNode) ([]*BSNode, int, []*BSNode) {
 	return nb, lv, can
 }
 
-func (node *BSNode) FastJoinRequest(target *BSNode) []*BSNode {
-	ret := node.routingTable.FindCandidates(target)
-	node.routingTable.Add(target) //
+func (node *BSNode) GetCloserCandidates() []*BSNode {
+	var ks []bs.KeyMV
+	if node.isFailure {
+		switch FailureType {
+		case F_NONE:
+			ks = node.routingTable.GetCloserCandidates()
+		case F_STOP:
+			ks = []bs.KeyMV{}
+		case F_COLLAB:
+			fallthrough
+		case F_COLLAB_AFTER:
+			node.ensureAdvRoutingTable()
+			if len(JoinedAdversaryList) == 1 { // first time
+				ks = []bs.KeyMV{} // a kind of introducer.
+			} else {
+				ks = node.advRoutingTable.GetCloserCandidates()
+			}
+		}
+	} else {
+		ks = node.routingTable.GetCloserCandidates()
+	}
+	return ksToNs(ks)
+}
+
+func (node *BSNode) FastJoinRequest(target *BSNode, piggyback []*BSNode) []*BSNode {
+	ret := node.GetCandidates()
+	//	if !node.isFailure || FailureType == F_NONE {
+	node.routingTable.Add(target)
+	for _, n := range piggyback {
+		node.routingTable.Add(n)
+	}
+	//	}
 	return ret
 }
 
@@ -337,40 +393,38 @@ func FastLookup(key int, source *BSNode) ([]*BSNode, int, int, int, bool) {
 	return rets, hops, msgs, hops_to_match, failure
 }
 
-func FastUpdateNeighbors(target *BSNode, source *BSNode, msg *BSUnicastEvent) int {
-	//([]*BSNode, int, int, int, int, bool) {
-	hops := 0
-	msgs := 0
+//length, _ := maxPathLength(msg.paths)
+//hops = int(length)
+func FastUpdateNeighbors(target *BSNode, source *BSNode, initialNodes []*BSNode) int {
 
-	length, _ := maxPathLength(msg.paths)
-	neighbors := msg.results
-	hops = int(length)
-	ayame.Log.Debugf("queried %d/%d hops, neighbors for %d = %s\n", source.Key(), hops, target.Key(), ayame.SliceString(neighbors))
 	target.routingTable.Add(source)
 
-	candidates := neighbors
+	msgs := 0
 	queried := []*BSNode{}
-	//processed := []*BSNode{}
+	candidates := initialNodes
+	ayame.Log.Debugf("queried %d neighbors for %d = %s\n", source.Key(), target.Key(), ayame.SliceString(candidates))
+
 	ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", target.Key(), ayame.SliceString(candidates), ayame.SliceString(queried))
 
 	for len(candidates) != 0 {
 		next := candidates[0]
-
 		// XXX use message
 		msgs++
-		newCandidates := next.FastJoinRequest(target)
+		piggyback := []*BSNode{}
+		if PiggybackJoinRequest {
+			piggyback = target.GetCandidates()
+		}
+		newCandidates := next.FastJoinRequest(target, piggyback)
 		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), ayame.SliceString(newCandidates))
 		msgs++
 		queried = append(queried, next)
 
 		for _, c := range newCandidates {
 			target.routingTable.Add(c)
-			//processed = append(processed, c)
 		}
 
-		candidates = ksToNs(target.routingTable.GetCloserCandidates()) //append(candidates, newCandidates...)
+		candidates = target.GetCloserCandidates()
 		candidates = UnincludedNodes(candidates, queried)
-		//candidates = UnincludedNodes(candidates, processed)
 		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
 	}
 	ayame.Log.Debugf("%d: update neighbors msgs %d\n", target.Key(), msgs)
@@ -386,7 +440,6 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 
 	hops++ // request
 	msgs++
-	//neighbors, level, candidates := //source.routingTable.GetNeighborsAndCandidates(target.keyMV)
 	neighbors, level, candidates := source.FastFindNode(target)
 	ayame.Log.Debugf("queried %d, neighbors for %d = %s\n", source.Key(), target.Key(), ayame.SliceString(neighbors))
 	hops++
@@ -433,9 +486,6 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		}
 		hops++ // response
 	}
-	if hops_to_match < 0 {
-		failure = true
-	}
 
 	msgs_to_lookup = msgs
 	// the nodes in the current routing table, in order of closeness. (R->L->R->L in each level)
@@ -446,6 +496,10 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		queried = []*BSNode{}
 	}
 	//processed := []*BSNode{}
+	if !target.isFailure && isFaultySet(candidates) {
+		failure = true
+		ayame.Log.Infof("candidates hijacked: %s num. of adv. node=%d\n", candidates, len(JoinedAdversaryList))
+	}
 	ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", target.Key(), ayame.SliceString(candidates), ayame.SliceString(queried))
 
 	for len(candidates) != 0 {
@@ -453,7 +507,11 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 
 		// XXX use message
 		msgs++
-		newCandidates := next.FastJoinRequest(target)
+		piggyback := []*BSNode{}
+		if PiggybackJoinRequest {
+			piggyback = target.GetCandidates()
+		}
+		newCandidates := next.FastJoinRequest(target, piggyback)
 		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), ayame.SliceString(newCandidates))
 		msgs++
 		queried = append(queried, next)
@@ -463,7 +521,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 			//processed = append(processed, c)
 		}
 
-		candidates = ksToNs(target.routingTable.GetCloserCandidates()) //append(candidates, newCandidates...)
+		candidates = target.GetCloserCandidates() //append(candidates, newCandidates...)
 		candidates = UnincludedNodes(candidates, queried)
 		//candidates = UnincludedNodes(candidates, processed)
 		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
@@ -487,7 +545,7 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 	ayame.Log.Debugf("handling %s->%d on %s level %d\n", msg.root.Sender().Id(), msg.targetKey, msg.Receiver().Id(), msg.level)
 	if !sendToSelf && msg.CheckAlreadySeen() {
 		msg.root.numberOfDuplicatedMessages++
-		msg.root.results = append(msg.root.results, m)
+		msg.root.results = appendIfMissing(msg.root.results, m)
 		msg.root.paths = append(msg.root.paths, msg.path)
 		return nil
 	}
@@ -508,14 +566,14 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 				//msg.root.finishTime = sev.Time()
 			} else {
 				if len(msg.root.destinations) >= msg.root.expectedNumberOfResults {
-					ayame.Log.Debugf("XXX should not be here. redundant results: %s\n", ayame.SliceString(msg.root.destinations))
+					ayame.Log.Debugf("redundant results: %s\n", ayame.SliceString(msg.root.destinations))
 				} else {
 					ayame.Log.Debugf("wait for another result: currently %d\n", len(msg.root.destinations))
 				}
 			}
 		}
 		// add anyway to check redundancy & record number of messages
-		msg.root.results = append(msg.root.results, m)
+		msg.root.results = appendIfMissing(msg.root.results, m)
 		msg.root.paths = append(msg.root.paths, msg.path)
 
 	} else {
@@ -537,7 +595,7 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 						strings.Join(funk.Map(msg.path, func(pe PathEntry) string {
 							return fmt.Sprintf("%s@%d", pe.node.Id(), pe.level)
 						}).([]string), ","))
-					msg.root.results = append(msg.root.results, m)
+					msg.root.results = appendIfMissing(msg.root.results, m)
 					msg.root.paths = append(msg.root.paths, msg.path)
 				} else {
 					msg.SetAlreadySeen()

@@ -151,7 +151,8 @@ func (rt *KADRoutingTable) pickClosestUncontained(target []*KADNode, alpha int) 
 const (
 	F_NONE int = iota
 	F_STOP
-	F_COLLAB
+	F_COLLAB       // adversary nodes collaborates from the beginning of join.
+	F_COLLAB_AFTER // adversary nodes collaborates after join.
 )
 
 type KADNode struct {

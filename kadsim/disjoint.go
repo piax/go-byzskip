@@ -43,11 +43,15 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 			case F_STOP:
 				founds = []*KADNode{}
 			case F_COLLAB:
+				fallthrough
+			case F_COLLAB_AFTER:
 				qt := NewKADRoutingTableForQuery(id, k)
-				for _, q := range AdversaryList {
+				for _, q := range JoinedAdversaryList {
 					qt.Add(q)
 				}
 				founds = qt.getNearestNodes(id, k)
+			case F_NONE:
+				founds = n.FastFindNode(id, source, k)
 			}
 		} else {
 			founds = n.FastFindNode(id, source, k)

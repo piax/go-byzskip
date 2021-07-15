@@ -17,14 +17,13 @@ var dValue *int
 var numberOfNodes *int
 var numberOfTrials *int
 var convergeTimes *int
-var honestJoin *bool
 var failureType *string
 var failureRatio *float64
-var adversarialNet *bool
 var seed *int64
 var verbose *bool
 
 var AdversaryList = []*KADNode{}
+var JoinedAdversaryList = []*KADNode{}
 var NormalList = []*KADNode{}
 
 func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d int) []*KADNode {
@@ -38,12 +37,12 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 		case F_STOP:
 			fallthrough
 		case F_COLLAB:
+			fallthrough
+		case F_COLLAB_AFTER:
 			f := rand.Float64() < *failureRatio
 			n = NewKADNode(i, k, f)
 			if f {
-				if *adversarialNet {
-					AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
-				}
+				AdversaryList = append(AdversaryList, n)
 			} else {
 				NormalList = append(NormalList, n)
 			}
@@ -52,10 +51,10 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 	}
 	// join time none
 	//****
-	var bak int
-	if *honestJoin {
-		bak = FailureType
+	bak := false
+	if FailureType == F_COLLAB_AFTER {
 		FailureType = F_NONE
+		bak = true
 	}
 	//****
 
@@ -66,8 +65,8 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 		fmt.Printf("join failed:%s\n", err)
 	}
 	// restore the failure type for search time
-	if *honestJoin {
-		FailureType = bak
+	if bak {
+		FailureType = F_COLLAB_AFTER
 	}
 	//****
 	//aves, _ := stats.Mean(funk.Map(nodes, func(n *KADNode) float64 { return float64(n.routingTable.table.Size()) }).([]float64))
@@ -87,7 +86,7 @@ func FastJoinAll(convergeTimes int, nodes []*KADNode, alpha int, k int, d int) e
 	for i := 0; i < convergeTimes; i++ {
 		index := 0 // introducer index
 		for _, n := range nodes {
-			if !*adversarialNet && n.isFailure {
+			if n.isFailure && FailureType == F_COLLAB {
 				AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
 			}
 			n.routingTable.Add(nodes[index])
@@ -115,8 +114,8 @@ func FastJoinAllDisjoint(convergeTimes int, nodes []*KADNode, alpha int, k int, 
 	sumMsgs := 0
 	index := 0 // introducer index
 	for _, n := range nodes {
-		if !*adversarialNet && n.isFailure {
-			AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
+		if n.isFailure {
+			JoinedAdversaryList = append(JoinedAdversaryList, n)
 		}
 		n.routingTable.Add(nodes[index])
 		_, _, msgs, _, _ := FastNodeLookupDisjoint(n.routingTable.dhtId, n, alpha, k, d)
@@ -150,11 +149,9 @@ func main() {
 	dValue = flag.Int("d", 4, "the disjoint path parameter")
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
-	convergeTimes = flag.Int("c", 1, "converge times")
-	failureType = flag.String("type", "collab", "failure type {none|stop|collab}")
+	convergeTimes = flag.Int("c", 3, "converge times")
+	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	honestJoin = flag.Bool("hj", true, "join honestly (no failure at join time)")
-	adversarialNet = flag.Bool("adv", true, "use an adversarial network for collaborative attack")
 	seed = flag.Int64("seed", 1, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -176,6 +173,10 @@ func main() {
 		FailureType = F_STOP
 	case "collab":
 		FailureType = F_COLLAB
+	case "collab-after":
+		FailureType = F_COLLAB_AFTER
+	default:
+		panic(fmt.Errorf("no such type %s", *failureType))
 	}
 
 	nodes := ConstructOverlay(*numberOfNodes, *convergeTimes, *alpha, *kValue, *dValue)

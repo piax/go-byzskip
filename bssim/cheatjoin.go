@@ -15,7 +15,7 @@ func nsToKs(lst []*BSNode) []byzskip.KeyMV {
 	return ret
 }
 
-func FastJoinAll(nodes []*BSNode) error {
+func FastJoinAllByCheat(nodes []*BSNode) error {
 	fastJoinAllInit(nodes)
 	er := fastJoinAllSub(byzskip.RIGHT, nsToKs(nodes))
 	if er != nil {

@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"time"
 
 	"github.com/montanaflynn/stats"
@@ -21,11 +23,11 @@ var failureType *string
 var failureRatio *float64
 var joinType *string
 var unicastType *string
-var useAdversarialNet *bool
 var seed *int64
 var verbose *bool
 
-var AdversaryList = []*BSNode{}
+//var AdversaryList = []*BSNode{}
+var JoinedAdversaryList = []*BSNode{}
 var NormalList = []*BSNode{}
 
 const (
@@ -42,6 +44,11 @@ const (
 
 var JoinType int
 var UnicastType int
+var PiggybackJoinRequest bool
+
+const (
+	CPU_PROFILE = true
+)
 
 /*func containedNumber(ts []int, rs []int) int {
 	count := 0
@@ -126,11 +133,9 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 
 func ConstructOverlay(numberOfNodes int) []*BSNode {
 	nodes := make([]*BSNode, 0, numberOfNodes)
-	//DummyNodes = make([]*MIRONode, 0, numberOfNodes)
 	for i := 0; i < numberOfNodes; i++ {
 		var n *BSNode
 		mv := ayame.NewMembershipVector(byzskip.ALPHA)
-		//dummyNode := NewMIRONode(i, mv)
 		switch FailureType {
 		case F_CALC:
 			fallthrough
@@ -140,28 +145,33 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		case F_STOP:
 			fallthrough
 		case F_COLLAB:
+			fallthrough
+		case F_COLLAB_AFTER:
 			f := rand.Float64() < *failureRatio
 			if i < byzskip.K { // first k nodes should not be a fault node
 				f = false
 			}
-			//if 8 <= i && i <= 11 { // intentional
-			//	f = true
-			//}
 			n = NewBSNode(i, mv, f)
-			if f {
-				if *useAdversarialNet {
-					AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
-				}
-			} else {
+			/*			if f {
+						if FailureType != F_STOP {
+							AdversaryList = append(AdversaryList, n)
+						}
+					} else {*/
+			if !f {
 				NormalList = append(NormalList, n)
 			}
 		}
 		nodes = append(nodes, n)
 	}
 
+	bak := false
+	if FailureType == F_COLLAB_AFTER {
+		FailureType = F_NONE
+		bak = true
+	}
 	switch JoinType {
 	case J_CHEAT:
-		err := FastJoinAll(nodes)
+		err := FastJoinAllByCheat(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
 		}
@@ -181,6 +191,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			fmt.Printf("join failed:%s\n", err)
 		}
 	}
+	if bak {
+		FailureType = F_COLLAB_AFTER
+	}
 	return nodes
 }
 
@@ -189,28 +202,46 @@ func meanOfInt(lst []int) float64 {
 	return v
 }
 
+func isFaultySet(nodes []*BSNode) bool {
+	if len(nodes) == 0 {
+		return false
+	}
+	for _, n := range nodes {
+		if !n.isFailure {
+			return false
+		}
+	}
+	// all faulty nodes!
+	return true
+}
+
 func FastJoinAllByRecursive(nodes []*BSNode) error {
 	index := 0 // introducer index
 	sumMsgs := 0
 	count := 0
 	prev := 0
+	allFaultyCount := 0
 	for i, n := range nodes {
-		if !*useAdversarialNet && n.isFailure {
-			AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
-		}
 		if index != i {
 			localn := n
 			locali := i
 			msg := NewBSUnicastEvent(nodes[index], ayame.MembershipVectorSize, localn.key)
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
+				if localn.isFailure {
+					JoinedAdversaryList = append(JoinedAdversaryList, localn)
+				}
 				localn.SendEvent(msg)
 				localn.Sched(ayame.NewSchedEventWithJob(func() {
+					if !localn.isFailure && isFaultySet(msg.results) {
+						allFaultyCount++
+						ayame.Log.Infof("result hijacked: %s\n", msg.results)
+					}
 					sumMsgs += len(msg.results) // number of reply messages
-					sumMsgs += FastUpdateNeighbors(localn, nodes[index], msg)
+					sumMsgs += FastUpdateNeighbors(localn, nodes[index], msg.results)
 					count++
 					percent := 100 * count / len(nodes)
 					if percent/10 != prev {
-						fmt.Printf("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+						fmt.Printf("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), allFaultyCount)
 					}
 					prev = percent / 10
 				}), int64(100)) // runs after 100ms time out
@@ -241,20 +272,25 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 	sumLMsgs := 0
 	count := 0
 	prev := 0
+	faultyCount := 0
 	for i, n := range nodes {
-		if !*useAdversarialNet && n.isFailure {
-			AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
+		if n.isFailure {
+			JoinedAdversaryList = append(JoinedAdversaryList, n)
 		}
 		if index != i {
-			rets, _, msgs, _, lmsgs, _ := FastNodeLookup(n, nodes[index])
+			rets, _, msgs, _, lmsgs, faulty := FastNodeLookup(n, nodes[index])
+			if faulty {
+				faultyCount++
+			}
 			ayame.Log.Debugf("%d: rets %s\n", n.key, ayame.SliceString(rets))
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
 		}
+
 		count++
 		percent := 100 * count / len(nodes)
 		if percent/10 != prev {
-			fmt.Printf("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+			fmt.Printf("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), faultyCount)
 		}
 		prev = percent / 10
 	}
@@ -295,11 +331,10 @@ func main() {
 	kValue = flag.Int("k", 4, "the redundancy parameter")
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
-	failureType = flag.String("type", "collab", "failure type {none|stop|collab|calc}")
-	failureRatio = flag.Float64("f", 0.5, "failure ratio")
-	joinType = flag.String("joinType", "recur", "join type {cheat|recur|iter|iter-p}")
-	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	useAdversarialNet = flag.Bool("adv", true, "use adversarial net (with -type collab)")
+	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
+	failureRatio = flag.Float64("f", 0.3, "failure ratio")
+	joinType = flag.String("joinType", "iter", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -324,6 +359,8 @@ func main() {
 		FailureType = F_STOP
 	case "collab":
 		FailureType = F_COLLAB
+	case "collab-after":
+		FailureType = F_COLLAB_AFTER
 	case "calc":
 		FailureType = F_CALC
 	}
@@ -337,6 +374,9 @@ func main() {
 		JoinType = J_ITER
 	case "iter-p":
 		JoinType = J_ITER_P
+	case "iter-pp":
+		JoinType = J_ITER_P
+		PiggybackJoinRequest = true
 	}
 
 	switch *unicastType {
@@ -351,24 +391,19 @@ func main() {
 		trials = *numberOfTrials
 	}
 
-	var advString string
-	if *useAdversarialNet {
-		advString = "adv"
-	} else {
-		advString = "non-adv"
-	}
-	paramsString = fmt.Sprintf("%d %d %d %.2f %s %s %s %s", *numberOfNodes, *kValue, *alpha, *failureRatio, *failureType, advString, *joinType, *unicastType)
+	paramsString = fmt.Sprintf("%d %d %d %.2f %s %s %s", *numberOfNodes, *kValue, *alpha, *failureRatio, *failureType, *joinType, *unicastType)
 
-	/* comment out if we do profiling
-	f, _ := os.Create("cpu.pprof")
+	if CPU_PROFILE {
+		f, _ := os.Create("cpu.pprof")
 
-	if err := pprof.StartCPUProfile(f); err != nil {
-		fmt.Printf("%v\n", err)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			fmt.Printf("%v\n", err)
+		}
+		defer pprof.StopCPUProfile()
 	}
-	defer pprof.StopCPUProfile()
-	*/
+
 	nodes := ConstructOverlay(*numberOfNodes)
-	//numberOfTrials := *numberOfNodes * 6
+
 	if *verbose {
 		for _, n := range nodes {
 			mark := ""
@@ -465,6 +500,7 @@ func main() {
 		ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
 		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 	}
+
 	table_sizes := []int{}
 	for _, node := range nodes {
 		//ayame.Log.Infof("%v\n", node.Id())
