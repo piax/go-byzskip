@@ -11,7 +11,6 @@ import (
 	"github.com/montanaflynn/stats"
 	"github.com/op/go-logging"
 	"github.com/piax/go-ayame/ayame"
-	"github.com/piax/go-ayame/byzskip"
 	bs "github.com/piax/go-ayame/byzskip"
 	"github.com/thoas/go-funk"
 )
@@ -136,7 +135,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 	nodes := make([]*BSNode, 0, numberOfNodes)
 	for i := 0; i < numberOfNodes; i++ {
 		var n *BSNode
-		mv := ayame.NewMembershipVector(byzskip.ALPHA)
+		mv := ayame.NewMembershipVector(bs.ALPHA)
 		switch FailureType {
 		case F_CALC:
 			fallthrough
@@ -145,7 +144,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
-			if i < byzskip.K { // first k nodes should not be a fault node
+			if i < bs.K { // first k nodes should not be a fault node
 				f = false
 			}
 			n = NewBSNode(i, mv, NewStopRoutingTable, f)
@@ -153,7 +152,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			fallthrough
 		case F_COLLAB_AFTER:
 			f := rand.Float64() < *failureRatio
-			if i < byzskip.K { // first k nodes should not be a fault node
+			if i < bs.K { // first k nodes should not be a fault node
 				f = false
 			}
 			if f {
@@ -389,9 +388,9 @@ func main() {
 
 	flag.Parse()
 
-	byzskip.InitK(*kValue)
+	bs.InitK(*kValue)
 
-	byzskip.ALPHA = *alpha
+	bs.ALPHA = *alpha
 
 	if *verbose {
 		ayame.InitLogger(logging.DEBUG)
