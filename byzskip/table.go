@@ -75,18 +75,45 @@ type NeighborList struct {
 	level     int
 }
 
-type RoutingTable struct {
+type RoutingTable interface {
+	// access entries
+	GetNeighbors(k int) ([]KeyMV, int) // get k neighbors and its level
+
+	Add(c KeyMV)
+	// order is not care
+	GetAll() []KeyMV // get all disjoint entries
+	// get all in order of closeness
+	GetCloserCandidates() []KeyMV
+
+	// neighbor list API
+	GetNeighborLists() []*NeighborList
+	AddNeighborList(s *NeighborList)
+
+	// util
+	String() string
+	Size() int
+}
+
+type SkipRoutingTable struct {
 	km            KeyMV           // self
 	NeighborLists []*NeighborList // level 0 to top
 }
 
-func NewRoutingTable(km KeyMV) *RoutingTable {
-	rt := &RoutingTable{km: km, NeighborLists: []*NeighborList{}}
-	rt.EnsureHeight(1) // level 0
+func NewSkipRoutingTable(km KeyMV) *SkipRoutingTable {
+	rt := &SkipRoutingTable{km: km, NeighborLists: []*NeighborList{}}
+	rt.ensureHeight(1) // level 0
 	return rt
 }
 
-func (table *RoutingTable) GetNeighbors(key int) ([]KeyMV, int) {
+func (table *SkipRoutingTable) GetNeighborLists() []*NeighborList {
+	return table.NeighborLists
+}
+
+func (table *SkipRoutingTable) AddNeighborList(s *NeighborList) {
+	table.NeighborLists = append(table.NeighborLists, s)
+}
+
+func (table *SkipRoutingTable) GetNeighbors(key int) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	// find the lowest level
@@ -111,7 +138,7 @@ func appendIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
 }
 
 // get all candidates //XXX higher than level 1
-func (table *RoutingTable) GetCandidates() []KeyMV {
+func (table *SkipRoutingTable) GetAll() []KeyMV {
 	ret := []KeyMV{}
 	// find the lowest level
 	for _, singleLevel := range table.NeighborLists {
@@ -124,7 +151,8 @@ func (table *RoutingTable) GetCandidates() []KeyMV {
 	return ret
 }
 
-func (table *RoutingTable) GetOrderedCandidates() []KeyMV {
+/*
+func (table *SkipRoutingTable) GetOrderedCandidates() []KeyMV {
 	ret := []KeyMV{}
 	// find the lowest level
 	for _, singleLevel := range table.NeighborLists {
@@ -144,7 +172,7 @@ func (table *RoutingTable) GetOrderedCandidates() []KeyMV {
 	return ret, level, can
 }*/
 
-func (table *RoutingTable) EnsureHeight(level int) {
+func (table *SkipRoutingTable) ensureHeight(level int) {
 	nextLevel := len(table.NeighborLists) // if current max is 1, nextLevel is 2
 	for i := nextLevel; i <= level; i++ {
 		table.NeighborLists = append(table.NeighborLists,
@@ -152,13 +180,13 @@ func (table *RoutingTable) EnsureHeight(level int) {
 	}
 }
 
-func (table *RoutingTable) Add(c KeyMV) {
+func (table *SkipRoutingTable) Add(c KeyMV) {
 	if table.km.Equals(c) {
 		return // cannot add self
 	}
 	// ensure the height for the matched prefix length
 	commonLen := table.km.MV().CommonPrefixLength(c.MV())
-	table.EnsureHeight(commonLen + 1)
+	table.ensureHeight(commonLen + 1)
 	// add to levels from 0 to common prefix level.
 	for i := 0; i < commonLen+1; i++ {
 		// trimmed if needed
@@ -177,7 +205,7 @@ func (table *RoutingTable) Add(c KeyMV) {
 //return &KeyMV{key: key, mv: mv}
 //}
 
-func (table *RoutingTable) Size() int {
+func (table *SkipRoutingTable) Size() int {
 	lst := []int{}
 
 	for _, levelTable := range table.NeighborLists {
@@ -191,7 +219,8 @@ func (table *RoutingTable) Size() int {
 	return len(lst)
 }
 
-func (table *RoutingTable) AllKeys() []int {
+/*
+func (table *SkipRoutingTable) AllKeys() []int {
 	lst := []int{}
 
 	for _, levelTable := range table.NeighborLists {
@@ -203,13 +232,13 @@ func (table *RoutingTable) AllKeys() []int {
 		}
 	}
 	return lst
-}
+}*/
 
-func (table *RoutingTable) Height() int {
+func (table *SkipRoutingTable) Height() int {
 	return len(table.NeighborLists)
 }
 
-func (table *RoutingTable) String() string {
+func (table *SkipRoutingTable) String() string {
 	ret := ""
 	for _, sl := range table.NeighborLists {
 		ret += sl.String() + "\n"
@@ -291,7 +320,7 @@ func SortCircular(base int, kms []KeyMV) {
 	})
 }
 
-func (rt *RoutingTable) GetCloserCandidates() []KeyMV {
+func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	ret := []KeyMV{}
 
 	// sorted list from bottom.
@@ -357,11 +386,11 @@ func (rts NeighborList) String() string {
 	ret += fmt.Sprintf("Level {%d}: ", rts.level)
 	ret += "LEFT=["
 	ret += strings.Join(funk.Map(rts.Neighbors[LEFT], func(n KeyMV) string {
-		return strconv.Itoa(n.Key())
+		return n.String()
 	}).([]string), ",")
 	ret += "], RIGHT=["
 	ret += strings.Join(funk.Map(rts.Neighbors[RIGHT], func(n KeyMV) string {
-		return strconv.Itoa(n.Key())
+		return n.String()
 	}).([]string), ",")
 	ret += "]"
 	return ret
@@ -516,7 +545,7 @@ func (rts *NeighborList) satisfuctionIndex(d int) int {
 //	return rts.satisfuctionIndex(d) > 0
 //}
 
-func (table *RoutingTable) ExtendRoutingTable(level int) {
+func (table *SkipRoutingTable) ExtendRoutingTable(level int) {
 	for len(table.NeighborLists) <= level {
 		maxLevel := len(table.NeighborLists) - 1
 		newLevel := maxLevel + 1

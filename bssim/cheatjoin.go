@@ -25,15 +25,16 @@ func FastJoinAllByCheat(nodes []*BSNode) error {
 }
 
 func (m *BSNode) extendRoutingTable(level int) {
-	for len(m.routingTable.NeighborLists) <= level {
-		maxLevel := len(m.routingTable.NeighborLists) - 1
+	for len(m.routingTable.GetNeighborLists()) <= level {
+		maxLevel := len(m.routingTable.GetNeighborLists()) - 1
 		newLevel := maxLevel + 1
 		s := byzskip.NewNeighborList(m, newLevel)
-		m.routingTable.NeighborLists = append(m.routingTable.NeighborLists, s)
+		m.routingTable.AddNeighborList(s)
+		//m.routingTable.NeighborLists = append(m.routingTable.NeighborLists, s)
 		// normal skip graph doesn't require this
 		if maxLevel >= 0 {
-			for _, n := range append(m.routingTable.NeighborLists[maxLevel].Neighbors[byzskip.RIGHT],
-				m.routingTable.NeighborLists[maxLevel].Neighbors[byzskip.LEFT]...) {
+			for _, n := range append(m.routingTable.GetNeighborLists()[maxLevel].Neighbors[byzskip.RIGHT],
+				m.routingTable.GetNeighborLists()[maxLevel].Neighbors[byzskip.LEFT]...) {
 				if n.MV().CommonPrefixLength(m.mv) >= newLevel {
 					s.Add(byzskip.RIGHT, n)
 					s.Add(byzskip.LEFT, n)
@@ -50,8 +51,8 @@ func fastJoinAllInit(nodes []*BSNode) {
 	}
 	for i, p := range nodes {
 		q := nodes[(i+1)%num]
-		p.routingTable.NeighborLists[0].Neighbors[byzskip.RIGHT] = append(p.routingTable.NeighborLists[0].Neighbors[byzskip.RIGHT], q)
-		q.routingTable.NeighborLists[0].Neighbors[byzskip.LEFT] = append(q.routingTable.NeighborLists[0].Neighbors[byzskip.LEFT], p)
+		p.routingTable.GetNeighborLists()[0].Neighbors[byzskip.RIGHT] = append(p.routingTable.GetNeighborLists()[0].Neighbors[byzskip.RIGHT], q)
+		q.routingTable.GetNeighborLists()[0].Neighbors[byzskip.LEFT] = append(q.routingTable.GetNeighborLists()[0].Neighbors[byzskip.LEFT], p)
 	}
 }
 
@@ -89,29 +90,29 @@ func fastJoinAllSub(d int, nodes []byzskip.KeyMV) error {
 			buf := make([][]byzskip.KeyMV, byzskip.ALPHA)
 			p := nodesAtCurrentLevel[0].(*BSNode)
 			start := p
-			q := p.routingTable.NeighborLists[level].Neighbors[d][0].(*BSNode)
+			q := p.routingTable.GetNeighborLists()[level].Neighbors[d][0].(*BSNode)
 			for {
 				nodesAtCurrentLevel = delNode(nodesAtCurrentLevel, p)
 				buf[p.mv.Val[level]] = delNode(buf[p.mv.Val[level]], p)
 				for q != p && lenLessThanExists(buf) {
 					dir := q.MV().Val[level]
 					buf[dir] = append(buf[dir], q)
-					q = q.routingTable.NeighborLists[level].Neighbors[d][0].(*BSNode)
+					q = q.routingTable.GetNeighborLists()[level].Neighbors[d][0].(*BSNode)
 				}
 				merged := mergeBuf(buf)
 				byzskip.SortC(p.key, merged)
 				if d == byzskip.LEFT {
 					ayame.ReverseSlice(merged)
 				}
-				p.routingTable.NeighborLists[level].Neighbors[d] = merged
+				p.routingTable.GetNeighborLists()[level].Neighbors[d] = merged
 				upperBuf := buf[p.mv.Val[level]]
 				if len(upperBuf) > 0 {
 					p.extendRoutingTable(level + 1)
-					p.routingTable.NeighborLists[level+1].Neighbors[d] = append([]byzskip.KeyMV{}, upperBuf...)
+					p.routingTable.GetNeighborLists()[level+1].Neighbors[d] = append([]byzskip.KeyMV{}, upperBuf...)
 				} else {
 					unfinished = delNode(unfinished, p)
 				}
-				p = p.routingTable.NeighborLists[level].Neighbors[d][0].(*BSNode)
+				p = p.routingTable.GetNeighborLists()[level].Neighbors[d][0].(*BSNode)
 				if p == start {
 					break
 				}

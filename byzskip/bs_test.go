@@ -9,16 +9,16 @@ import (
 )
 
 func TestTable(t *testing.T) {
-	rt := NewRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVector(2)})
-	rt.EnsureHeight(3)
-	rt.EnsureHeight(2)
+	rt := NewSkipRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVector(2)})
+	rt.ensureHeight(3)
+	rt.ensureHeight(2)
 	fmt.Println(rt.String())
 	ast.Equal(t, rt.Height(), 4, "expected 4")
 }
 
 func TestSorted(t *testing.T) {
 	InitK(2)
-	rt := NewRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt := NewSkipRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
 	rt.Add(&IntKeyMV{Intkey: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
 	rt.Add(&IntKeyMV{Intkey: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
 	rt.Add(&IntKeyMV{Intkey: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})

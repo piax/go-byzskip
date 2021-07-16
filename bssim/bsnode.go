@@ -16,10 +16,9 @@ type BSNode struct {
 	mv  *ayame.MembershipVector
 	//bs.IntKeyMV
 
-	routingTable    *BSRoutingTable
-	isFailure       bool
-	advRoutingTable *BSRoutingTable // used only collaborative adversarial node
-	querySeen       map[int]int
+	routingTable bs.RoutingTable
+	isFailure    bool
+	querySeen    map[int]int
 	ayame.LocalNode
 }
 
@@ -45,38 +44,12 @@ func (n *BSNode) String() string {
 
 type BSRoutingTable struct {
 	//	nodes map[int]*BSNode // key=>node
-	bs.RoutingTable
+	bs.SkipRoutingTable
 }
 
-func NewBSRoutingTable(keyMV bs.KeyMV) *BSRoutingTable {
-	t := bs.NewRoutingTable(keyMV)
-	return &BSRoutingTable{RoutingTable: *t} //, nodes: make(map[int]*BSNode)}
-}
-
-func (table *BSRoutingTable) Count() (int, int) {
-	lst := []*BSNode{}
-	fcount := 0
-	for _, levelTable := range table.NeighborLists {
-		for _, node := range levelTable.Neighbors[bs.LEFT] {
-			exists := false
-			n := node.(*BSNode)
-			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
-				if n.isFailure {
-					fcount++
-				}
-			}
-		}
-		for _, node := range levelTable.Neighbors[bs.RIGHT] {
-			exists := false
-			n := node.(*BSNode)
-			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
-				if n.isFailure {
-					fcount++
-				}
-			}
-		}
-	}
-	return len(lst), fcount
+func NewBSRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
+	t := bs.NewSkipRoutingTable(keyMV)
+	return &BSRoutingTable{SkipRoutingTable: *t} //, nodes: make(map[int]*BSNode)}
 }
 
 func ksToNs(lst []bs.KeyMV) []*BSNode {
@@ -88,9 +61,9 @@ func ksToNs(lst []bs.KeyMV) []*BSNode {
 }
 
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
-func (rt *BSRoutingTable) GetNeighborsAndCandidates(s *BSNode) ([]*BSNode, int, []*BSNode) {
-	ret, level := rt.GetNeighbors(s.Key())
-	can := rt.GetCandidates()
+func (node *BSNode) GetNeighborsAndCandidates(s *BSNode) ([]*BSNode, int, []*BSNode) {
+	ret, level := node.routingTable.GetNeighbors(s.Key())
+	can := node.routingTable.GetAll()
 	return ksToNs(ret), level, ksToNs(can)
 }
 
@@ -103,149 +76,43 @@ const (
 	F_CALC
 )
 
-func NewBSNode(key int, mv *ayame.MembershipVector, isFailure bool) *BSNode {
+func NewBSNode(key int, mv *ayame.MembershipVector, maker func(bs.KeyMV) bs.RoutingTable, isFailure bool) *BSNode {
 	ret := &BSNode{key: key, mv: mv,
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
 		LocalNode: ayame.NewLocalNode(key),
 		querySeen: make(map[int]int),
 		isFailure: isFailure}
-	ret.routingTable = NewBSRoutingTable(ret)
-	//ret.routingTable.nodes[key] = ret
+	ret.routingTable = maker(ret)
 	return ret
-}
-
-// if this is the first joined node, return true
-func (node *BSNode) ensureAdvRoutingTable() {
-	/*	if node.advRoutingTable == nil {
-			qt := NewBSRoutingTable(node)
-			for _, q := range AdversaryList {
-				qt.Add(q)
-			}
-			// its a kind of cache
-			node.advRoutingTable = qt
-		}
-	*/
-	qt := NewBSRoutingTable(node)
-	for _, q := range JoinedAdversaryList {
-		qt.Add(q)
-	}
-	// its a kind of cache
-	node.advRoutingTable = qt
 }
 
 // for local
 func (node *BSNode) GetNeighbors(key int) ([]*BSNode, int) {
-	var nb []bs.KeyMV
-	var lv int
-	if node.isFailure {
-		switch FailureType {
-		case F_NONE:
-			nb, lv = node.routingTable.GetNeighbors(key)
-		case F_STOP:
-			nb = []bs.KeyMV{}
-			lv = 0
-		case F_COLLAB:
-			fallthrough
-		case F_COLLAB_AFTER:
-			node.ensureAdvRoutingTable()
-			nb, lv = node.advRoutingTable.GetNeighbors(key)
-		}
-	} else {
-		nb, lv = node.routingTable.GetNeighbors(key)
-	}
+	nb, lv := node.routingTable.GetNeighbors(key)
 	return ksToNs(nb), lv
 }
 
 func (node *BSNode) GetCandidates() []*BSNode {
-	var nb []bs.KeyMV
-	if node.isFailure {
-		switch FailureType {
-		case F_NONE:
-			nb = node.routingTable.GetCandidates()
-		case F_STOP:
-			nb = []bs.KeyMV{}
-		case F_COLLAB:
-			fallthrough
-		case F_COLLAB_AFTER:
-			node.ensureAdvRoutingTable()
-			nb = node.advRoutingTable.GetCandidates()
-		}
-	} else {
-		nb = node.routingTable.GetCandidates()
-	}
-	return ksToNs(nb)
+	return ksToNs(node.routingTable.GetAll())
 }
 
+// called by remote
 func (node *BSNode) FastFindKey(key int) ([]*BSNode, int) {
-	var nb []bs.KeyMV
-	var lv int
-	if node.isFailure {
-		switch FailureType {
-		case F_NONE:
-			nb, lv = node.routingTable.GetNeighbors(key)
-		case F_STOP:
-			nb = []bs.KeyMV{}
-			lv = 0
-		case F_COLLAB:
-			fallthrough
-		case F_COLLAB_AFTER:
-			node.ensureAdvRoutingTable()
-			nb, lv = node.advRoutingTable.GetNeighbors(key)
-		}
-	} else {
-		nb, lv = node.routingTable.GetNeighbors(key)
-	}
+	nb, lv := node.routingTable.GetNeighbors(key)
 	return ksToNs(nb), lv
 }
 
 func (node *BSNode) FastFindNode(target *BSNode) ([]*BSNode, int, []*BSNode) {
-	var nb []*BSNode
-	var can []*BSNode
-	var lv int
-	if node.isFailure {
-		switch FailureType {
-		case F_NONE:
-			nb, lv, can = node.routingTable.GetNeighborsAndCandidates(target)
-			node.routingTable.Add(target) //
-		case F_STOP:
-			nb = []*BSNode{}
-			lv = 0
-			can = []*BSNode{}
-		case F_COLLAB:
-			fallthrough
-		case F_COLLAB_AFTER:
-			node.ensureAdvRoutingTable()
-			nb, lv, can = node.advRoutingTable.GetNeighborsAndCandidates(target)
-		}
-	} else {
-		nb, lv, can = node.routingTable.GetNeighborsAndCandidates(target)
-		node.routingTable.Add(target) //
-	}
-	return nb, lv, can
+	node.routingTable.Add(target)
+	return node.GetNeighborsAndCandidates(target)
 }
 
+const (
+	CONFUSED_ROUTING_TABLE = true
+)
+
 func (node *BSNode) GetCloserCandidates() []*BSNode {
-	var ks []bs.KeyMV
-	if node.isFailure {
-		switch FailureType {
-		case F_NONE:
-			ks = node.routingTable.GetCloserCandidates()
-		case F_STOP:
-			ks = []bs.KeyMV{}
-		case F_COLLAB:
-			fallthrough
-		case F_COLLAB_AFTER:
-			node.ensureAdvRoutingTable()
-			if len(JoinedAdversaryList) == 1 { // first time
-				ks = []bs.KeyMV{} // a kind of introducer.
-			} else {
-				ks = node.advRoutingTable.GetCloserCandidates()
-			}
-		}
-	} else {
-		ks = node.routingTable.GetCloserCandidates()
-	}
-	return ksToNs(ks)
+	return ksToNs(node.routingTable.GetCloserCandidates())
 }
 
 func (node *BSNode) FastJoinRequest(target *BSNode, piggyback []*BSNode) []*BSNode {

@@ -56,11 +56,7 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 		FailureType = F_NONE
 		bak = true
 	}
-	//****
-
-	//err := FastJoinAll(nodes, alpha)
 	err := FastJoinAllDisjoint(convergeTimes, nodes, alpha, k, d)
-	//err := FastJoinAll(convergeTimes, nodes, alpha, k, d)
 	if err != nil {
 		fmt.Printf("join failed:%s\n", err)
 	}
@@ -68,9 +64,6 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 	if bak {
 		FailureType = F_COLLAB_AFTER
 	}
-	//****
-	//aves, _ := stats.Mean(funk.Map(nodes, func(n *KADNode) float64 { return float64(n.routingTable.table.Size()) }).([]float64))
-	//ayame.Log.Infof("avg. routing table size: %f\n", aves)
 	return nodes
 }
 

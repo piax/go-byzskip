@@ -12,6 +12,7 @@ import (
 	"github.com/op/go-logging"
 	"github.com/piax/go-ayame/ayame"
 	"github.com/piax/go-ayame/byzskip"
+	bs "github.com/piax/go-ayame/byzskip"
 	"github.com/thoas/go-funk"
 )
 
@@ -140,10 +141,14 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = NewBSNode(i, mv, false)
+			n = NewBSNode(i, mv, NewBSRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
-			fallthrough
+			f := rand.Float64() < *failureRatio
+			if i < byzskip.K { // first k nodes should not be a fault node
+				f = false
+			}
+			n = NewBSNode(i, mv, NewStopRoutingTable, f)
 		case F_COLLAB:
 			fallthrough
 		case F_COLLAB_AFTER:
@@ -151,13 +156,10 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			if i < byzskip.K { // first k nodes should not be a fault node
 				f = false
 			}
-			n = NewBSNode(i, mv, f)
-			/*			if f {
-						if FailureType != F_STOP {
-							AdversaryList = append(AdversaryList, n)
-						}
-					} else {*/
-			if !f {
+			if f {
+				n = NewBSNode(i, mv, NewAdversaryRoutingTable, f)
+			} else {
+				n = NewBSNode(i, mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -225,11 +227,19 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 		if index != i {
 			localn := n
 			locali := i
+			if localn.isFailure {
+				JoinedAdversaryList = append(JoinedAdversaryList, localn)
+				for _, p := range JoinedAdversaryList {
+					if !p.Equals(localn) {
+						table, ok := p.routingTable.(*AdversaryRoutingTable)
+						if ok {
+							table.AddAdversarial(localn)
+						}
+					}
+				}
+			}
 			msg := NewBSUnicastEvent(nodes[index], ayame.MembershipVectorSize, localn.key)
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				if localn.isFailure {
-					JoinedAdversaryList = append(JoinedAdversaryList, localn)
-				}
 				localn.SendEvent(msg)
 				localn.Sched(ayame.NewSchedEventWithJob(func() {
 					if !localn.isFailure && isFaultySet(msg.results) {
@@ -251,19 +261,46 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 	ayame.GlobalEventExecutor.Sim(int64(len(nodes)*1000+200), true)
 	ayame.GlobalEventExecutor.AwaitFinish()
 	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
-	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(len(nodes)))
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(len(nodes)))
+	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
 
 	ncount := 0
 	fcount := 0
 	for _, n := range NormalList {
-		c, f := n.routingTable.Count()
+		c, f := CountTableEntries(n)
 		ncount += c
 		fcount += f
 	}
 	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
 
 	return nil
+}
+
+func CountTableEntries(node *BSNode) (int, int) {
+	lst := []*BSNode{}
+	table := node.routingTable
+	fcount := 0
+	for _, levelTable := range table.GetNeighborLists() {
+		for _, node := range levelTable.Neighbors[bs.LEFT] {
+			exists := false
+			n := node.(*BSNode)
+			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
+				if n.isFailure {
+					fcount++
+				}
+			}
+		}
+		for _, node := range levelTable.Neighbors[bs.RIGHT] {
+			exists := false
+			n := node.(*BSNode)
+			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
+				if n.isFailure {
+					fcount++
+				}
+			}
+		}
+	}
+	return len(lst), fcount
 }
 
 func FastJoinAllByLookup(nodes []*BSNode) error {
@@ -276,6 +313,18 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 	for i, n := range nodes {
 		if n.isFailure {
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
+			for _, p := range JoinedAdversaryList {
+				if !p.Equals(n) {
+					ptable, pok := p.routingTable.(*AdversaryRoutingTable)
+					if pok {
+						ptable.AddAdversarial(n)
+						ntable, nok := n.routingTable.(*AdversaryRoutingTable)
+						if nok {
+							ntable.AddAdversarial(p)
+						}
+					}
+				}
+			}
 		}
 		if index != i {
 			rets, _, msgs, _, lmsgs, faulty := FastNodeLookup(n, nodes[index])
@@ -294,13 +343,13 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 		}
 		prev = percent / 10
 	}
-	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(len(nodes)))
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
+	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
 
 	ncount := 0
 	fcount := 0
 	for _, n := range NormalList {
-		c, f := n.routingTable.Count()
+		c, f := CountTableEntries(n)
 		ncount += c
 		fcount += f
 	}
@@ -329,11 +378,11 @@ var paramsString string
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 10000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
@@ -502,7 +551,7 @@ func main() {
 	}
 
 	table_sizes := []int{}
-	for _, node := range nodes {
+	for _, node := range NormalList {
 		//ayame.Log.Infof("%v\n", node.Id())
 		table_sizes = append(table_sizes, node.routingTable.Size())
 	}
