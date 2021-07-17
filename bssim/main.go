@@ -147,7 +147,13 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 			if i < bs.K { // first k nodes should not be a fault node
 				f = false
 			}
-			n = NewBSNode(i, mv, NewStopRoutingTable, f)
+			if f {
+				n = NewBSNode(i, mv, NewStopRoutingTable, f)
+			} else {
+				n = NewBSNode(i, mv, NewBSRoutingTable, f)
+				NormalList = append(NormalList, n)
+			}
+
 		case F_COLLAB:
 			fallthrough
 		case F_COLLAB_AFTER:
@@ -178,7 +184,11 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		}
 	case J_RECUR:
 		// shuffle the join order
-		rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] })
+		// first K nodes is preserved.
+		first := nodes[0:bs.K]
+		last := nodes[bs.K:]
+		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		nodes := append(first, last...)
 		err := FastJoinAllByRecursive(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
@@ -186,7 +196,10 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 	case J_ITER:
 		fallthrough
 	case J_ITER_P:
-		rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] })
+		first := nodes[0:bs.K]
+		last := nodes[bs.K:]
+		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		nodes := append(first, last...)
 		err := FastJoinAllByLookup(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
@@ -230,9 +243,13 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 				JoinedAdversaryList = append(JoinedAdversaryList, localn)
 				for _, p := range JoinedAdversaryList {
 					if !p.Equals(localn) {
-						table, ok := p.routingTable.(*AdversaryRoutingTable)
-						if ok {
-							table.AddAdversarial(localn)
+						ptable, pok := p.routingTable.(*AdversaryRoutingTable)
+						if pok {
+							ptable.AddAdversarial(localn)
+							ntable, nok := localn.routingTable.(*AdversaryRoutingTable)
+							if nok {
+								ntable.AddAdversarial(p)
+							}
 						}
 					}
 				}
@@ -326,6 +343,7 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 			}
 		}
 		if index != i {
+			ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
 			rets, _, msgs, _, lmsgs, faulty := FastNodeLookup(n, nodes[index])
 			if faulty {
 				faultyCount++
@@ -377,11 +395,11 @@ var paramsString string
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 10000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 128, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	joinType = flag.String("joinType", "iter", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")

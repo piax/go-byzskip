@@ -270,9 +270,9 @@ func lenLessThanExists(buf [][]KeyMV) bool {
 */
 
 func maxNode(kms []KeyMV) KeyMV {
-	var max KeyMV = nil
+	var max KeyMV = kms[0]
 	for _, s := range kms {
-		if max == nil || max.Key() < s.Key() {
+		if max.Key() < s.Key() {
 			max = s
 		}
 	}
@@ -280,15 +280,13 @@ func maxNode(kms []KeyMV) KeyMV {
 }
 
 func larger(base int, max int, kmx, kmy int) bool {
-	xval := kmx
-	yval := kmy
 	if kmx <= base {
-		xval += max + 1
+		kmx += max + 1
 	}
 	if kmy <= base {
-		yval += max + 1
+		kmy += max + 1
 	}
-	return xval > yval
+	return kmx > kmy
 }
 
 // much faster version of SortCircular

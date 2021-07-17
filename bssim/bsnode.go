@@ -103,8 +103,9 @@ func (node *BSNode) FastFindKey(key int) ([]*BSNode, int) {
 }
 
 func (node *BSNode) FastFindNode(target *BSNode) ([]*BSNode, int, []*BSNode) {
+	nb, lv, can := node.GetNeighborsAndCandidates(target)
 	node.routingTable.Add(target)
-	return node.GetNeighborsAndCandidates(target)
+	return nb, lv, can
 }
 
 const (
@@ -326,7 +327,7 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		target.routingTable.Add(c)
 	}
 
-	queried := []*BSNode{}
+	queried := []*BSNode{source}
 
 	for !allContained(neighbors, queried) {
 		// get uncontained neighbors
@@ -335,7 +336,8 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 		for _, next := range nexts {
 			msgs++
 			curNeighbors, curLevel, curCandidates := next.FastFindNode(target)
-			ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curCandidates))
+			ayame.Log.Debugf("queried %d, neighbors for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curNeighbors))
+			//ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curCandidates))
 			msgs++
 			queried = append(queried, next)
 			if curLevel == 0 {
@@ -412,7 +414,7 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 	ayame.Log.Debugf("handling %s->%d on %s level %d\n", msg.root.Sender().Id(), msg.targetKey, msg.Receiver().Id(), msg.level)
 	if !sendToSelf && msg.CheckAlreadySeen() {
 		msg.root.numberOfDuplicatedMessages++
-		msg.root.results = appendIfMissing(msg.root.results, m)
+		//msg.root.results = appendIfMissing(msg.root.results, m)
 		msg.root.paths = append(msg.root.paths, msg.path)
 		return nil
 	}
