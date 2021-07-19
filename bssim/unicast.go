@@ -140,7 +140,7 @@ func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
 	ks, lv := myNode.GetNeighbors(ev.targetKey)
 	kNodes = ks
 	level = lv
-
+	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.targetKey, ayame.SliceString(kNodes), level, myNode.routingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}

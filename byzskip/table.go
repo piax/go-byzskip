@@ -493,17 +493,17 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 func (rts *NeighborList) pickupKNodes(target int) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
-		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
+		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		return closestKNodesDisjoint(target, nodes), true
 	} else {
-		ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
+		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		if len(nodes) < K { // if number of nodes is less than K, return all
 			return nodes, true
 		}
 		for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
 			curNode := nodes[i].Key()
 			nextNode := nodes[i+1].Key()
-			ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
+			//ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
 			if isOrdered(curNode, true, target, nextNode, false) {
 				return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], true
 			}

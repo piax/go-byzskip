@@ -47,7 +47,7 @@ var UnicastType int
 var PiggybackJoinRequest bool
 
 const (
-	CPU_PROFILE = true
+	CPU_PROFILE = false
 )
 
 /*func containedNumber(ts []int, rs []int) int {
@@ -258,12 +258,17 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 				localn.SendEvent(msg)
 				localn.Sched(ayame.NewSchedEventWithJob(func() {
-					if !localn.isFailure && isFaultySet(msg.results) {
-						allFaultyCount++
-						ayame.Log.Infof("result hijacked: %s\n", msg.results)
-					}
+
 					sumMsgs += len(msg.results) // number of reply messages
-					sumMsgs += FastUpdateNeighbors(localn, nodes[index], msg.results)
+
+					//
+					localn.routingTable.Add(nodes[index])
+
+					umsgs, hijacked := FastUpdateNeighbors(localn, nodes[index], msg.results)
+					sumMsgs += umsgs
+					if hijacked {
+						allFaultyCount++
+					}
 					count++
 					percent := 100 * count / len(nodes)
 					if percent/10 != prev {
@@ -395,12 +400,12 @@ var paramsString string
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 128, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter", "join type {cheat|recur|iter|iter-p|iter-pp}")
-	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
+	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -487,11 +492,11 @@ func main() {
 	if UnicastType == U_RECUR {
 		msgs := []*BSUnicastEvent{}
 		for i := 1; i <= trials; i++ {
-			src := rand.Intn(len(NormalList))
-			dst := rand.Intn(len(NormalList))
-			msg := NewBSUnicastEvent(NormalList[src], ayame.MembershipVectorSize, dst) // starts with the max level.
+			src := NormalList[rand.Intn(len(NormalList))]
+			dst := NormalList[rand.Intn(len(NormalList))]
+			msg := NewBSUnicastEvent(src, ayame.MembershipVectorSize, dst.key) // starts with the max level.
 			msgs = append(msgs, msg)
-			ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.messageId, NormalList[src], NormalList[dst])
+			ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.messageId, src, dst)
 			ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
 			//nodes[src].SendEvent(msg)
 			// time out after 200ms
@@ -544,10 +549,10 @@ func main() {
 		}
 	} else {
 		for i := 1; i <= trials; i++ {
-			src := rand.Intn(len(NormalList))
-			dst := rand.Intn(len(NormalList))
+			src := NormalList[rand.Intn(len(NormalList))]
+			dst := NormalList[rand.Intn(len(NormalList))]
 			//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
-			founds, hops, msgs, hops_to_match, failure := FastLookup(NormalList[dst].key, NormalList[src])
+			founds, hops, msgs, hops_to_match, failure := FastLookup(dst.key, src)
 			path_lengths = append(path_lengths, float64(hops))
 			nums_msgs = append(nums_msgs, msgs)
 			if !failure {

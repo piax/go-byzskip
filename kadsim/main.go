@@ -87,7 +87,7 @@ func FastJoinAll(convergeTimes int, nodes []*KADNode, alpha int, k int, d int) e
 			sumMsgs += msgs
 		}
 	}
-	ayame.Log.Infof("avg-join-msgs: %d %f %f\n", *numberOfNodes, *failureRatio, float64(sumMsgs)/float64(len(nodes)))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 	count := 0
 	fcount := 0
 	for _, n := range NormalList {
@@ -95,7 +95,7 @@ func FastJoinAll(convergeTimes int, nodes []*KADNode, alpha int, k int, d int) e
 		count += c
 		fcount += f
 	}
-	ayame.Log.Infof("polluted-entry-ratio: %d %f %f\n", *numberOfNodes, *failureRatio, float64(fcount)/float64(count))
+	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(count))
 
 	FailureType = bak
 	return nil
@@ -121,7 +121,7 @@ func FastJoinAllDisjoint(convergeTimes int, nodes []*KADNode, alpha int, k int, 
 			sumMsgs += msgs
 		}
 	}
-	ayame.Log.Infof("avg-join-msgs: %d %f %f\n", *numberOfNodes, *failureRatio, float64(sumMsgs)/float64(len(nodes)))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 
 	count := 0
 	fcount := 0
@@ -130,17 +130,19 @@ func FastJoinAllDisjoint(convergeTimes int, nodes []*KADNode, alpha int, k int, 
 		count += c
 		fcount += f
 	}
-	ayame.Log.Infof("polluted-entry-ratio: %d %f %f\n", *numberOfNodes, *failureRatio, float64(fcount)/float64(count))
+	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(count))
 
 	//	FailureType = bak
 	return nil
 }
 
+var paramsString string
+
 func main() {
 	alpha = flag.Int("alpha", 1, "the parallelism parameter")
 	kValue = flag.Int("k", 8, "the bucket size parameter")
 	dValue = flag.Int("d", 4, "the disjoint path parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	convergeTimes = flag.Int("c", 3, "converge times")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after}")
@@ -171,6 +173,12 @@ func main() {
 	default:
 		panic(fmt.Errorf("no such type %s", *failureType))
 	}
+	trials := *numberOfNodes
+	if *numberOfTrials > 0 {
+		trials = *numberOfTrials
+	}
+
+	paramsString = fmt.Sprintf("%d %d %d %d %.2f %s %d", *numberOfNodes, *kValue, *dValue, *alpha, *failureRatio, *failureType, *convergeTimes)
 
 	nodes := ConstructOverlay(*numberOfNodes, *convergeTimes, *alpha, *kValue, *dValue)
 	//numberOfTrials := *numberOfNodes * 6
@@ -179,11 +187,6 @@ func main() {
 	nums_msgs := []int{}
 	match_lengths := []float64{}
 	failures := 0
-
-	trials := *numberOfNodes
-	if *numberOfTrials > 0 {
-		trials = *numberOfTrials
-	}
 
 	for i := 1; i <= trials; i++ {
 		src := rand.Intn(len(NormalList))
@@ -201,11 +204,11 @@ func main() {
 		ayame.Log.Debugf("%d->%d: avg. results: %d, hops: %f, msgs: %d, hops_to_match: %f, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 	}
 	pmean, _ := stats.Mean(path_lengths)
-	ayame.Log.Infof("avg-paths-length: %d %f\n", *numberOfNodes, pmean)
+	ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %d %f\n", *numberOfNodes, hmean)
-	ayame.Log.Infof("avg-msgs: %d %f\n", *numberOfNodes, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %d %f %f\n", *numberOfNodes, *failureRatio, 1-float64(failures)/float64(trials))
+	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 
 	table_sizes := []int{}
 	for _, node := range nodes {
@@ -213,6 +216,6 @@ func main() {
 		table_sizes = append(table_sizes, node.routingTable.table.Size())
 	}
 
-	ayame.Log.Infof("avg-table-size: %d %f\n", *numberOfNodes, meanOfInt(table_sizes))
+	ayame.Log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
 
 }
