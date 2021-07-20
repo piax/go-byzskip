@@ -79,6 +79,8 @@ type RoutingTable interface {
 	// access entries
 	GetNeighbors(k int) ([]KeyMV, int) // get k neighbors and its level
 
+	GetCommonNeighbors(kmv KeyMV) []KeyMV // get neighbors which have common prefix with kmv
+
 	Add(c KeyMV)
 	// order is not care
 	GetAll() []KeyMV // get all disjoint entries
@@ -147,6 +149,21 @@ func (table *SkipRoutingTable) GetAll() []KeyMV {
 			ret = appendIfMissing(ret, n)
 			//			}
 		}
+	}
+	return ret
+}
+
+func (table *SkipRoutingTable) GetCommonNeighbors(kmv KeyMV) []KeyMV {
+	ret := []KeyMV{}
+	for l, singleLevel := range table.NeighborLists {
+		commonLen := table.km.MV().CommonPrefixLength(kmv.MV())
+		if l > commonLen { // no match
+			break
+		}
+		for _, n := range singleLevel.concatenate(true) {
+			ret = appendIfMissing(ret, n)
+		}
+		//fmt.Printf("level %d, common=%d, can=%s\n", l, commonLen, ayame.SliceString(ret))
 	}
 	return ret
 }

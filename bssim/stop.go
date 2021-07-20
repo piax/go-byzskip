@@ -24,6 +24,10 @@ func (table *StopRoutingTable) GetAll() []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 
+func (table *StopRoutingTable) GetCommonNeighbors(kmv bs.KeyMV) []bs.KeyMV {
+	return []bs.KeyMV{}
+}
+
 func (table *StopRoutingTable) Add(c bs.KeyMV) {
 	// do nothing.
 }

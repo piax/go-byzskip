@@ -264,7 +264,7 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 					//
 					localn.routingTable.Add(nodes[index])
 
-					umsgs, hijacked := FastUpdateNeighbors(localn, nodes[index], msg.results)
+					umsgs, hijacked := FastUpdateNeighbors(localn, nodes[index], msg.results, []*BSNode{})
 					sumMsgs += umsgs
 					if hijacked {
 						allFaultyCount++
