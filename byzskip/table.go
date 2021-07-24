@@ -120,7 +120,7 @@ func (table *SkipRoutingTable) GetNeighbors(key int) ([]KeyMV, int) {
 	var level int
 	// find the lowest level
 	for i, singleLevel := range table.NeighborLists {
-		kn, exists := singleLevel.pickupKNodes(key)
+		kn, exists := singleLevel.PickupKNodes(key)
 		if exists {
 			ret = kn
 			level = i
@@ -163,7 +163,7 @@ func (table *SkipRoutingTable) GetCommonNeighbors(kmv KeyMV) []KeyMV {
 		for _, n := range singleLevel.concatenate(true) {
 			ret = appendIfMissing(ret, n)
 		}
-		//fmt.Printf("level %d, common=%d, can=%s\n", l, commonLen, ayame.SliceString(ret))
+		//fmt.Printf("level %d, table=%d, key=%d, common=%d, can=%s\n", l, table.km.Key(), kmv.Key(), commonLen, ayame.SliceString(ret))
 	}
 	return ret
 }
@@ -507,7 +507,7 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 //	return strconv.Itoa(km.key)
 //}
 
-func (rts *NeighborList) pickupKNodes(target int) ([]KeyMV, bool) {
+func (rts *NeighborList) PickupKNodes(target int) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
 		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))

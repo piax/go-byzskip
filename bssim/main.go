@@ -23,6 +23,7 @@ var failureType *string
 var failureRatio *float64
 var joinType *string
 var unicastType *string
+var uniRoutingType *string
 var seed *int64
 var verbose *bool
 
@@ -400,12 +401,13 @@ var paramsString string
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
+	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -457,6 +459,17 @@ func main() {
 		UnicastType = U_ITER
 	}
 
+	switch *uniRoutingType {
+	case "single":
+		RoutingType = SINGLE
+	case "prune":
+		RoutingType = PRUNE
+	case "prune-opt1":
+		RoutingType = PRUNE_OPT1
+	case "prune-opt2":
+		RoutingType = PRUNE_OPT2
+	}
+
 	trials := *numberOfNodes
 	if *numberOfTrials > 0 {
 		trials = *numberOfTrials
@@ -501,7 +514,7 @@ func main() {
 			//nodes[src].SendEvent(msg)
 			// time out after 200ms
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				ayame.Log.Debugf("id=%d,src=%d, dst=%d timed out\n", msg.messageId, src, dst)
+				ayame.Log.Debugf("id=%d,src=%s, dst=%s timed out\n", msg.messageId, src, dst)
 				msg.root.channel <- true
 			}), int64(i*1000)+100)
 		}

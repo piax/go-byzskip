@@ -17,3 +17,6 @@
 # VSCode
 */.vscode/
 .vscode/
+
+# local working files
+work/

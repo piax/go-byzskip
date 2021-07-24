@@ -64,7 +64,7 @@ func ksToNs(lst []bs.KeyMV) []*BSNode {
 func (node *BSNode) GetNeighborsAndCandidates(s *BSNode) ([]*BSNode, int, []*BSNode) {
 	ret, level := node.routingTable.GetNeighbors(s.Key())
 	//can := node.routingTable.GetAll()
-	can := node.routingTable.GetCommonNeighbors(node)
+	can := node.routingTable.GetCommonNeighbors(s)
 	return ksToNs(ret), level, ksToNs(can)
 }
 

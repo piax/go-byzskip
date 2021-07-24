@@ -118,25 +118,30 @@ func (ev *BSUnicastEvent) nextMsg(n *BSNode, level int) *BSUnicastEvent {
 	return ev.createSubMessage(n, level)
 }
 
+var RoutingType = PRUNE_OPT2
+
 func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
+	var ret []*BSUnicastEvent
+	switch RoutingType {
+	case SINGLE:
+		ret, _ = ev.findNextHopsSingle()
+	case PRUNE:
+		fallthrough
+	case PRUNE_OPT1:
+		fallthrough
+	case PRUNE_OPT2:
+		ret, _ = ev.findNextHopsPrune()
+	}
+	return ret
+}
+
+func (ev *BSUnicastEvent) findNextHopsSingle() ([]*BSUnicastEvent, error) {
 	myNode := ev.Receiver().(*BSNode)
 	level := -1
 
 	var kNodes []*BSNode
 	nextMsgs := []*BSUnicastEvent{}
 
-	// find the lowest level
-	/*for i, singleLevel := range myNode.routingTable.NeighborLists {
-		kn, exists := singleLevel.pickupKNodes(ev.targetKey)
-		if exists {
-			kNodes = kn
-			level = i
-			break
-		}
-	}*/
-
-	//ks, lv := myNode.routingTable.GetNeighbors(ev.targetKey)
-	//kNodes = ksToNs(ks)
 	ks, lv := myNode.GetNeighbors(ev.targetKey)
 	kNodes = ks
 	level = lv
@@ -145,5 +150,63 @@ func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
 	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, ayame.SliceString(kNodes), level)
-	return nextMsgs
+	return nextMsgs, nil
+}
+
+const (
+	SINGLE int = iota
+	PRUNE
+	PRUNE_OPT1
+	PRUNE_OPT2
+)
+
+func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
+	var err error = nil
+	myNode := ev.Receiver().(*BSNode)
+	// root node case(?)
+	var kNodes []*BSNode = []*BSNode{}
+	var destLevel int = ev.level - 1
+	if ev == ev.root {
+		kNodes, destLevel = myNode.GetNeighbors(ev.targetKey)
+		ayame.Log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.targetKey, destLevel, ayame.SliceString(kNodes))
+	} else {
+		if ev.level == 0 {
+			kNodes = []*BSNode{myNode}
+		} else if RoutingType == PRUNE_OPT1 {
+			ks, _ := myNode.routingTable.GetNeighborLists()[0].PickupKNodes(ev.targetKey)
+			if len(ks) > 0 {
+				kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
+					return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
+				}).([]*BSNode)
+				destLevel = 0
+			}
+		} else if RoutingType == PRUNE_OPT2 {
+			for i := 0; i < destLevel; i++ {
+				ks, _ := myNode.routingTable.GetNeighborLists()[i].PickupKNodes(ev.targetKey)
+				if len(ks) > 0 {
+					kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
+						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
+					}).([]*BSNode)
+					destLevel = i
+					break
+				}
+			}
+			err = fmt.Errorf("implementation error")
+		}
+		if len(kNodes) == 0 {
+			ks, _ := myNode.routingTable.GetNeighborLists()[destLevel].PickupKNodes(ev.targetKey)
+			kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
+				return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
+			}).([]*BSNode)
+		}
+	}
+	nextMsgs := []*BSUnicastEvent{}
+
+	level := destLevel
+	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.targetKey, ayame.SliceString(kNodes), level, myNode.routingTable.String())
+	for _, n := range kNodes {
+		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
+	}
+	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, ayame.SliceString(kNodes), level)
+	return nextMsgs, err
 }
