@@ -24,6 +24,7 @@ var failureRatio *float64
 var joinType *string
 var unicastType *string
 var uniRoutingType *string
+var experiment *string
 var seed *int64
 var verbose *bool
 
@@ -401,13 +402,14 @@ var paramsString string
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
-	failureRatio = flag.Float64("f", 0.3, "failure ratio")
+	failureRatio = flag.Float64("f", 0.0, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	experiment = flag.String("exp", "uni-each", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -475,7 +477,11 @@ func main() {
 		trials = *numberOfTrials
 	}
 
-	paramsString = fmt.Sprintf("%d %d %d %.2f %s %s %s", *numberOfNodes, *kValue, *alpha, *failureRatio, *failureType, *joinType, *unicastType)
+	unicast := *unicastType
+	if *unicastType == "recur" {
+		unicast = *unicastType + ":" + *uniRoutingType
+	}
+	paramsString = fmt.Sprintf("%d %d %d %.2f %s %s %s", *numberOfNodes, *kValue, *alpha, *failureRatio, *failureType, *joinType, unicast)
 
 	if CPU_PROFILE {
 		f, _ := os.Create("cpu.pprof")
@@ -503,62 +509,11 @@ func main() {
 	failures := 0
 
 	if UnicastType == U_RECUR {
-		msgs := []*BSUnicastEvent{}
-		for i := 1; i <= trials; i++ {
-			src := NormalList[rand.Intn(len(NormalList))]
-			dst := NormalList[rand.Intn(len(NormalList))]
-			msg := NewBSUnicastEvent(src, ayame.MembershipVectorSize, dst.key) // starts with the max level.
-			msgs = append(msgs, msg)
-			ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.messageId, src, dst)
-			ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
-			//nodes[src].SendEvent(msg)
-			// time out after 200ms
-			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				ayame.Log.Debugf("id=%d,src=%s, dst=%s timed out\n", msg.messageId, src, dst)
-				msg.root.channel <- true
-			}), int64(i*1000)+100)
-		}
-		success := 0
-		for _, msg := range msgs {
-			go func(msg *BSUnicastEvent) {
-				<-msg.root.channel
-				if *verbose {
-					avg, _ := meanOfPathLength(msg.root.paths)
-					ayame.Log.Debugf("%d: started %d, finished: %d, avg.hops %f\n", msg.messageId, msg.Time(), msg.finishTime, avg)
-				}
-				if ContainsKey(msg.targetKey, msg.root.destinations) {
-					success++
-				} else {
-					ayame.Log.Debugf("%s->%d: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, ayame.SliceString(msg.root.destinations))
-				}
-				close(msg.root.channel)
-			}(msg)
-		}
-		ayame.GlobalEventExecutor.Reset()
-		ayame.GlobalEventExecutor.Sim(int64(trials*1000*2), true)
-		ayame.GlobalEventExecutor.AwaitFinish()
-
-		ave, _ := stats.Mean(funk.Map(msgs, func(msg *BSUnicastEvent) float64 {
-			avg, _ := meanOfPathLength(msg.destinationPaths)
-			ayame.Log.Debugf("%s->%d: avg. path length: %f\n", msg.root.Sender().Id(), msg.targetKey, avg)
-			return avg
-		}).([]float64))
-		counts := ayame.GlobalEventExecutor.EventCount
-
-		ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, ave)
-		ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, float64(counts)/float64(trials))
-		if FailureType == F_CALC {
-			// XXX
-			probSum := 0.0
-			count := 1000
-			for _, msg := range msgs {
-				prob := ComputeProbabilityMonteCarlo(msg, *failureRatio, count)
-				ayame.Log.Debugf("%s->%d %f\n", msg.Sender().Id(), msg.targetKey, prob)
-				probSum += prob
-			}
-			ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-probSum/float64(len(msgs)))
-		} else {
-			ayame.Log.Infof("success-ratio: %s %f\n", paramsString, float64(success)/float64(trials))
+		switch *experiment {
+		case "uni":
+			expUnicastRecursive(trials)
+		case "uni-each":
+			expUnicastEachRecursive()
 		}
 	} else {
 		for i := 1; i <= trials; i++ {
