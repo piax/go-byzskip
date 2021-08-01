@@ -83,10 +83,10 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 	success := 0
 	for _, msg := range msgs {
 		go func(msg *BSUnicastEvent) {
-			<-msg.root.channel
+			<-msg.root.channel // wait for the timeout.
 			//if *verbose {
-			avg, _ := meanOfPathLength(msg.root.paths)
-			ayame.Log.Debugf("%d: started %d, finished: %d, avg.hops %f\n", msg.messageId, msg.Time(), msg.finishTime, avg)
+			//avg, _ := meanOfPathLength(msg.root.paths)
+			ayame.Log.Debugf("%d: started %d, finished: %d\n", msg.targetKey, msg.messageId, msg.Time())
 			//}
 			if ContainsKey(msg.targetKey, msg.root.destinations) {
 				success++
@@ -101,8 +101,8 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 	ayame.GlobalEventExecutor.AwaitFinish()
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *BSUnicastEvent) float64 {
-		avg, _ := meanOfPathLength(msg.destinationPaths)
-		ayame.Log.Debugf("%s->%d: avg. path length: %f\n", msg.root.Sender().Id(), msg.targetKey, avg)
+		avg, _ := minHops(msg.destinationPaths, msg.targetKey)
+		ayame.Log.Debugf("%s->%d: min. path length: %f\n", msg.root.Sender().Id(), msg.targetKey, avg)
 		return avg
 	}).([]float64))
 	counts := ayame.GlobalEventExecutor.EventCount

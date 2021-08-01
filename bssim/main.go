@@ -386,12 +386,42 @@ func (pe PathEntry) String() string {
 	return pe.node.Id()
 }
 
+func hops(lst []PathEntry, dstKey int) (float64, bool) {
+	ret := float64(0)
+	prev := lst[0].node.(*BSNode)
+	found := false
+	for i, pe := range lst {
+		if dstKey == pe.node.(*BSNode).Key() {
+			found = true
+		}
+		if i != 0 && !prev.Equals(pe.node.(*BSNode)) {
+			ret++
+		}
+		prev = pe.node.(*BSNode)
+	}
+	///ayame.Log.Debugf("%s, %f\n", lst, ret)
+	return ret, found
+}
+
+func minHops(lst [][]PathEntry, dstKey int) (float64, bool) {
+	for _, path := range lst {
+		if ret, ok := hops(path, dstKey); ok {
+			return ret, true
+		}
+	}
+	return 0, false
+}
+
 func meanOfPathLength(lst [][]PathEntry) (float64, error) {
 	return stats.Mean(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
 }
 
 func maxPathLength(lst [][]PathEntry) (float64, error) {
 	return stats.Max(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
+}
+
+func minPathLength(lst [][]PathEntry) (float64, error) {
+	return stats.Min(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
 }
 
 var paramsString string
@@ -408,8 +438,8 @@ func main() {
 	failureRatio = flag.Float64("f", 0.0, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
-	experiment = flag.String("exp", "uni-each", "experiment type {uni|uni-each|join}")
+	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 

@@ -41,6 +41,21 @@ func halvesOfK(k int) (int, int) {
 	}
 }
 
+// not yet
+type Key interface {
+	// Less reports whether the element is less than b
+	Less(b interface{}) bool
+}
+
+type Int int
+
+func (t Int) Less(b interface{}) bool {
+	if v, ok := b.(Int); ok {
+		return int(t) < int(v)
+	}
+	return false
+}
+
 type KeyMV interface {
 	Key() int
 	MV() *ayame.MembershipVector
@@ -286,33 +301,40 @@ func lenLessThanExists(buf [][]KeyMV) bool {
 }
 */
 
-func maxNode(kms []KeyMV) KeyMV {
+func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
 	var max KeyMV = kms[0]
+	var min KeyMV = kms[0]
 	for _, s := range kms {
 		if max.Key() < s.Key() {
 			max = s
 		}
+		if min.Key() > s.Key() {
+			min = s
+		}
 	}
-	return max
+	return min, max
 }
 
-func larger(base int, max int, kmx, kmy int) bool {
-	if kmx <= base {
-		kmx += max + 1
+func less(base, min, max, x, y int) bool {
+	if x == max && y == min {
+		return true
 	}
-	if kmy <= base {
-		kmy += max + 1
+	if (y < base || y == base) && (base < x) {
+		return true
 	}
-	return kmx > kmy
+	if (x < base || x == base) && (base < y) {
+		return false
+	}
+	return x < y
 }
 
 // much faster version of SortCircular
 func SortC(base int, kms []KeyMV) {
-	max := maxNode(kms).Key()
+	min, max := minMaxNode(kms)
 	eNum := len(kms)
 	for i := eNum; i > 0; i-- {
 		for j := 0; j < i-1; j++ {
-			if larger(base, max, kms[j].Key(), kms[j+1].Key()) {
+			if less(base, min.Key(), max.Key(), kms[j+1].Key(), kms[j].Key()) {
 				kms[j], kms[j+1] = kms[j+1], kms[j]
 			}
 		}
@@ -320,7 +342,7 @@ func SortC(base int, kms []KeyMV) {
 }
 
 func SortCircular(base int, kms []KeyMV) {
-	max := maxNode(kms)
+	_, max := minMaxNode(kms)
 	sort.Slice(kms, func(x, y int) bool {
 		var xval, yval int
 		xval = kms[x].Key()

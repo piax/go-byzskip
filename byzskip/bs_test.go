@@ -16,6 +16,28 @@ func TestTable(t *testing.T) {
 	ast.Equal(t, rt.Height(), 4, "expected 4")
 }
 
+func TestLessCircular(t *testing.T) {
+	fmt.Println(less(5, 0, 10, 6, 3))
+	fmt.Println(less(5, 0, 10, 3, 6))
+}
+
+func TestSortCircular(t *testing.T) {
+	lst := []KeyMV{}
+	for i := -10; i < 0; i++ {
+		lst = append(lst, &IntKeyMV{Intkey: i, Mvdata: ayame.NewMembershipVector(2)})
+	}
+	SortC(-2, lst)
+
+	lst2 := []KeyMV{}
+	for i := -10; i < 0; i++ {
+		lst2 = append(lst2, &IntKeyMV{Intkey: i, Mvdata: ayame.NewMembershipVector(2)})
+	}
+	SortCircular(-2, lst2)
+
+	fmt.Println(ayame.SliceString(lst))
+	fmt.Println(ayame.SliceString(lst2))
+}
+
 func TestSorted(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})

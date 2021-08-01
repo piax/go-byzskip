@@ -393,16 +393,17 @@ func FastNodeLookup(target *BSNode, source *BSNode) ([]*BSNode, int, int, int, i
 	return rets, hops, msgs, hops_to_match, msgs_to_lookup, failure
 }
 
-func (m *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
-	switch sev.(type) {
-	case *BSUnicastEvent:
-		return m.handleUnicastSingle(sev, sendToSelf)
-	default:
-		return nil
+func PathsString(paths [][]PathEntry) string {
+	ret := ""
+	for _, path := range paths {
+		ret += "[" + strings.Join(funk.Map(path, func(pe PathEntry) string {
+			return fmt.Sprintf("%s@%d", pe.node.Id(), pe.level)
+		}).([]string), ",") + "]"
 	}
+	return ret
 }
 
-func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) error {
+func (m *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 	msg := sev.(*BSUnicastEvent)
 	ayame.Log.Debugf("handling %s->%d on %s level %d\n", msg.root.Sender().Id(), msg.targetKey, msg.Receiver().Id(), msg.level)
 	if !sendToSelf && msg.CheckAlreadySeen() {
@@ -416,19 +417,20 @@ func (m *BSNode) handleUnicastSingle(sev ayame.SchedEvent, sendToSelf bool) erro
 		ayame.Log.Debugf("level=0 on %d msg=%s\n", m.key, msg)
 		// reached to the destination.
 		if Contains(m, msg.root.destinations) { // already arrived.
-			ayame.Log.Debugf("redundant result: %s\n", msg)
+			ayame.Log.Debugf("redundant result: %s, path:%s\n", msg, PathsString([][]PathEntry{msg.path}))
 		} else { // NEW!
 			msg.root.destinations = append(msg.root.destinations, m)
 			msg.root.destinationPaths = append(msg.root.destinationPaths, msg.path)
 
 			if len(msg.root.destinations) == msg.root.expectedNumberOfResults {
 				// XXX need to send UnicastReply
-				ayame.Log.Debugf("dst=%d: completed %d\n", msg.targetKey, len(msg.root.destinations))
+				ayame.Log.Debugf("dst=%d: completed %d, paths:%s\n", msg.targetKey, len(msg.root.destinations),
+					PathsString(msg.root.destinationPaths))
 				//msg.root.channel <- true
 				//msg.root.finishTime = sev.Time()
 			} else {
 				if len(msg.root.destinations) >= msg.root.expectedNumberOfResults {
-					ayame.Log.Debugf("redundant results: %s\n", ayame.SliceString(msg.root.destinations))
+					ayame.Log.Debugf("redundant results: %s, paths:%s\n", ayame.SliceString(msg.root.destinations), PathsString(msg.root.destinationPaths))
 				} else {
 					ayame.Log.Debugf("wait for another result: currently %d\n", len(msg.root.destinations))
 				}
