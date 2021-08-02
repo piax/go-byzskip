@@ -14,6 +14,11 @@ type Node interface {
 	Locator() (string, error) // Endpoint
 }
 
+type LocalNode struct {
+	pid string
+	Node
+}
+
 func (an *LocalNode) SendEvent(ev SchedEvent) {
 	ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
@@ -22,11 +27,6 @@ func (an *LocalNode) SendEvent(ev SchedEvent) {
 func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, time)
-}
-
-type LocalNode struct {
-	pid string
-	Node
 }
 
 func NewLocalNode(key int) LocalNode {

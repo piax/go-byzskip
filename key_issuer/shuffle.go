@@ -31,7 +31,7 @@ func (n *Node) ExtractKey() float64 {
 }
 
 func (n *Node) String() string {
-	return fmt.Sprintf("{key:%f, netKey:%f, delegated: %d, faulty: %v}", n.logicalKey, n.netKey, len(n.delegated), n.isFailure)
+	return fmt.Sprintf("{logicalKey:%f, netKey:%f, delegated: %d, faulty: %v}", n.logicalKey, n.netKey, len(n.delegated), n.isFailure)
 }
 
 type ShuffleKeyIssuer struct {
@@ -57,14 +57,6 @@ func NewShuffleKeyIssuer() *ShuffleKeyIssuer {
 
 func (ki *ShuffleKeyIssuer) GetKey(key float64) float64 {
 	return ki.getShuffled(key)
-}
-
-func halvesOfK(k int) (int, int) {
-	if k%2 == 0 {
-		return k / 2, k / 2
-	} else {
-		return (k + 1) / 2, (k+1)/2 - 1
-	}
 }
 
 func excludeNodeWithKey(nodes []*Node, key float64) []*Node {

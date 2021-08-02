@@ -41,45 +41,13 @@ const (
 	JOIN_RATIO = 0.7
 )
 
-func FindKClosest(nodes SkipList, node *SkipListElement, k int) []float64 {
-	ret := []float64{}
-	left, right := halvesOfK(k)
-	cur := node
-	cur = nodes.Prev(cur)       // first one is for right one
-	for i := 0; i < left; i++ { // left side
-		ret = append(ret, cur.GetValue().ExtractKey())
-		cur = nodes.Prev(cur)
-	}
-	ayame.ReverseSlice(ret)
-	cur = node
-	for i := 0; i < right; i++ { // right side
-		ret = append(ret, cur.GetValue().ExtractKey())
-		cur = nodes.Next(cur)
-	}
-	return ret
-}
-
 func GetKClosest(nodes Ring, logicalKey float64, k int) []*Node {
 	ret := []*Node{}
 	left, right := k/2, k/2
 
-	var cur *Node
-	var index int
-	for i := 0; i < nodes.Len(); i++ {
-		if i+1 == nodes.Len() && nodes.Nth(i).netKey <= logicalKey { // the last one
-			cur = nodes.Nth(0)
-			index = 0
-		} else if nodes.Nth(i).netKey <= logicalKey && logicalKey < nodes.Nth(i+1).netKey {
-			cur = nodes.Nth(i)
-			index = i
-		} else if i == 0 && logicalKey < nodes.Nth(i).netKey { // the first one
-			cur = nodes.Nth(nodes.Len() - 1)
-			index = nodes.Len() - 1
-		}
-	}
+	index, cur := nodes.Find(logicalKey)
 
 	start := index
-
 	// cur is always non-nil
 	for len(ret) < left {
 		if cur.netKey != logicalKey { // myself (when as-is) is skipped.
@@ -196,7 +164,7 @@ func main() {
 	// Jain's fairness.
 	jain_num := 0
 	jain_denom := 0
-	min := 10000
+	min := *numberOfNodes
 	max := 0
 	sum := 0
 	for _, node := range ring {

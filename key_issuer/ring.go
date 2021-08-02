@@ -12,14 +12,22 @@ func (r *Ring) Push(x interface{}) {
 	*r = append(*r, x)
 }
 
-func (r Ring) Find(key float64) (int, *Node) {
-	for i, n := range r {
-		node := n.(*Node)
-		if node.netKey == key {
-			return i, node
+func (r Ring) Find(targetKey float64) (int, *Node) {
+	var cur *Node
+	var index int
+	for i := 0; i < r.Len(); i++ {
+		if i+1 == r.Len() && r.Nth(i).netKey <= targetKey { // the last one
+			cur = r.Nth(0)
+			index = 0
+		} else if r.Nth(i).netKey <= targetKey && targetKey < r.Nth(i+1).netKey {
+			cur = r.Nth(i)
+			index = i
+		} else if i == 0 && targetKey < r.Nth(i).netKey { // the first one
+			cur = r.Nth(r.Len() - 1)
+			index = r.Len() - 1
 		}
 	}
-	return -1, nil
+	return index, cur
 }
 
 func (r Ring) Update() {
