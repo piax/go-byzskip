@@ -2,8 +2,6 @@ package byzskip
 
 import (
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/piax/go-ayame/ayame"
@@ -41,34 +39,19 @@ func halvesOfK(k int) (int, int) {
 	}
 }
 
-// not yet
-type Key interface {
-	// Less reports whether the element is less than b
-	Less(b interface{}) bool
-}
-
-type Int int
-
-func (t Int) Less(b interface{}) bool {
-	if v, ok := b.(Int); ok {
-		return int(t) < int(v)
-	}
-	return false
-}
-
 type KeyMV interface {
-	Key() int
+	Key() ayame.Key
 	MV() *ayame.MembershipVector
 	Equals(other KeyMV) bool
 	String() string
 }
 
 type IntKeyMV struct {
-	Intkey int
+	Intkey ayame.Int
 	Mvdata *ayame.MembershipVector
 }
 
-func (km IntKeyMV) Key() int {
+func (km IntKeyMV) Key() ayame.Key {
 	return km.Intkey
 }
 
@@ -77,11 +60,11 @@ func (km IntKeyMV) MV() *ayame.MembershipVector {
 }
 
 func (km IntKeyMV) Equals(other KeyMV) bool {
-	return km.Intkey == other.Key()
+	return km.Intkey.Equals(other.Key())
 }
 
 func (km IntKeyMV) String() string {
-	return strconv.Itoa(km.Intkey)
+	return km.Intkey.String()
 }
 
 type NeighborList struct {
@@ -92,7 +75,7 @@ type NeighborList struct {
 
 type RoutingTable interface {
 	// access entries
-	GetNeighbors(k int) ([]KeyMV, int) // get k neighbors and its level
+	GetNeighbors(k ayame.Key) ([]KeyMV, int) // get k neighbors and its level
 
 	GetCommonNeighbors(kmv KeyMV) []KeyMV // get neighbors which have common prefix with kmv
 
@@ -130,7 +113,7 @@ func (table *SkipRoutingTable) AddNeighborList(s *NeighborList) {
 	table.NeighborLists = append(table.NeighborLists, s)
 }
 
-func (table *SkipRoutingTable) GetNeighbors(key int) ([]KeyMV, int) {
+func (table *SkipRoutingTable) GetNeighbors(key ayame.Key) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	// find the lowest level
@@ -238,7 +221,7 @@ func (table *SkipRoutingTable) Add(c KeyMV) {
 //}
 
 func (table *SkipRoutingTable) Size() int {
-	lst := []int{}
+	lst := []ayame.Key{}
 
 	for _, levelTable := range table.NeighborLists {
 		for _, node := range levelTable.Neighbors[LEFT] {
@@ -305,31 +288,31 @@ func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
 	var max KeyMV = kms[0]
 	var min KeyMV = kms[0]
 	for _, s := range kms {
-		if max.Key() < s.Key() {
+		if max.Key().Less(s.Key()) {
 			max = s
 		}
-		if min.Key() > s.Key() {
+		if s.Key().Less(min.Key()) {
 			min = s
 		}
 	}
 	return min, max
 }
 
-func less(base, min, max, x, y int) bool {
-	if x == max && y == min {
+func less(base, min, max, x, y ayame.Key) bool {
+	if x.Equals(max) && y.Equals(min) {
 		return true
 	}
-	if (y < base || y == base) && (base < x) {
+	if (y.Less(base) || y.Equals(base)) && (base.Less(x)) {
 		return true
 	}
-	if (x < base || x == base) && (base < y) {
+	if (x.Less(base) || x.Equals(base)) && (base.Less(y)) {
 		return false
 	}
-	return x < y
+	return x.Less(y)
 }
 
 // much faster version of SortCircular
-func SortC(base int, kms []KeyMV) {
+func SortC(base ayame.Key, kms []KeyMV) {
 	min, max := minMaxNode(kms)
 	eNum := len(kms)
 	for i := eNum; i > 0; i-- {
@@ -341,6 +324,7 @@ func SortC(base int, kms []KeyMV) {
 	}
 }
 
+/*
 func SortCircular(base int, kms []KeyMV) {
 	_, max := minMaxNode(kms)
 	sort.Slice(kms, func(x, y int) bool {
@@ -355,7 +339,7 @@ func SortCircular(base int, kms []KeyMV) {
 		}
 		return xval < yval
 	})
-}
+}*/
 
 func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	ret := []KeyMV{}
@@ -380,31 +364,31 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	return ret
 }
 
-func isOrderedInclusive(a, b, c int) bool {
-	if a <= b && b <= c {
+func isOrderedInclusive(a, b, c ayame.Key) bool {
+	if a.LessOrEquals(b) && b.LessOrEquals(c) {
 		return true
 	}
-	if b <= c && c <= a {
+	if b.LessOrEquals(c) && c.LessOrEquals(a) {
 		return true
 	}
-	if c <= a && a <= b {
+	if c.LessOrEquals(a) && a.LessOrEquals(b) {
 		return true
 	}
 	return false
 }
 
-func isOrdered(start int, startInclusive bool, val int, end int, endInclusive bool) bool {
-	if start == end {
-		return (startInclusive != endInclusive) || (start == val)
+func isOrdered(start ayame.Key, startInclusive bool, val ayame.Key, end ayame.Key, endInclusive bool) bool {
+	if start.Equals(end) {
+		return (startInclusive != endInclusive) || (start.Equals(val))
 	}
 	rc := isOrderedInclusive(start, val, end)
 	if rc {
-		if start == val {
+		if start.Equals(val) {
 			rc = startInclusive
 		}
 	}
 	if rc {
-		if val == end {
+		if val.Equals(end) {
 			rc = endInclusive
 		}
 	}
@@ -495,7 +479,7 @@ func min(x, y int) int {
 	return y
 }
 
-func closestKNodesDisjoint(target int, nodes []KeyMV) []KeyMV {
+func closestKNodesDisjoint(target ayame.Key, nodes []KeyMV) []KeyMV {
 	sortedNodes := uniqueNodes(nodes) //append([]KeyMV{}, nodes...)
 	SortC(target, sortedNodes)
 	leftLen := min(len(sortedNodes), LEFT_HALF_K)
@@ -529,7 +513,7 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 //	return strconv.Itoa(km.key)
 //}
 
-func (rts *NeighborList) PickupKNodes(target int) ([]KeyMV, bool) {
+func (rts *NeighborList) PickupKNodes(target ayame.Key) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
 		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))

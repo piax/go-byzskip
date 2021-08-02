@@ -4,6 +4,7 @@ import (
 
 	// "go mod tidy" is needed on go 1.16
 
+	"github.com/piax/go-ayame/ayame"
 	bs "github.com/piax/go-ayame/byzskip" // "go mod tidy" is needed on go 1.16
 	//
 )
@@ -15,7 +16,7 @@ func NewStopRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 	return &StopRoutingTable{} //, nodes: make(map[int]*BSNode)}
 }
 
-func (table *StopRoutingTable) GetNeighbors(k int) ([]bs.KeyMV, int) {
+func (table *StopRoutingTable) GetNeighbors(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 

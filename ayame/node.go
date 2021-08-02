@@ -9,6 +9,44 @@ type NodeMap map[string]LocalNode
 
 var LocalNodes = make(NodeMap)
 
+type Key interface {
+	// Less reports whether the element is less than b
+	Less(elem interface{}) bool
+	// Equals reports whether the element equals to b
+	Equals(elem interface{}) bool
+	// Suger.
+	LessOrEquals(elem interface{}) bool
+	String() string
+}
+
+// Integer Key
+type Int int
+
+func (t Int) Less(elem interface{}) bool {
+	if v, ok := elem.(Int); ok {
+		return int(t) < int(v)
+	}
+	return false
+}
+
+func (t Int) Equals(elem interface{}) bool {
+	if v, ok := elem.(Int); ok {
+		return int(t) == int(v)
+	}
+	return false
+}
+
+func (t Int) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(Int); ok {
+		return int(t) <= int(v)
+	}
+	return false
+}
+
+func (t Int) String() string {
+	return strconv.Itoa(int(t))
+}
+
 type Node interface {
 	Id() string
 	Locator() (string, error) // Endpoint
@@ -29,8 +67,8 @@ func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	GlobalEventExecutor.RegisterEvent(ev, time)
 }
 
-func NewLocalNode(key int) LocalNode {
-	return LocalNode{pid: strconv.Itoa(key)}
+func NewLocalNode(key Key) LocalNode {
+	return LocalNode{pid: key.String()}
 }
 
 func (n LocalNode) Id() string {

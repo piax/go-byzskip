@@ -17,25 +17,25 @@ func TestTable(t *testing.T) {
 }
 
 func TestLessCircular(t *testing.T) {
-	fmt.Println(less(5, 0, 10, 6, 3))
-	fmt.Println(less(5, 0, 10, 3, 6))
+	fmt.Println(less(ayame.Int(5), ayame.Int(0), ayame.Int(10), ayame.Int(6), ayame.Int(3)))
+	fmt.Println(less(ayame.Int(5), ayame.Int(0), ayame.Int(10), ayame.Int(3), ayame.Int(6)))
 }
 
 func TestSortCircular(t *testing.T) {
 	lst := []KeyMV{}
 	for i := -10; i < 0; i++ {
-		lst = append(lst, &IntKeyMV{Intkey: i, Mvdata: ayame.NewMembershipVector(2)})
+		lst = append(lst, &IntKeyMV{Intkey: ayame.Int(i), Mvdata: ayame.NewMembershipVector(2)})
 	}
-	SortC(-2, lst)
+	SortC(ayame.Int(-2), lst)
 
-	lst2 := []KeyMV{}
+	/*lst2 := []KeyMV{}
 	for i := -10; i < 0; i++ {
-		lst2 = append(lst2, &IntKeyMV{Intkey: i, Mvdata: ayame.NewMembershipVector(2)})
+		lst2 = append(lst2, &IntKeyMV{Intkey: Int(i), Mvdata: ayame.NewMembershipVector(2)})
 	}
-	SortCircular(-2, lst2)
+	SortCircular(-2, lst2)*/
 
 	fmt.Println(ayame.SliceString(lst))
-	fmt.Println(ayame.SliceString(lst2))
+	/*fmt.Println(ayame.SliceString(lst2))*/
 }
 
 func TestSorted(t *testing.T) {

@@ -117,7 +117,7 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 	for i := 0; i < count; i++ {
 		graphCopy := make(Graph)
 		for key, value := range graph {
-			if key != src.key && key != dst.key && rand.Float64() < failureRatio {
+			if key != src.key.String() && key != dst.key.String() && rand.Float64() < failureRatio {
 				graphCopy[key] = nil // failure
 			} else {
 				graphCopy[key] = value
@@ -142,7 +142,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = NewBSNode(i, mv, NewBSRoutingTable, false)
+			n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -150,9 +150,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(i, mv, NewStopRoutingTable, f)
+				n = NewBSNode(ayame.Int(i), mv, NewStopRoutingTable, f)
 			} else {
-				n = NewBSNode(i, mv, NewBSRoutingTable, f)
+				n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -164,9 +164,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(i, mv, NewAdversaryRoutingTable, f)
+				n = NewBSNode(ayame.Int(i), mv, NewAdversaryRoutingTable, f)
 			} else {
-				n = NewBSNode(i, mv, NewBSRoutingTable, f)
+				n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -386,12 +386,12 @@ func (pe PathEntry) String() string {
 	return pe.node.Id()
 }
 
-func hops(lst []PathEntry, dstKey int) (float64, bool) {
+func hops(lst []PathEntry, dstKey ayame.Key) (float64, bool) {
 	ret := float64(0)
 	prev := lst[0].node.(*BSNode)
 	found := false
 	for i, pe := range lst {
-		if dstKey == pe.node.(*BSNode).Key() {
+		if dstKey.Equals(pe.node.(*BSNode).Key()) {
 			found = true
 		}
 		if i != 0 && !prev.Equals(pe.node.(*BSNode)) {
@@ -403,7 +403,7 @@ func hops(lst []PathEntry, dstKey int) (float64, bool) {
 	return ret, found
 }
 
-func minHops(lst [][]PathEntry, dstKey int) (float64, bool) {
+func minHops(lst [][]PathEntry, dstKey ayame.Key) (float64, bool) {
 	for _, path := range lst {
 		if ret, ok := hops(path, dstKey); ok {
 			return ret, true
@@ -435,7 +435,7 @@ func main() {
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
-	failureRatio = flag.Float64("f", 0.0, "failure ratio")
+	failureRatio = flag.Float64("f", 0.5, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")

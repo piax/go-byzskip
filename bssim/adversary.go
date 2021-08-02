@@ -4,6 +4,7 @@ import (
 
 	// "go mod tidy" is needed on go 1.16
 
+	"github.com/piax/go-ayame/ayame"
 	bs "github.com/piax/go-ayame/byzskip" // "go mod tidy" is needed on go 1.16
 	//
 )
@@ -18,7 +19,7 @@ func NewAdversaryRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 }
 
 // get k neighbors and its level
-func (table *AdversaryRoutingTable) GetNeighbors(k int) ([]bs.KeyMV, int) {
+func (table *AdversaryRoutingTable) GetNeighbors(k ayame.Key) ([]bs.KeyMV, int) {
 	if FailureType == F_NONE {
 		return table.normal.GetNeighbors(k)
 	} else {

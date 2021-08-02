@@ -8,7 +8,7 @@ import (
 )
 
 type Array []*BSNode
-type Graph map[int][]*BSNode
+type Graph map[string][]*BSNode
 
 func (arr Array) hasPropertyOf(node *BSNode) bool {
 	for _, v := range arr {
@@ -21,27 +21,27 @@ func (arr Array) hasPropertyOf(node *BSNode) bool {
 
 func (graph Graph) Dump() {
 	for k, v := range graph {
-		fmt.Printf("%d: %s\n", k, ayame.SliceString(v))
+		fmt.Printf("%s: %s\n", k, ayame.SliceString(v))
 	}
 }
 
 func (graph Graph) Register(node *BSNode) {
-	if _, exist := graph[node.key]; !exist {
-		graph[node.key] = Array{} //[]*MIRONode{node}
+	if _, exist := graph[node.key.String()]; !exist {
+		graph[node.key.String()] = Array{} //[]*MIRONode{node}
 	}
 }
 
 func (graph Graph) AddChild(parent *BSNode, node *BSNode) {
-	if array, exist := graph[parent.Key()]; exist {
-		graph[parent.Key()] = appendIfMissing(array, node)
+	if array, exist := graph[parent.Key().String()]; exist {
+		graph[parent.Key().String()] = appendIfMissing(array, node)
 	} else {
-		graph[parent.Key()] = Array{node} //[]*MIRONode{node}
+		graph[parent.Key().String()] = Array{node} //[]*MIRONode{node}
 	}
 }
 
 func (graph Graph) ShortestPath(start *BSNode, end *BSNode, path Array) Array {
 	//fmt.Printf("start: %d\n", start.key)
-	if _, exist := graph[start.Key()]; !exist {
+	if _, exist := graph[start.Key().String()]; !exist {
 		return path
 	}
 	path = append(path, start)
@@ -50,7 +50,7 @@ func (graph Graph) ShortestPath(start *BSNode, end *BSNode, path Array) Array {
 		return path
 	}
 	shortest := make(Array, 0)
-	for _, node := range graph[start.Key()] {
+	for _, node := range graph[start.Key().String()] {
 		if !path.hasPropertyOf(node) {
 			newPath := graph.ShortestPath(node, end, path)
 			if len(newPath) > 0 {
@@ -65,7 +65,7 @@ func (graph Graph) ShortestPath(start *BSNode, end *BSNode, path Array) Array {
 
 func (graph Graph) PathExists(start *BSNode, end *BSNode, path Array) (Array, bool) {
 	//fmt.Printf("start: %d\n", start.key)
-	if _, exist := graph[start.Key()]; !exist {
+	if _, exist := graph[start.Key().String()]; !exist {
 		return path, false
 	}
 	path = append(path, start)
@@ -74,7 +74,7 @@ func (graph Graph) PathExists(start *BSNode, end *BSNode, path Array) (Array, bo
 		return path, true
 	}
 	shortest := make(Array, 0)
-	for _, node := range graph[start.Key()] {
+	for _, node := range graph[start.Key().String()] {
 		if !path.hasPropertyOf(node) {
 			newPath, found := graph.PathExists(node, end, path)
 			if found {
@@ -109,7 +109,7 @@ func CalcProbabilityMonteCarlo(paths [][]PathEntry, src *BSNode, dst *BSNode, fa
 	for i := 0; i < count; i++ {
 		graphCopy := make(Graph)
 		for key, value := range graph {
-			if key != src.key && key != dst.key && rand.Float64() < failureRatio {
+			if key != src.key.String() && key != dst.key.String() && rand.Float64() < failureRatio {
 				graphCopy[key] = nil // failure
 			} else {
 				graphCopy[key] = value

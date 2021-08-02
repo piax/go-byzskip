@@ -45,9 +45,9 @@ func LessThanExists(lst []int, x int) bool {
 	return true
 }
 
-func AppendIfMissing(slice []int, i int) []int {
+func AppendIfMissing(slice []Key, i Key) []Key {
 	for _, ele := range slice {
-		if ele == i {
+		if ele.Equals(i) {
 			return slice
 		}
 	}
