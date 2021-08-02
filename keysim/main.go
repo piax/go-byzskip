@@ -6,6 +6,7 @@ import (
 
 	"github.com/op/go-logging"
 	"github.com/piax/go-ayame/ayame"
+	ki "github.com/piax/go-ayame/key_issuer"
 	"golang.org/x/exp/rand"
 	"gonum.org/v1/gonum/stat/distuv"
 )
@@ -21,9 +22,9 @@ var paramAlpha *float64
 var paramBeta *float64
 var verbose *bool
 
-func allFailure(delegated []*Node) bool {
+func allFailure(delegated []*ki.Node) bool {
 	for _, d := range delegated {
-		if !d.isFailure {
+		if !d.IsFailure() {
 			return false
 		}
 	}
@@ -41,8 +42,8 @@ const (
 	JOIN_RATIO = 0.7
 )
 
-func GetKClosest(nodes Ring, logicalKey float64, k int) []*Node {
-	ret := []*Node{}
+func GetKClosest(nodes Ring, logicalKey float64, k int) []*ki.Node {
+	ret := []*ki.Node{}
 	left, right := k/2, k/2
 
 	index, cur := nodes.Find(logicalKey)
@@ -50,7 +51,7 @@ func GetKClosest(nodes Ring, logicalKey float64, k int) []*Node {
 	start := index
 	// cur is always non-nil
 	for len(ret) < left {
-		if cur.netKey != logicalKey { // myself (when as-is) is skipped.
+		if cur.Key() != logicalKey { // myself (when as-is) is skipped.
 			ret = append(ret, cur)
 		}
 		index, cur = nodes.Prev(index)
@@ -58,7 +59,7 @@ func GetKClosest(nodes Ring, logicalKey float64, k int) []*Node {
 	ayame.ReverseSlice(ret)
 	index = start
 	for len(ret) < left+right { // right side
-		if cur.netKey != logicalKey { // myself (when as-is) is skipped.
+		if cur.Key() != logicalKey { // myself (when as-is) is skipped.
 			ret = append(ret, cur)
 		}
 		index, cur = nodes.Next(index)
@@ -69,15 +70,15 @@ func GetKClosest(nodes Ring, logicalKey float64, k int) []*Node {
 
 func main() {
 	k = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 10000, "number of nodes")
-	seed = flag.Int64("seed", 3, "give a random seed")
-	poolSize = flag.Int("pool", 500, "the size of the pool")
-	paramAlpha = flag.Float64("alpha", 10.0, "the parameter alpha of beta distribution.")
-	paramBeta = flag.Float64("beta", 10.0, "the parameter beta of beta distribution.")
-	adversarialType = flag.String("adv", "burst", "adversarial attack type {burst|random}")
-	issueType = flag.String("issue", "shuffle", "key issuer type {shuffle|random|asis}")
-	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	verbose = flag.Bool("v", false, "verbose output")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
+	seed = flag.Int64("seed", 4, "give a random seed")
+	poolSize = flag.Int("pool", 5, "the size of the pool")
+	paramAlpha = flag.Float64("alpha", 1.0, "the parameter alpha of beta distribution.")
+	paramBeta = flag.Float64("beta", 1.0, "the parameter beta of beta distribution.")
+	adversarialType = flag.String("adv", "random", "adversarial attack type {burst|random}")
+	issueType = flag.String("issue", "random", "key issuer type {shuffle|random|asis}")
+	failureRatio = flag.Float64("f", 0.0, "failure ratio")
+	verbose = flag.Bool("v", true, "verbose output")
 	flag.Parse()
 
 	if *verbose {
@@ -111,31 +112,32 @@ func main() {
 	z := make([]float64, n)
 	for i := 0; i < n; i++ {
 		z[i] = dist.Rand()
+		//z[i] = rand.Float64()
 	}
 
 	paramsString := fmt.Sprintf("%d %d %f %f %f a:%s i:%s ", *numberOfNodes, *k, *failureRatio, *paramAlpha, *paramBeta, *adversarialType, *issueType)
 
-	auth := NewKeyIssuer(*issueType)
+	auth := ki.NewKeyIssuer(*issueType, *seed, *poolSize)
 
 	// store nodes in order of obtained keys
 	ring := make(Ring, 0)
 
 	for i := 0; i < n; i++ {
-		var node *Node
+		var node *ki.Node
 		switch *adversarialType {
 		case "burst":
 			if BURST_START < i && i < int(*failureRatio*(float64(n)))+BURST_START {
 				key := BURST_START_KEY + float64(i)*BURST_INTERVAL // burst key attack
 				netKey := auth.GetKey(key)
-				node = NewNodeWithFailure(key, netKey, true)
+				node = ki.NewNodeWithFailure(key, netKey, true)
 			} else {
 				netKey := auth.GetKey(z[i])
 				//node = NewNodeWithFailure(z[i], netKey, r.Float64() < *failureRatio)
-				node = NewNodeWithFailure(z[i], netKey, false)
+				node = ki.NewNodeWithFailure(z[i], netKey, false)
 			}
 		case "random":
 			netKey := auth.GetKey(z[i])
-			node = NewNodeWithFailure(z[i], netKey, r.Float64() < *failureRatio)
+			node = ki.NewNodeWithFailure(z[i], netKey, r.Float64() < *failureRatio)
 		}
 		if rand.Float64() < JOIN_RATIO {
 			ring.Push(node)
@@ -149,11 +151,11 @@ func main() {
 	// Note that this is just a simplified check: just check K neighbors (K/2 left and K/2 right are all faulty)
 	allFaultyCount := 0
 	for _, node := range ring {
-		closestNodes := GetKClosest(ring, node.(*Node).logicalKey, *k)
+		closestNodes := GetKClosest(ring, node.(*ki.Node).LogicalKey(), *k)
 		for _, n := range closestNodes {
-			n.delegated = append(n.delegated, node.(*Node))
+			n.Delegate(node.(*ki.Node))
 		}
-		if !node.(*Node).isFailure && allFailure(closestNodes) {
+		if !node.(*ki.Node).IsFailure() && allFailure(closestNodes) {
 			allFaultyCount++
 			ayame.Log.Infof("all failure for node=%s, %s\n", node, ayame.SliceString(closestNodes))
 		}
@@ -168,8 +170,8 @@ func main() {
 	max := 0
 	sum := 0
 	for _, node := range ring {
-		//fmt.Printf("%s\n", node)
-		x := len(node.(*Node).delegated)
+		//fmt.Printf("%s, %s\n", node, ayame.SliceString(node.(*Node).delegated))
+		x := len(node.(*ki.Node).Delegated())
 		jain_num += x
 		jain_denom += x * x
 		if min > x {

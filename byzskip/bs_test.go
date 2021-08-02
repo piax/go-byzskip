@@ -9,7 +9,7 @@ import (
 )
 
 func TestTable(t *testing.T) {
-	rt := NewSkipRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVector(2)})
+	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVector(2)})
 	rt.ensureHeight(3)
 	rt.ensureHeight(2)
 	fmt.Println(rt.String())
@@ -17,16 +17,16 @@ func TestTable(t *testing.T) {
 }
 
 func TestLessCircular(t *testing.T) {
-	fmt.Println(less(ayame.Int(5), ayame.Int(0), ayame.Int(10), ayame.Int(6), ayame.Int(3)))
-	fmt.Println(less(ayame.Int(5), ayame.Int(0), ayame.Int(10), ayame.Int(3), ayame.Int(6)))
+	fmt.Println(less(ayame.IntKey(5), ayame.IntKey(0), ayame.IntKey(10), ayame.IntKey(6), ayame.IntKey(3)))
+	fmt.Println(less(ayame.IntKey(5), ayame.IntKey(0), ayame.IntKey(10), ayame.IntKey(3), ayame.IntKey(6)))
 }
 
 func TestSortCircular(t *testing.T) {
 	lst := []KeyMV{}
 	for i := -10; i < 0; i++ {
-		lst = append(lst, &IntKeyMV{Intkey: ayame.Int(i), Mvdata: ayame.NewMembershipVector(2)})
+		lst = append(lst, &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)})
 	}
-	SortC(ayame.Int(-2), lst)
+	SortC(ayame.IntKey(-2), lst)
 
 	/*lst2 := []KeyMV{}
 	for i := -10; i < 0; i++ {
@@ -40,16 +40,16 @@ func TestSortCircular(t *testing.T) {
 
 func TestSorted(t *testing.T) {
 	InitK(2)
-	rt := NewSkipRoutingTable(&IntKeyMV{Intkey: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
-	rt.Add(&IntKeyMV{Intkey: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
-	rt.Add(&IntKeyMV{Intkey: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
-	rt.Add(&IntKeyMV{Intkey: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})
-	rt.Add(&IntKeyMV{Intkey: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})})
-	rt.Add(&IntKeyMV{Intkey: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})})
-	rt.Add(&IntKeyMV{Intkey: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
-	rt.Add(&IntKeyMV{Intkey: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
+	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
+	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})
+	rt.Add(&IntKeyMV{key: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})})
+	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})})
+	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
+	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
 	rslt := rt.GetCloserCandidates()
 	fmt.Println(ayame.SliceString(rslt))
-	rslt = rt.GetCommonNeighbors(&IntKeyMV{Intkey: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
+	rslt = rt.GetCommonNeighbors(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
 	fmt.Println(ayame.SliceString(rslt))
 }

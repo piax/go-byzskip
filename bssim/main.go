@@ -142,7 +142,7 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, false)
+			n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -150,9 +150,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(ayame.Int(i), mv, NewStopRoutingTable, f)
+				n = NewBSNode(ayame.IntKey(i), mv, NewStopRoutingTable, f)
 			} else {
-				n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, f)
+				n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -164,9 +164,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(ayame.Int(i), mv, NewAdversaryRoutingTable, f)
+				n = NewBSNode(ayame.IntKey(i), mv, NewAdversaryRoutingTable, f)
 			} else {
-				n = NewBSNode(ayame.Int(i), mv, NewBSRoutingTable, f)
+				n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -430,15 +430,15 @@ var paramsString string
 // unicastType i|r
 
 func main() {
-	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
+	alpha = flag.Int("alpha", 3, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 32, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.5, "failure ratio")
-	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	joinType = flag.String("joinType", "cheat", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")

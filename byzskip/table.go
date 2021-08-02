@@ -47,12 +47,12 @@ type KeyMV interface {
 }
 
 type IntKeyMV struct {
-	Intkey ayame.Int
+	key    ayame.IntKey
 	Mvdata *ayame.MembershipVector
 }
 
 func (km IntKeyMV) Key() ayame.Key {
-	return km.Intkey
+	return km.key
 }
 
 func (km IntKeyMV) MV() *ayame.MembershipVector {
@@ -60,11 +60,11 @@ func (km IntKeyMV) MV() *ayame.MembershipVector {
 }
 
 func (km IntKeyMV) Equals(other KeyMV) bool {
-	return km.Intkey.Equals(other.Key())
+	return km.key.Equals(other.Key())
 }
 
 func (km IntKeyMV) String() string {
-	return km.Intkey.String()
+	return km.key.String()
 }
 
 type NeighborList struct {
@@ -302,10 +302,10 @@ func less(base, min, max, x, y ayame.Key) bool {
 	if x.Equals(max) && y.Equals(min) {
 		return true
 	}
-	if (y.Less(base) || y.Equals(base)) && (base.Less(x)) {
+	if (y.LessOrEquals(base)) && (base.Less(x)) {
 		return true
 	}
-	if (x.Less(base) || x.Equals(base)) && (base.Less(y)) {
+	if (x.LessOrEquals(base)) && (base.Less(y)) {
 		return false
 	}
 	return x.Less(y)

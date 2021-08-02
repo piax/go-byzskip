@@ -25,7 +25,7 @@
 // Additionally, there are methods for retrieving the next and previous element as well as changing the actual value
 // without the need for re-insertion (as long as the key stays the same!)
 // Skiplist is a fast alternative to a balanced tree.
-package main
+package key_issuer
 
 import (
 	"fmt"

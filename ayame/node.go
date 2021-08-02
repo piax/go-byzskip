@@ -20,31 +20,58 @@ type Key interface {
 }
 
 // Integer Key
-type Int int
+type IntKey int
 
-func (t Int) Less(elem interface{}) bool {
-	if v, ok := elem.(Int); ok {
+func (t IntKey) Less(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
 		return int(t) < int(v)
 	}
 	return false
 }
 
-func (t Int) Equals(elem interface{}) bool {
-	if v, ok := elem.(Int); ok {
+func (t IntKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
 		return int(t) == int(v)
 	}
 	return false
 }
 
-func (t Int) LessOrEquals(elem interface{}) bool {
-	if v, ok := elem.(Int); ok {
+func (t IntKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
 		return int(t) <= int(v)
 	}
 	return false
 }
 
-func (t Int) String() string {
+func (t IntKey) String() string {
 	return strconv.Itoa(int(t))
+}
+
+type FloatKey float64
+
+func (t FloatKey) Less(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) < int(v)
+	}
+	return false
+}
+
+func (t FloatKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) == int(v)
+	}
+	return false
+}
+
+func (t FloatKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) <= int(v)
+	}
+	return false
+}
+
+func (t FloatKey) String() string {
+	return fmt.Sprintf("%f", float64(t))
 }
 
 type Node interface {

@@ -1,4 +1,4 @@
-package main
+package key_issuer
 
 import "math/rand"
 
@@ -26,13 +26,13 @@ func (ki *AsIsKeyIssuer) GetKey(logicalKey float64) float64 {
 	return logicalKey
 }
 
-func NewKeyIssuer(issuerType string) KeyIssuer {
+func NewKeyIssuer(issuerType string, seed int64, poolSize int) KeyIssuer {
 	switch issuerType {
 	case "random":
 		return NewRandomKeyIssuer()
 	case "asis":
 		return NewAsIsKeyIssuer()
 	default:
-		return NewShuffleKeyIssuer()
+		return NewShuffleKeyIssuer(seed, poolSize)
 	}
 }

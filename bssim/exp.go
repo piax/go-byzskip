@@ -101,9 +101,9 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 	ayame.GlobalEventExecutor.AwaitFinish()
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *BSUnicastEvent) float64 {
-		avg, _ := minHops(msg.destinationPaths, msg.targetKey)
-		ayame.Log.Debugf("%s->%d: min. path length: %f\n", msg.root.Sender().Id(), msg.targetKey, avg)
-		return avg
+		min, _ := minHops(msg.destinationPaths, msg.targetKey)
+		ayame.Log.Debugf("%s->%s: min. path length: %f\n", msg.root.Sender(), msg.targetKey, min)
+		return min
 	}).([]float64))
 	counts := ayame.GlobalEventExecutor.EventCount
 
