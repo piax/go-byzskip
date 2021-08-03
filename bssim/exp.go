@@ -89,6 +89,7 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 			ayame.Log.Debugf("%d: started %d, finished: %d\n", msg.targetKey, msg.messageId, msg.Time())
 			//}
 			if ContainsKey(msg.targetKey, msg.root.destinations) {
+				ayame.Log.Debugf("%d is included in %s\n", msg.targetKey, msg.root.destinations)
 				success++
 			} else {
 				ayame.Log.Infof("%s->%d: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, ayame.SliceString(msg.root.destinations))
@@ -101,9 +102,9 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 	ayame.GlobalEventExecutor.AwaitFinish()
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *BSUnicastEvent) float64 {
-		avg, _ := minHops(msg.destinationPaths, msg.targetKey)
-		ayame.Log.Debugf("%s->%d: min. path length: %f\n", msg.root.Sender().Id(), msg.targetKey, avg)
-		return avg
+		min, _ := minHops(msg.destinationPaths, msg.targetKey)
+		ayame.Log.Debugf("%s->%s: min. path length: %f\n", msg.root.Sender(), msg.targetKey, min)
+		return min
 	}).([]float64))
 	counts := ayame.GlobalEventExecutor.EventCount
 

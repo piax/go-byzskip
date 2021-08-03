@@ -11,7 +11,7 @@ import (
 
 type BSUnicastEvent struct {
 	///sourceNode *SGNode
-	targetKey int
+	targetKey ayame.Key
 	messageId int
 	path      []PathEntry // node-ids
 	paths     [][]PathEntry
@@ -38,7 +38,7 @@ type PathEntry struct {
 
 var nextMessageId int = 0
 
-func NewBSUnicastEvent(receiver *BSNode, level int, target int) *BSUnicastEvent {
+func NewBSUnicastEvent(receiver *BSNode, level int, target ayame.Key) *BSUnicastEvent {
 	nextMessageId++
 	ev := &BSUnicastEvent{
 		targetKey:                  target,

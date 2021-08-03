@@ -7,12 +7,11 @@ import (
 	"strings"
 
 	bs "github.com/piax/go-ayame/byzskip" // "go mod tidy" is needed on go 1.16
-	"strconv"
 	//
 )
 
 type BSNode struct {
-	key int
+	key ayame.Key
 	mv  *ayame.MembershipVector
 	//bs.IntKeyMV
 
@@ -22,7 +21,7 @@ type BSNode struct {
 	ayame.LocalNode
 }
 
-func (n *BSNode) Key() int {
+func (n *BSNode) Key() ayame.Key {
 	return n.key
 }
 
@@ -31,11 +30,11 @@ func (n *BSNode) MV() *ayame.MembershipVector {
 }
 
 func (n *BSNode) Equals(m bs.KeyMV) bool {
-	return m.Key() == n.key
+	return m.Key().Equals(n.key)
 }
 
 func (n *BSNode) String() string {
-	ret := strconv.Itoa(n.Key())
+	ret := n.Key().String()
 	if n.isFailure {
 		ret += "*"
 	}
@@ -77,7 +76,7 @@ const (
 	F_CALC
 )
 
-func NewBSNode(key int, mv *ayame.MembershipVector, maker func(bs.KeyMV) bs.RoutingTable, isFailure bool) *BSNode {
+func NewBSNode(key ayame.Key, mv *ayame.MembershipVector, maker func(bs.KeyMV) bs.RoutingTable, isFailure bool) *BSNode {
 	ret := &BSNode{key: key, mv: mv,
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
 		LocalNode: ayame.NewLocalNode(key),
@@ -88,7 +87,7 @@ func NewBSNode(key int, mv *ayame.MembershipVector, maker func(bs.KeyMV) bs.Rout
 }
 
 // for local
-func (node *BSNode) GetNeighbors(key int) ([]*BSNode, int) {
+func (node *BSNode) GetNeighbors(key ayame.Key) ([]*BSNode, int) {
 	nb, lv := node.routingTable.GetNeighbors(key)
 	return ksToNs(nb), lv
 }
@@ -98,7 +97,7 @@ func (node *BSNode) GetCandidates() []*BSNode {
 }
 
 // called by remote
-func (node *BSNode) FastFindKey(key int) ([]*BSNode, int) {
+func (node *BSNode) FastFindKey(key ayame.Key) ([]*BSNode, int) {
 	nb, lv := node.routingTable.GetNeighbors(key)
 	return ksToNs(nb), lv
 }
@@ -182,9 +181,9 @@ func Contains(node *BSNode, nodes []*BSNode) bool {
 	return false
 }
 
-func ContainsKey(key int, nodes []*BSNode) bool {
+func ContainsKey(key ayame.Key, nodes []*BSNode) bool {
 	for _, n := range nodes {
-		if n.Key() == key {
+		if n.Key().Equals(key) {
 			return true
 		}
 	}
@@ -218,7 +217,7 @@ func appendNodesIfMissing(lst []*BSNode, nodes []*BSNode) []*BSNode {
 
 var FailureType int
 
-func FastLookup(key int, source *BSNode) ([]*BSNode, int, int, int, bool) {
+func FastLookup(key ayame.Key, source *BSNode) ([]*BSNode, int, int, int, bool) {
 	hops := 0
 	msgs := 0
 	hops_to_match := -1

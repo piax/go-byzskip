@@ -9,6 +9,71 @@ type NodeMap map[string]LocalNode
 
 var LocalNodes = make(NodeMap)
 
+type Key interface {
+	// Less reports whether the element is less than b
+	Less(elem interface{}) bool
+	// Equals reports whether the element equals to b
+	Equals(elem interface{}) bool
+	// Suger.
+	LessOrEquals(elem interface{}) bool
+	String() string
+}
+
+// Integer Key
+type IntKey int
+
+func (t IntKey) Less(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
+		return int(t) < int(v)
+	}
+	return false
+}
+
+func (t IntKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
+		return int(t) == int(v)
+	}
+	return false
+}
+
+func (t IntKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(IntKey); ok {
+		return int(t) <= int(v)
+	}
+	return false
+}
+
+func (t IntKey) String() string {
+	return strconv.Itoa(int(t))
+}
+
+type FloatKey float64
+
+func (t FloatKey) Less(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) < int(v)
+	}
+	return false
+}
+
+func (t FloatKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) == int(v)
+	}
+	return false
+}
+
+func (t FloatKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(FloatKey); ok {
+		return int(t) <= int(v)
+	}
+	return false
+}
+
+func (t FloatKey) String() string {
+	return fmt.Sprintf("%f", float64(t))
+}
+
 type Node interface {
 	Id() string
 	Locator() (string, error) // Endpoint
@@ -29,8 +94,8 @@ func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	GlobalEventExecutor.RegisterEvent(ev, time)
 }
 
-func NewLocalNode(key int) LocalNode {
-	return LocalNode{pid: strconv.Itoa(key)}
+func NewLocalNode(key Key) LocalNode {
+	return LocalNode{pid: key.String()}
 }
 
 func (n LocalNode) Id() string {

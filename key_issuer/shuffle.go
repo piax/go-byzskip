@@ -1,4 +1,4 @@
-package main
+package key_issuer
 
 import (
 	"fmt"
@@ -16,6 +16,26 @@ type Node struct {
 	netKey     float64
 	delegated  []*Node
 	isFailure  bool
+}
+
+func (n *Node) Key() float64 {
+	return n.netKey
+}
+
+func (n *Node) LogicalKey() float64 {
+	return n.logicalKey
+}
+
+func (n *Node) IsFailure() bool {
+	return n.isFailure
+}
+
+func (n *Node) Delegate(d *Node) {
+	n.delegated = append(n.delegated, d)
+}
+
+func (n *Node) Delegated() []*Node {
+	return n.delegated
 }
 
 func NewNode(key float64, netKey float64) *Node {
@@ -40,13 +60,13 @@ type ShuffleKeyIssuer struct {
 	pool  []*Node
 }
 
-func NewShuffleKeyIssuer() *ShuffleKeyIssuer {
+func NewShuffleKeyIssuer(seed int64, poolSize int) *ShuffleKeyIssuer {
 	ret := &ShuffleKeyIssuer{
 		count: 0,
-		nodes: NewSkipListWithSeed(*seed),
+		nodes: NewSkipListWithSeed(seed),
 		pool:  []*Node{},
 	}
-	for ret.count < *poolSize {
+	for ret.count < poolSize {
 		key := rand.Float64()
 		requester := NewNode(key, key)
 		ret.pool = append(ret.pool, requester)

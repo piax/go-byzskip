@@ -50,9 +50,9 @@ func TestEventQueue(t *testing.T) {
 }
 
 func TestAppendIf(t *testing.T) {
-	lst := []int{}
-	lst = ayame.AppendIfMissing(lst, 1)
-	lst = ayame.AppendIfMissing(lst, 1)
-	lst = ayame.AppendIfMissing(lst, 2)
+	lst := []ayame.Key{}
+	lst = ayame.AppendIfMissing(lst, ayame.IntKey(1))
+	lst = ayame.AppendIfMissing(lst, ayame.IntKey(1))
+	lst = ayame.AppendIfMissing(lst, ayame.IntKey(2))
 	ast.Equal(t, len(lst), 2, "expected 2")
 }
