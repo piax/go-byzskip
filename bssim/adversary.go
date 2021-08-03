@@ -61,10 +61,15 @@ func (table *AdversaryRoutingTable) AddAdversarial(c bs.KeyMV) {
 }
 
 func (table *AdversaryRoutingTable) GetNeighborLists() []*bs.NeighborList {
-	return table.normal.GetNeighborLists()
+	if FailureType == F_NONE {
+		return table.normal.GetNeighborLists()
+	} else {
+		return table.adversarial.GetNeighborLists()
+	}
 }
 
 func (table *AdversaryRoutingTable) AddNeighborList(s *bs.NeighborList) {
+	// only for cheat
 	table.normal.AddNeighborList(s)
 }
 
