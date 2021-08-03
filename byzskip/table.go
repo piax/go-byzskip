@@ -76,8 +76,7 @@ type NeighborList struct {
 type RoutingTable interface {
 	// access entries
 	GetNeighbors(k ayame.Key) ([]KeyMV, int) // get k neighbors and its level
-
-	GetCommonNeighbors(kmv KeyMV) []KeyMV // get neighbors which have common prefix with kmv
+	GetCommonNeighbors(kmv KeyMV) []KeyMV    // get neighbors which have common prefix with kmv
 
 	Add(c KeyMV)
 	// order is not care
@@ -299,6 +298,12 @@ func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
 }
 
 func less(base, min, max, x, y ayame.Key) bool {
+	if base.Less(min) {
+		min = base
+	}
+	if max.Less(base) {
+		max = base
+	}
 	if x.Equals(max) && y.Equals(min) {
 		return true
 	}
@@ -353,9 +358,9 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	}
 
 	right := append([]KeyMV{}, kms...)
-	SortC(rt.km.Key(), right)
+	//SortC(rt.km.Key(), right)
 	left := append([]KeyMV{}, kms...)
-	SortC(rt.km.Key(), left)
+	//SortC(rt.km.Key(), left)
 	reverseSlice(left)
 	for i := 0; i < len(kms); i++ {
 		ret = appendIfMissing(ret, right[i])
