@@ -6,6 +6,7 @@ Simulators
 * bssim - A ByzSkip simulator
 * kadsim - A S/Kademlia simulator
 * sgsim - A Skip Graph simulator
+* keysim - A key issuer simulator
 
 Libraries
 
