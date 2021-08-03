@@ -23,19 +23,18 @@ func TestLessCircular(t *testing.T) {
 
 func TestSortCircular(t *testing.T) {
 	lst := []KeyMV{}
-	for i := -10; i < 0; i++ {
+	for i := 10; i > 0; i-- {
 		lst = append(lst, &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)})
 	}
-	SortC(ayame.IntKey(-2), lst)
+	SortC(ayame.IntKey(7), lst)
 
-	/*lst2 := []KeyMV{}
-	for i := -10; i < 0; i++ {
-		lst2 = append(lst2, &IntKeyMV{Intkey: Int(i), Mvdata: ayame.NewMembershipVector(2)})
+	lst2 := []KeyMV{}
+	base := ayame.IntKey(7)
+	for i := 10; i > 0; i-- {
+		lst2 = SortCircularAppend(base, lst2, &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)})
 	}
-	SortCircular(-2, lst2)*/
-
 	fmt.Println(ayame.SliceString(lst))
-	/*fmt.Println(ayame.SliceString(lst2))*/
+	fmt.Println(ayame.SliceString(lst2))
 }
 
 func TestSorted(t *testing.T) {

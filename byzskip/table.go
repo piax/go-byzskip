@@ -428,16 +428,44 @@ func reverseSlice(a []KeyMV) {
 	}
 }
 
+func SortCircularAppend(base ayame.Key, list []KeyMV, elem KeyMV) []KeyMV {
+	var ret []KeyMV
+	if len(list) == 0 {
+		ret = []KeyMV{elem}
+	} else if isOrdered(base, false, elem.Key(), list[0].Key(), false) {
+		ret = append([]KeyMV{elem}, list...)
+	} else {
+		inserted := false
+		ret = []KeyMV{}
+		for i := 0; i < len(list)-1; i++ {
+			if isOrdered(list[i].Key(), false, elem.Key(), list[i+1].Key(), false) {
+				ret = append(ret, list[0:i+1]...)
+				ret = append(ret, elem)
+				ret = append(ret, list[i+1:]...)
+				inserted = true
+				break
+			}
+		}
+		if !inserted {
+			ret = append(list, elem)
+		}
+	}
+	return ret
+}
+
 func (rts *NeighborList) Add(d int, u KeyMV) {
 	for _, a := range rts.Neighbors[d] {
 		if a.Equals(u) {
 			return
 		}
 	}
-	rts.Neighbors[d] = append(rts.Neighbors[d], u)
-	SortC(rts.owner.Key(), rts.Neighbors[d])
+	//rts.Neighbors[d] = append(rts.Neighbors[d], u)
+	//SortC(rts.owner.Key(), rts.Neighbors[d])
 	if d == LEFT {
-		///ayame.ReverseSlice(rts.Neighbors[d]) XXX too slow!?
+		reverseSlice(rts.Neighbors[d])
+	}
+	rts.Neighbors[d] = SortCircularAppend(rts.owner.Key(), rts.Neighbors[d], u)
+	if d == LEFT {
 		reverseSlice(rts.Neighbors[d])
 	}
 	i := rts.satisfuctionIndex(d)
