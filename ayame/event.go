@@ -6,7 +6,7 @@ type Event interface {
 	Sender() Node
 	SetSender(Node)
 	Receiver() Node
-	SetReceiver(Node)
+	//SetReceiver(Node)
 	SendTime() int64
 	SetSendTime(int64)
 	Time() int64

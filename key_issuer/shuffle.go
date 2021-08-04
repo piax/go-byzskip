@@ -75,8 +75,8 @@ func NewShuffleKeyIssuer(seed int64, poolSize int) *ShuffleKeyIssuer {
 	return ret
 }
 
-func (ki *ShuffleKeyIssuer) GetKey(key float64) float64 {
-	return ki.getShuffled(key)
+func (ki *ShuffleKeyIssuer) GetKey(key ayame.Key) ayame.Key {
+	return ayame.FloatKey(ki.getShuffled(float64(key.(ayame.FloatKey))))
 }
 
 func excludeNodeWithKey(nodes []*Node, key float64) []*Node {

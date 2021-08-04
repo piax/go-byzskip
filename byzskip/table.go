@@ -369,6 +369,19 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	return ret
 }
 
+func isOrderedSimple(a, b, c ayame.Key) bool {
+	if a.Less(b) && b.Less(c) {
+		return true
+	}
+	if b.Less(c) && c.Less(a) {
+		return true
+	}
+	if c.Less(a) && a.Less(b) {
+		return true
+	}
+	return false
+}
+
 func isOrderedInclusive(a, b, c ayame.Key) bool {
 	if a.LessOrEquals(b) && b.LessOrEquals(c) {
 		return true
@@ -432,13 +445,13 @@ func SortCircularAppend(base ayame.Key, list []KeyMV, elem KeyMV) []KeyMV {
 	var ret []KeyMV
 	if len(list) == 0 {
 		ret = []KeyMV{elem}
-	} else if isOrdered(base, false, elem.Key(), list[0].Key(), false) {
+	} else if isOrderedSimple(base, elem.Key(), list[0].Key()) { //isOrdered(base, false, elem.Key(), list[0].Key(), false) {
 		ret = append([]KeyMV{elem}, list...)
 	} else {
 		inserted := false
 		ret = []KeyMV{}
 		for i := 0; i < len(list)-1; i++ {
-			if isOrdered(list[i].Key(), false, elem.Key(), list[i+1].Key(), false) {
+			if isOrderedSimple(list[i].Key(), elem.Key(), list[i+1].Key()) { //isOrdered(list[i].Key(), false, elem.Key(), list[i+1].Key(), false) {
 				ret = append(ret, list[0:i+1]...)
 				ret = append(ret, elem)
 				ret = append(ret, list[i+1:]...)

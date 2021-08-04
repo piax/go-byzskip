@@ -7,6 +7,7 @@ import (
 
 const (
 	MembershipVectorSize = 32
+	DefaultAlpha         = 2
 )
 
 type MembershipVector struct {

@@ -89,10 +89,10 @@ func recursiveUnicastExperiment(msgs []*BSUnicastEvent, trials int) {
 			ayame.Log.Debugf("%d: started %d, finished: %d\n", msg.targetKey, msg.messageId, msg.Time())
 			//}
 			if ContainsKey(msg.targetKey, msg.root.destinations) {
-				ayame.Log.Debugf("%d is included in %s\n", msg.targetKey, msg.root.destinations)
+				ayame.Log.Debugf("%s is included in %s\n", msg.targetKey, msg.root.destinations)
 				success++
 			} else {
-				ayame.Log.Infof("%s->%d: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, ayame.SliceString(msg.root.destinations))
+				ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", msg.Sender().Id(), msg.targetKey, ayame.SliceString(msg.root.destinations))
 			}
 			close(msg.root.channel)
 		}(msg)

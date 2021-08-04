@@ -1,9 +1,13 @@
 package key_issuer
 
-import "math/rand"
+import (
+	"math/rand"
+
+	"github.com/piax/go-ayame/ayame"
+)
 
 type KeyIssuer interface {
-	GetKey(logicalKey float64) float64
+	GetKey(logicalKey ayame.Key) ayame.Key
 }
 
 type RandomKeyIssuer struct{}
@@ -12,8 +16,8 @@ func NewRandomKeyIssuer() *RandomKeyIssuer {
 	return &RandomKeyIssuer{}
 }
 
-func (ki *RandomKeyIssuer) GetKey(logicalKey float64) float64 {
-	return rand.Float64()
+func (ki *RandomKeyIssuer) GetKey(logicalKey ayame.Key) ayame.Key {
+	return ayame.FloatKey(rand.Float64())
 }
 
 type AsIsKeyIssuer struct{}
@@ -22,7 +26,7 @@ func NewAsIsKeyIssuer() *AsIsKeyIssuer {
 	return &AsIsKeyIssuer{}
 }
 
-func (ki *AsIsKeyIssuer) GetKey(logicalKey float64) float64 {
+func (ki *AsIsKeyIssuer) GetKey(logicalKey ayame.Key) ayame.Key {
 	return logicalKey
 }
 

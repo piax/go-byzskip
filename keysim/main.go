@@ -128,16 +128,16 @@ func main() {
 		case "burst":
 			if BURST_START < i && i < int(*failureRatio*(float64(n)))+BURST_START {
 				key := BURST_START_KEY + float64(i)*BURST_INTERVAL // burst key attack
-				netKey := auth.GetKey(key)
-				node = ki.NewNodeWithFailure(key, netKey, true)
+				netKey := auth.GetKey(ayame.FloatKey(key))
+				node = ki.NewNodeWithFailure(key, float64(netKey.(ayame.FloatKey)), true)
 			} else {
-				netKey := auth.GetKey(z[i])
+				netKey := auth.GetKey(ayame.FloatKey(z[i]))
 				//node = NewNodeWithFailure(z[i], netKey, r.Float64() < *failureRatio)
-				node = ki.NewNodeWithFailure(z[i], netKey, false)
+				node = ki.NewNodeWithFailure(z[i], float64(netKey.(ayame.FloatKey)), false)
 			}
 		case "random":
-			netKey := auth.GetKey(z[i])
-			node = ki.NewNodeWithFailure(z[i], netKey, r.Float64() < *failureRatio)
+			netKey := auth.GetKey(ayame.FloatKey(z[i]))
+			node = ki.NewNodeWithFailure(z[i], float64(netKey.(ayame.FloatKey)), r.Float64() < *failureRatio)
 		}
 		if rand.Float64() < JOIN_RATIO {
 			ring.Push(node)

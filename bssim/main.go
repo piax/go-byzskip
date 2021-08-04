@@ -6,12 +6,15 @@ import (
 	"math/rand"
 	"os"
 	"runtime/pprof"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/montanaflynn/stats"
 	"github.com/op/go-logging"
 	"github.com/piax/go-ayame/ayame"
 	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-ayame/key_issuer"
 	"github.com/thoas/go-funk"
 )
 
@@ -23,6 +26,7 @@ var failureType *string
 var failureRatio *float64
 var joinType *string
 var unicastType *string
+var keyIssuerType *string
 var uniRoutingType *string
 var experiment *string
 var seed *int64
@@ -85,6 +89,16 @@ func correctEntryRatio(nodes []*BSNode) float64 {
 	return float64(sumContained) / float64(sum)
 }*/
 
+func newKeyIssuer(typeString string) key_issuer.KeyIssuer {
+	split := strings.Split(typeString, "-")
+	var param int = -1
+	if len(split) == 2 {
+		param, _ = strconv.Atoi(split[1])
+	}
+	ret := key_issuer.NewKeyIssuer(split[0], *seed, param)
+	return ret
+}
+
 func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, count int) float64 {
 	src := msg.Sender().(*BSNode)
 	var dst *BSNode
@@ -138,11 +152,12 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 	for i := 0; i < numberOfNodes; i++ {
 		var n *BSNode
 		mv := ayame.NewMembershipVector(bs.ALPHA)
+		key := keyIssuer.GetKey(ayame.FloatKey(float64(i)))
 		switch FailureType {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, false)
+			n = NewBSNode(key, mv, NewBSRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -150,9 +165,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(ayame.IntKey(i), mv, NewStopRoutingTable, f)
+				n = NewBSNode(key, mv, NewStopRoutingTable, f)
 			} else {
-				n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, f)
+				n = NewBSNode(key, mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -164,9 +179,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(ayame.IntKey(i), mv, NewAdversaryRoutingTable, f)
+				n = NewBSNode(key, mv, NewAdversaryRoutingTable, f)
 			} else {
-				n = NewBSNode(ayame.IntKey(i), mv, NewBSRoutingTable, f)
+				n = NewBSNode(key, mv, NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -258,7 +273,7 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 			}
 			msg := NewBSUnicastEvent(nodes[index], ayame.MembershipVectorSize, localn.key)
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				localn.SendEvent(msg)
+				localn.Send(msg)
 				localn.Sched(ayame.NewSchedEventWithJob(func() {
 
 					sumMsgs += len(msg.results) // number of reply messages
@@ -425,6 +440,7 @@ func minPathLength(lst [][]PathEntry) (float64, error) {
 }
 
 var paramsString string
+var keyIssuer key_issuer.KeyIssuer
 
 // joinType cheat|recur|iter|iter-p
 // unicastType i|r
@@ -437,8 +453,9 @@ func main() {
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	keyIssuerType = flag.String("issuerType", "shuffle-100", "issuer type (type-param) type={shuffle|random|asis}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
@@ -522,6 +539,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	keyIssuer = newKeyIssuer(*keyIssuerType)
 	nodes := ConstructOverlay(*numberOfNodes)
 
 	if *verbose {
@@ -558,9 +576,9 @@ func main() {
 			}
 			if failure {
 				failures++
-				ayame.Log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+				ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
-			ayame.Log.Debugf("%d->%d: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
+			ayame.Log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 		}
 		pmean, _ := stats.Mean(path_lengths)
 		ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
