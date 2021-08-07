@@ -1,30 +1,33 @@
-package main
+package byzskip
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/piax/go-ayame/ayame"
-	"github.com/piax/go-ayame/byzskip"
 	"github.com/thoas/go-funk"
+
+	p2p "github.com/piax/go-ayame/ayame/p2p"
+	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
 type BSUnicastEvent struct {
 	///sourceNode *SGNode
-	targetKey ayame.Key
-	messageId int
+	TargetKey ayame.Key
+	MessageId string
 	path      []PathEntry // node-ids
-	paths     [][]PathEntry
+	Paths     [][]PathEntry
 	level     int
 	hop       int
-	children  []*BSUnicastEvent
-	root      *BSUnicastEvent
+	Children  []*BSUnicastEvent
+	Root      *BSUnicastEvent
 	// root only
 	expectedNumberOfResults    int
-	results                    []*BSNode
-	destinations               []*BSNode // distinct results
-	destinationPaths           [][]PathEntry
-	channel                    chan bool
+	Results                    []*BSNode
+	Destinations               []*BSNode // distinct results
+	DestinationPaths           [][]PathEntry
+	Channel                    chan bool
 	numberOfMessages           int
 	numberOfDuplicatedMessages int
 	finishTime                 int64
@@ -32,7 +35,7 @@ type BSUnicastEvent struct {
 }
 
 type PathEntry struct {
-	node  ayame.Node
+	Node  ayame.Node
 	level int
 }
 
@@ -41,21 +44,21 @@ var nextMessageId int = 0
 func NewBSUnicastEvent(receiver *BSNode, level int, target ayame.Key) *BSUnicastEvent {
 	nextMessageId++
 	ev := &BSUnicastEvent{
-		targetKey:                  target,
-		messageId:                  nextMessageId,
-		path:                       []PathEntry{{node: receiver, level: ayame.MembershipVectorSize}},
+		TargetKey:                  target,
+		MessageId:                  strconv.Itoa(nextMessageId),
+		path:                       []PathEntry{{Node: receiver, level: ayame.MembershipVectorSize}},
 		level:                      level,
 		hop:                        0,
-		children:                   []*BSUnicastEvent{},
-		expectedNumberOfResults:    byzskip.K,
-		results:                    []*BSNode{},
-		paths:                      []([]PathEntry){},
-		channel:                    make(chan bool),
+		Children:                   []*BSUnicastEvent{},
+		expectedNumberOfResults:    K,
+		Results:                    []*BSNode{},
+		Paths:                      []([]PathEntry){},
+		Channel:                    make(chan bool),
 		numberOfMessages:           0,
 		numberOfDuplicatedMessages: 0,
 		finishTime:                 0,
 		AbstractSchedEvent:         *ayame.NewSchedEvent()}
-	ev.root = ev
+	ev.Root = ev
 	ev.SetSender(receiver)
 	ev.SetReceiver(receiver)
 	return ev
@@ -64,21 +67,21 @@ func NewBSUnicastEvent(receiver *BSNode, level int, target ayame.Key) *BSUnicast
 func (ev *BSUnicastEvent) CheckAndSetAlreadySeen() bool {
 	myNode := ev.Receiver().(*BSNode)
 	msgLevel := ev.level
-	seenLevel, exists := myNode.querySeen[ev.messageId]
+	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
 	if exists && msgLevel <= seenLevel {
-		ayame.Log.Debugf("already seen: %d at %d\n", ev.messageId, seenLevel)
+		ayame.Log.Debugf("already seen: %d at %d\n", ev.MessageId, seenLevel)
 		return true
 	}
-	myNode.querySeen[ev.messageId] = msgLevel
+	myNode.QuerySeen[ev.MessageId] = msgLevel
 	return false
 }
 
 func (ev *BSUnicastEvent) CheckAlreadySeen() bool {
 	myNode := ev.Receiver().(*BSNode)
 	msgLevel := ev.level
-	seenLevel, exists := myNode.querySeen[ev.messageId]
+	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
 	if exists && msgLevel <= seenLevel {
-		ayame.Log.Debugf("already seen: %d at %d on %d\n", ev.messageId, seenLevel, myNode.Key())
+		ayame.Log.Debugf("already seen: %d at %d on %d\n", ev.MessageId, seenLevel, myNode.Key())
 		return true
 	}
 	return false
@@ -87,8 +90,8 @@ func (ev *BSUnicastEvent) CheckAlreadySeen() bool {
 func (ev *BSUnicastEvent) SetAlreadySeen() {
 	myNode := ev.Receiver().(*BSNode)
 	msgLevel := ev.level
-	ayame.Log.Debugf("set seen: %d at %d on %d\n", ev.messageId, msgLevel, myNode.Key())
-	myNode.querySeen[ev.messageId] = msgLevel
+	ayame.Log.Debugf("set seen: %d at %d on %d\n", ev.MessageId, msgLevel, myNode.Key())
+	myNode.QuerySeen[ev.MessageId] = msgLevel
 }
 
 func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicastEvent {
@@ -96,18 +99,25 @@ func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicas
 	sub.path = append([]PathEntry{}, ue.path...)
 	sub.SetReceiver(nextHop)
 	sub.SetSender(ue.Receiver())
-	sub.path = append(sub.path, PathEntry{node: nextHop, level: level})
+	sub.path = append(sub.path, PathEntry{Node: nextHop, level: level})
 	sub.hop = ue.hop + 1
 	sub.level = level
-	sub.children = []*BSUnicastEvent{}
-	ue.children = append(ue.children, &sub)
+	sub.Children = []*BSUnicastEvent{}
+	ue.Children = append(ue.Children, &sub)
 	return &sub
 }
 
 func (ue *BSUnicastEvent) String() string {
-	return ue.Receiver().Id() + "<" + strings.Join(funk.Map(ue.path, func(pe PathEntry) string {
-		return fmt.Sprintf("%s@%d", pe.node.Id(), pe.level)
+	return ue.Receiver().String() + "<" + strings.Join(funk.Map(ue.path, func(pe PathEntry) string {
+		return fmt.Sprintf("%s@%d", pe.Node, pe.level)
 	}).([]string), ",") + ">"
+}
+
+func (ue *BSUnicastEvent) Encode() *pb.Message {
+	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
+	ret := sender.NewMessage(fmt.Sprintf("%s-%s", sender.Key().String(), ue.MessageId),
+		pb.MessageType_UNICAST, ue.TargetKey)
+	return ret
 }
 
 func (ue *BSUnicastEvent) Run(node ayame.Node) {
@@ -142,14 +152,14 @@ func (ev *BSUnicastEvent) findNextHopsSingle() ([]*BSUnicastEvent, error) {
 	var kNodes []*BSNode
 	nextMsgs := []*BSUnicastEvent{}
 
-	ks, lv := myNode.GetNeighbors(ev.targetKey)
+	ks, lv := myNode.GetNeighbors(ev.TargetKey)
 	kNodes = ks
 	level = lv
-	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.targetKey, ayame.SliceString(kNodes), level, myNode.routingTable.String())
+	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, ayame.SliceString(kNodes), level)
+	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, nil
 }
 
@@ -166,14 +176,14 @@ func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
 	// root node case(?)
 	var kNodes []*BSNode = []*BSNode{}
 	var destLevel int = ev.level - 1
-	if ev == ev.root {
-		kNodes, destLevel = myNode.GetNeighbors(ev.targetKey)
-		ayame.Log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.targetKey, destLevel, ayame.SliceString(kNodes))
+	if ev == ev.Root {
+		kNodes, destLevel = myNode.GetNeighbors(ev.TargetKey)
+		ayame.Log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.TargetKey, destLevel, ayame.SliceString(kNodes))
 	} else {
 		if ev.level == 0 {
 			kNodes = []*BSNode{myNode}
 		} else if RoutingType == PRUNE_OPT1 {
-			ks, _ := myNode.routingTable.GetNeighborLists()[0].PickupKNodes(ev.targetKey)
+			ks, _ := myNode.RoutingTable.GetNeighborLists()[0].PickupKNodes(ev.TargetKey)
 			if len(ks) > 0 {
 				kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
 					return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
@@ -182,7 +192,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
 			}
 		} else if RoutingType == PRUNE_OPT2 {
 			for i := 0; i < destLevel; i++ {
-				ks, _ := myNode.routingTable.GetNeighborLists()[i].PickupKNodes(ev.targetKey)
+				ks, _ := myNode.RoutingTable.GetNeighborLists()[i].PickupKNodes(ev.TargetKey)
 				if len(ks) > 0 {
 					kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
 						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
@@ -194,7 +204,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
 			err = fmt.Errorf("implementation error")
 		}
 		if len(kNodes) == 0 {
-			ks, _ := myNode.routingTable.GetNeighborLists()[destLevel].PickupKNodes(ev.targetKey)
+			ks, _ := myNode.RoutingTable.GetNeighborLists()[destLevel].PickupKNodes(ev.TargetKey)
 			kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
 				return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
 			}).([]*BSNode)
@@ -203,10 +213,10 @@ func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
 	nextMsgs := []*BSUnicastEvent{}
 
 	level := destLevel
-	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.targetKey, ayame.SliceString(kNodes), level, myNode.routingTable.String())
+	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode.Id(), ev.targetKey, ayame.SliceString(kNodes), level)
+	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, err
 }

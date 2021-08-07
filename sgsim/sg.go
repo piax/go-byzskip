@@ -172,7 +172,7 @@ func (sg *SGNode) handleUnicast(sev ayame.SchedEvent) error {
 		return nil
 	}
 	ev := msg.createSubMessage(nextNode, level)
-	sg.SendEvent(ev)
+	sg.Send(ev)
 	return nil
 }
 
@@ -216,7 +216,7 @@ func sortCircular(base int, nodes []*SGNode) {
 }
 
 func NewSGNode(key int, mv *ayame.MembershipVector) *SGNode {
-	return &SGNode{key: key, mv: mv, LocalNode: ayame.GetLocalNode(strconv.Itoa(key))}
+	return &SGNode{key: key, mv: mv, LocalNode: *ayame.NewLocalNode(ayame.IntKey(key), mv)}
 }
 
 func (rts *RoutingTableSingleLevel) Add(d int, u *SGNode) {

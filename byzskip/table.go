@@ -26,10 +26,10 @@ const (
 	LEFT
 )
 
-const (
+/*const (
 	SINGLE int = iota
 	PRUNE
-)
+)*/
 
 func halvesOfK(k int) (int, int) {
 	if k%2 == 0 {
@@ -127,7 +127,7 @@ func (table *SkipRoutingTable) GetNeighbors(key ayame.Key) ([]KeyMV, int) {
 	return ret, level
 }
 
-func appendIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
+func appendKeyMVIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
 	for _, ele := range lst {
 		if ele.Equals(node) {
 			return lst
@@ -143,7 +143,7 @@ func (table *SkipRoutingTable) GetAll() []KeyMV {
 	for _, singleLevel := range table.NeighborLists {
 		for _, n := range singleLevel.concatenate(true) {
 			//			if n.mv.CommonPrefixLength(s.mv) >= 1 {
-			ret = appendIfMissing(ret, n)
+			ret = appendKeyMVIfMissing(ret, n)
 			//			}
 		}
 	}
@@ -158,7 +158,7 @@ func (table *SkipRoutingTable) GetCommonNeighbors(kmv KeyMV) []KeyMV {
 			break
 		}
 		for _, n := range singleLevel.concatenate(true) {
-			ret = appendIfMissing(ret, n)
+			ret = appendKeyMVIfMissing(ret, n)
 		}
 		//fmt.Printf("level %d, table=%d, key=%d, common=%d, can=%s\n", l, table.km.Key(), kmv.Key(), commonLen, ayame.SliceString(ret))
 	}
@@ -353,7 +353,7 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	kms := []KeyMV{}
 	for _, singleLevel := range rt.NeighborLists {
 		for _, n := range singleLevel.concatenate(false) {
-			kms = appendIfMissing(kms, n)
+			kms = appendKeyMVIfMissing(kms, n)
 		}
 	}
 
@@ -363,8 +363,8 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	//SortC(rt.km.Key(), left)
 	reverseSlice(left)
 	for i := 0; i < len(kms); i++ {
-		ret = appendIfMissing(ret, right[i])
-		ret = appendIfMissing(ret, left[i])
+		ret = appendKeyMVIfMissing(ret, right[i])
+		ret = appendKeyMVIfMissing(ret, left[i])
 	}
 	return ret
 }
@@ -538,7 +538,7 @@ func closestKNodesDisjoint(target ayame.Key, nodes []KeyMV) []KeyMV {
 func uniqueNodes(nodes []KeyMV) []KeyMV {
 	ret := []KeyMV{}
 	for _, n := range nodes {
-		ret = appendIfMissing(ret, n)
+		ret = appendKeyMVIfMissing(ret, n)
 	}
 	return ret
 }

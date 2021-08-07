@@ -5,12 +5,13 @@ import (
 	"math/rand"
 
 	"github.com/piax/go-ayame/ayame"
+	bs "github.com/piax/go-ayame/byzskip"
 )
 
-type Array []*BSNode
-type Graph map[string][]*BSNode
+type Array []*bs.BSNode
+type Graph map[string][]*bs.BSNode
 
-func (arr Array) hasPropertyOf(node *BSNode) bool {
+func (arr Array) hasPropertyOf(node *bs.BSNode) bool {
 	for _, v := range arr {
 		if node.Equals(v) {
 			return true
@@ -25,13 +26,13 @@ func (graph Graph) Dump() {
 	}
 }
 
-func (graph Graph) Register(node *BSNode) {
-	if _, exist := graph[node.key.String()]; !exist {
-		graph[node.key.String()] = Array{} //[]*MIRONode{node}
+func (graph Graph) Register(node *bs.BSNode) {
+	if _, exist := graph[node.Key().String()]; !exist {
+		graph[node.Key().String()] = Array{} //[]*MIRONode{node}
 	}
 }
 
-func (graph Graph) AddChild(parent *BSNode, node *BSNode) {
+func (graph Graph) AddChild(parent *bs.BSNode, node *bs.BSNode) {
 	if array, exist := graph[parent.Key().String()]; exist {
 		graph[parent.Key().String()] = appendIfMissing(array, node)
 	} else {
@@ -39,7 +40,7 @@ func (graph Graph) AddChild(parent *BSNode, node *BSNode) {
 	}
 }
 
-func (graph Graph) ShortestPath(start *BSNode, end *BSNode, path Array) Array {
+func (graph Graph) ShortestPath(start *bs.BSNode, end *bs.BSNode, path Array) Array {
 	//fmt.Printf("start: %d\n", start.key)
 	if _, exist := graph[start.Key().String()]; !exist {
 		return path
@@ -63,7 +64,7 @@ func (graph Graph) ShortestPath(start *BSNode, end *BSNode, path Array) Array {
 	return shortest
 }
 
-func (graph Graph) PathExists(start *BSNode, end *BSNode, path Array) (Array, bool) {
+func (graph Graph) PathExists(start *bs.BSNode, end *bs.BSNode, path Array) (Array, bool) {
 	//fmt.Printf("start: %d\n", start.key)
 	if _, exist := graph[start.Key().String()]; !exist {
 		return path, false
@@ -90,14 +91,14 @@ func (graph Graph) PathExists(start *BSNode, end *BSNode, path Array) (Array, bo
 	return nil, false
 }
 
-func CalcProbabilityMonteCarlo(paths [][]PathEntry, src *BSNode, dst *BSNode, failureRatio float64, count int) float64 {
+func CalcProbabilityMonteCarlo(paths [][]bs.PathEntry, src *bs.BSNode, dst *bs.BSNode, failureRatio float64, count int) float64 {
 
 	graph := make(Graph)
 	for _, pes := range paths {
 		fmt.Printf("path: %s\n", ayame.SliceString(pes))
-		var prev *BSNode = nil
+		var prev *bs.BSNode = nil
 		for _, pe := range pes {
-			this := pe.node.(*BSNode)
+			this := pe.Node.(*bs.BSNode)
 			graph.Register(this)
 			if prev != nil && prev != this {
 				graph.AddChild(prev, this)
@@ -109,7 +110,7 @@ func CalcProbabilityMonteCarlo(paths [][]PathEntry, src *BSNode, dst *BSNode, fa
 	for i := 0; i < count; i++ {
 		graphCopy := make(Graph)
 		for key, value := range graph {
-			if key != src.key.String() && key != dst.key.String() && rand.Float64() < failureRatio {
+			if key != src.Key().String() && key != dst.Key().String() && rand.Float64() < failureRatio {
 				graphCopy[key] = nil // failure
 			} else {
 				graphCopy[key] = value

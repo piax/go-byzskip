@@ -1,6 +1,10 @@
 package ayame
 
-import "fmt"
+import (
+	"fmt"
+
+	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
+)
 
 type Event interface {
 	Sender() Node
@@ -64,6 +68,7 @@ type SchedEvent interface {
 	Run(node Node)
 	SetCanceled(c bool)
 	IsCanceled() bool
+	Encode() *p2p.Message
 	Event
 }
 
@@ -131,5 +136,9 @@ func (se *AbstractSchedEvent) Cancel() {
 }
 
 func (ev *AbstractSchedEvent) String() string {
-	return fmt.Sprintf("%d:%s->%s", ev.vTime, ev.sender.Id(), ev.receiver.Id())
+	return fmt.Sprintf("%d:%s->%s", ev.vTime, ev.sender, ev.receiver)
+}
+
+func (ev *AbstractSchedEvent) Encode() *p2p.Message {
+	return nil
 }

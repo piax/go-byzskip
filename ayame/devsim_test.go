@@ -3,7 +3,6 @@ package ayame_test
 import (
 	"container/heap"
 	"math/rand"
-	"strconv"
 	"testing"
 
 	"github.com/piax/go-ayame/ayame"
@@ -13,8 +12,8 @@ import (
 func newTestEv(i int, t int64) ayame.Event {
 	ev := ayame.NewSchedEvent()
 	ev.SetTime(t)
-	ev.SetSender(ayame.GetLocalNode(strconv.Itoa(i)))
-	ev.SetReceiver(ayame.GetLocalNode(strconv.Itoa(0)))
+	ev.SetSender(ayame.NewLocalNode(ayame.IntKey(i), nil))
+	ev.SetReceiver(ayame.NewLocalNode(ayame.IntKey(0), nil))
 	return ev
 }
 
@@ -31,13 +30,13 @@ func TestEventQueue(t *testing.T) {
 	}
 	ev := heap.Pop(&eq).(ayame.Event)
 
-	ast.Equal(t, ev.Sender().Id(), "0", "expected 0")
+	ast.Equal(t, ev.Sender().String(), "0", "expected 0")
 	ast.Equal(t, ev.Time(), int64(1), "expected 1")
 
 	// test adding earliest time.
 	heap.Push(&eq, newTestEv(7, 1))
 	ev = heap.Pop(&eq).(ayame.Event)
-	ast.Equal(t, ev.Sender().Id(), "7", "expected 7")
+	ast.Equal(t, ev.Sender().String(), "7", "expected 7")
 
 	var prevTime int64
 	prevTime = 0

@@ -2,6 +2,8 @@ module github.com/piax/go-ayame/kadsim
 
 go 1.16
 
+replace github.com/piax/go-ayame/ayame => ../ayame
+
 require (
 	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
