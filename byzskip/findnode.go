@@ -11,7 +11,6 @@ import (
 )
 
 type BSFindNodeEvent struct {
-	///sourceNode *SGNode
 	isResponse bool
 	TargetKey  ayame.Key
 	MessageId  string

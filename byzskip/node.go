@@ -1,8 +1,10 @@
 package byzskip
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/piax/go-ayame/ayame"
@@ -11,8 +13,11 @@ import (
 
 // -- find node
 type FindNodeProc struct {
-	ev      *BSFindNodeEvent
-	queried []*BSNode // store the queried remote nodes
+	ev         *BSFindNodeEvent
+	candidates []*BSNode   // candidates
+	closers    []*BSNode   // the current result
+	queried    []*BSNode   // store the queried remote nodes
+	ch         chan string // notify message-id when finished
 }
 
 type BSNode struct {
@@ -21,7 +26,6 @@ type BSNode struct {
 	mv     *ayame.MembershipVector
 	//bs.IntKeyMV
 
-	keyMaker     func([]byte) ayame.Key
 	RoutingTable RoutingTable
 	IsFailure    bool
 	QuerySeen    map[string]int
@@ -189,26 +193,53 @@ func (pe PathEntry) String() string {
 	return pe.Node.String()
 }
 
+const (
+	FIND_NODE_TIMEOUT  = 20
+	FIND_NODE_INTERVAL = 1
+)
+
 func (n *BSNode) Join(introducer *BSNode) {
+	ctx := context.Background()
+	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second) // all request should be ended within
+	defer cancel()
+	var ch chan string
+	go func() { // run in background
+		ch = n.FindNode(findCtx, introducer)
+	}()
+	// wait for the process
+	select {
+	case <-ctx.Done(): // after FIND_NODE_TIMEOUT
+		ayame.Log.Infof("FIND_NODE process ended with timeout")
+	case mid := <-ch: // FindNode finished
+		ayame.Log.Infof("FIND_NODE process finished normally")
+		proc := n.Procs[mid]
+		ayame.Log.Infof("found %s\n", ayame.SliceString(proc.closers))
+	}
+}
+
+func (n *BSNode) FindNode(ctx context.Context, introducer *BSNode) chan string {
+
 	ev := NewBSFindNodeReqEvent(n, n.Key())
-	n.Procs[ev.MessageId] = &FindNodeProc{ev: ev, queried: []*BSNode{}}
+	ch := make(chan string, 1)
+	n.Procs[ev.MessageId] = &FindNodeProc{ev: ev, queried: []*BSNode{}, ch: ch}
 	ev.SetSender(n) // author of the message
 	ev.SetReceiver(introducer)
 	n.Send(ev)
+	return ch
 }
 
 func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 	ue := ev.(*BSFindNodeEvent)
 	if ue.isResponse {
 		if ue.level == 0 {
-			// finish
+
 		}
 		for _, c := range ue.candidates {
 			n.RoutingTable.Add(c)
 		}
-
 	} else {
 		n.RoutingTable.Add(ue.Sender().(*BSNode))
+		n.GetNeighborsAndCandidates(ue.Sender().(*BSNode))
 		n.GetCandidates()
 		n.GetNeighbors(ue.TargetKey)
 	}

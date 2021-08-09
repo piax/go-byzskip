@@ -1,8 +1,10 @@
 package byzskip
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/piax/go-ayame/ayame"
 	ast "github.com/stretchr/testify/assert"
@@ -51,4 +53,25 @@ func TestSorted(t *testing.T) {
 	fmt.Println(ayame.SliceString(rslt))
 	rslt = rt.GetCommonNeighbors(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
 	fmt.Println(ayame.SliceString(rslt))
+}
+
+func TestTicker(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1)*time.Second)
+	go func() {
+		time.Sleep(time.Duration(300) * time.Millisecond)
+		cancel()
+	}()
+	timer := time.NewTicker(time.Duration(100) * time.Millisecond)
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("timed out %s\n", ctx.Err())
+			timer.Stop() // stop the timer
+			break L
+		case <-timer.C:
+			fmt.Println("timer event")
+		}
+	}
+
 }
