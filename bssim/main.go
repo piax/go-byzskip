@@ -460,7 +460,7 @@ func main() {
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	keyIssuerType = flag.String("issuerType", "asis", "issuer type (type-param) type={shuffle|random|asis}")
-	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
+	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")

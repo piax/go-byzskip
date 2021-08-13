@@ -31,7 +31,7 @@ func FastFindKey(node *bs.BSNode, key ayame.Key) ([]*bs.BSNode, int) {
 }
 
 func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.BSNode) {
-	nb, lv, can := node.GetNeighborsAndCandidates(target)
+	nb, lv, can := node.GetNeighborsAndCandidates(target.Key(), target.MV())
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
 	node.RoutingTable.Add(target)
 	//ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n updated:\n %s\n", node, target.key, ayame.SliceString(nb), lv,
@@ -44,7 +44,8 @@ const (
 )
 
 func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode) []*bs.BSNode {
-	ret := node.GetCandidates()
+	//ret := node.GetCandidates()
+	ret := node.RoutingTable.GetCommonNeighbors(target.MV())
 	//	if !node.isFailure || FailureType == F_NONE {
 	//ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
 	node.RoutingTable.Add(target)
@@ -53,7 +54,7 @@ func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode)
 		node.RoutingTable.Add(n)
 	}
 	//	}
-	return ret
+	return ksToNs(ret)
 }
 
 func appendNodesIfMissing(lst []*bs.BSNode, nodes []*bs.BSNode) []*bs.BSNode {

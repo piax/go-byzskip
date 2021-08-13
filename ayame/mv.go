@@ -7,15 +7,15 @@ import (
 	"strconv"
 )
 
-const (
-	MembershipVectorSize = 32
-	DefaultAlpha         = 2
-)
-
 type MembershipVector struct {
 	Alpha int
 	Val   [MembershipVectorSize]int
 }
+
+const (
+	MembershipVectorSize = 32
+	//DefaultAlpha         = 2
+)
 
 func NewMembershipVector(alpha int) *MembershipVector {
 	var v [MembershipVectorSize]int
@@ -41,7 +41,7 @@ func NewMembershipVectorFromBinary(bin []byte) *MembershipVector {
 			thisVal := int(math.Pow(float64(2), float64(j)))
 			thisBit := v / int(math.Pow(float64(2), float64(j)))
 			val[i*8+7-j] = thisBit
-			Log.Debugf("%d=>%d\n", i*8+7-j, thisBit)
+			//Log.Debugf("%d=>%d\n", i*8+7-j, thisBit)
 			if thisBit == 1 {
 				v -= thisVal
 			}
@@ -70,7 +70,7 @@ func (mv *MembershipVector) Encode() []byte {
 		for j := 7; j >= 0; j-- {
 			byteVal += int(math.Pow(float64(2), float64(7-j))) * mv.Val[i+j]
 		}
-		Log.Debugf("%d=>%d\n", i/8, byteVal)
+		//Log.Debugf("%d=>%d\n", i/8, byteVal)
 		ret[i/8] = byte(byteVal)
 	}
 	return ret

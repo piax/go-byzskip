@@ -2,6 +2,7 @@ package ayame
 
 import (
 	"github.com/libp2p/go-libp2p-core/peer"
+	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
 type Node interface {
@@ -10,6 +11,7 @@ type Node interface {
 	String() string
 	Id() peer.ID // ID as an Endpoint
 	Send(ev SchedEvent)
+	Encode() *pb.Peer
 }
 
 type LocalNode struct {
@@ -35,6 +37,10 @@ func (n *LocalNode) String() string {
 
 func (n *LocalNode) Id() peer.ID {
 	return "" // empty identifier
+}
+
+func (n *LocalNode) Encode() *pb.Peer {
+	return nil // empty result
 }
 
 func (an *LocalNode) Send(ev SchedEvent) {

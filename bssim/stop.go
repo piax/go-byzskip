@@ -25,7 +25,7 @@ func (table *StopRoutingTable) GetAll() []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 
-func (table *StopRoutingTable) GetCommonNeighbors(kmv bs.KeyMV) []bs.KeyMV {
+func (table *StopRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 

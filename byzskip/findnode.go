@@ -13,6 +13,7 @@ import (
 type BSFindNodeEvent struct {
 	isResponse bool
 	TargetKey  ayame.Key
+	TargetMV   *ayame.MembershipVector
 	MessageId  string
 	level      int
 	closers    []*BSNode
@@ -20,21 +21,22 @@ type BSFindNodeEvent struct {
 	ayame.AbstractSchedEvent
 }
 
-func NewBSFindNodeReqEvent(sender *BSNode, target ayame.Key) *BSFindNodeEvent {
-	nextMessageId++
+func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
+
 	ev := &BSFindNodeEvent{
 		isResponse:         false,
-		TargetKey:          target,
-		MessageId:          strconv.Itoa(nextMessageId),
+		TargetKey:          targetKey,
+		TargetMV:           targetMV,
+		MessageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent()}
 	return ev
 }
 
 func NewBSFindNodeResEvent(request *BSFindNodeEvent, closers []*BSNode, level int, candidates []*BSNode) *BSFindNodeEvent {
-	nextMessageId++
 	ev := &BSFindNodeEvent{
 		isResponse:         true,
-		TargetKey:          request.Sender().Key(),
+		TargetKey:          request.Sender().Key(), // no meaning, just fill
+		TargetMV:           request.Sender().MV(),  // no meaning, just fill
 		MessageId:          request.MessageId,
 		closers:            closers,
 		candidates:         candidates,
@@ -44,22 +46,21 @@ func NewBSFindNodeResEvent(request *BSFindNodeEvent, closers []*BSNode, level in
 }
 
 func (ue *BSFindNodeEvent) String() string {
-	return ue.Receiver().String()
+	return fmt.Sprintf("findnode id=%s", ue.MessageId)
 }
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(fmt.Sprintf("%s-%s", sender.Key().String(), ue.MessageId),
-		pb.MessageType_FIND_NODE, ue.TargetKey)
+	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, ue.TargetKey, ue.TargetMV)
 	ret.IsResponse = ue.isResponse
 	var cpeers []*pb.Peer
 	for _, n := range ue.candidates {
-		cpeers = append(cpeers, n.parent.(*p2p.P2PNode).Encode())
+		cpeers = append(cpeers, n.parent.Encode())
 	}
 	ret.Data.CandidatePeers = cpeers
 	var lpeers []*pb.Peer
 	for _, n := range ue.closers {
-		lpeers = append(lpeers, n.parent.(*p2p.P2PNode).Encode())
+		lpeers = append(lpeers, n.parent.Encode())
 	}
 	ret.Data.CloserPeers = lpeers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)

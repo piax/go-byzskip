@@ -13,11 +13,11 @@ import (
 )
 
 type RemoteNode struct {
-	self    *P2PNode
-	key     ayame.Key
-	mv      *ayame.MembershipVector
-	locator []ma.Multiaddr
-	id      peer.ID
+	self  *P2PNode
+	key   ayame.Key
+	mv    *ayame.MembershipVector
+	addrs []ma.Multiaddr
+	id    peer.ID
 }
 
 // ayame.Node interface
@@ -28,22 +28,26 @@ func (n *RemoteNode) MV() *ayame.MembershipVector { // Endpoint
 	return n.mv
 }
 func (n *RemoteNode) String() string {
-	return fmt.Sprintf("%s,%s", n.key, n.locator)
+	return fmt.Sprintf("%s,%s", n.key, n.addrs)
 }
 func (n *RemoteNode) Id() peer.ID { // Endpoint
 	return n.id
 }
 
-func (n *RemoteNode) Encode() *p2p.Peer {
-	addrs := make([][]byte, len(n.locator))
-	for i, maddr := range n.locator {
+func EncodeAddrs(maddrs []ma.Multiaddr) [][]byte {
+	addrs := make([][]byte, len(maddrs))
+	for i, maddr := range maddrs {
 		addrs[i] = maddr.Bytes() // Bytes, not String. Compressed.
 	}
+	return addrs
+}
+
+func (n *RemoteNode) Encode() *p2p.Peer {
 	return &p2p.Peer{
 		Id:         peer.Encode(n.id),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
-		Addrs:      addrs,
+		Addrs:      EncodeAddrs(n.addrs),
 		Cert:       nil,                          // XXX not yet
 		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
@@ -96,13 +100,23 @@ func Connectedness(c p2p.ConnectionType) network.Connectedness {
 
 func NewRemoteNode(self *P2PNode, p *p2p.Peer) *RemoteNode {
 	// store to peerstore on self.
-	id := peer.ID(p.Id)
+	id, _ := peer.Decode(p.Id)
 	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.ProviderAddrTTL)
+	return &RemoteNode{
+		self:  self,
+		id:    id,
+		key:   NewKey(p.Key),
+		addrs: Addresses(p.Addrs),
+		mv:    ayame.NewMembershipVectorFromBinary(p.Mv),
+	}
+}
+
+func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *RemoteNode {
+	// store to peerstore on self.
+	self.Peerstore().AddAddrs(id, addrs, peerstore.ProviderAddrTTL)
 	return &RemoteNode{
 		self: self,
 		id:   id,
-		key:  NewKey(p.Key),
-		mv:   ayame.NewMembershipVectorFromBinary(p.Mv),
 	}
 }
 

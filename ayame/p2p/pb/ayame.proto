@@ -12,6 +12,7 @@ enum KeyType {
 	INT = 0;
 	FLOAT = 1;
 	STRING = 2;
+    RANGE = 3;
 }
 
 message Key {
@@ -82,18 +83,21 @@ message MessageData {
     // Used to specify the key associated with this message (may be a range in multicast)
     Key key = 6;
 
+    // Used to specify the MV associated with this message
+    bytes mv = 7;
+
     // protocol specific data added by author (such as level info)
-    string authorAppData = 7;
+    string authorAppData = 8;
 
     // peer information of the node who created the message 
-    Peer author = 8;    // XXX ConnectionType is always CONNECTED for node itself
+    Peer author = 9;    // XXX ConnectionType is always CONNECTED for node itself
     // the Secp256k1 public key (32bytes)
-    bytes authorPubKey = 9;
+    bytes authorPubKey = 10;
 
     // signature of message by authoring node (except authorSign and senderAppData)
-    bytes authorSign = 10;
+    bytes authorSign = 11;
     // protocol specific data added by sender (such as level info)
-    string senderAppData = 11;
+    string senderAppData = 12;
 
     // Used to return peers closer to a key in FIND_NODE / UNICAST
     repeated Peer closerPeers = 13;

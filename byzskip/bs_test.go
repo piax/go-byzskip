@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/piax/go-ayame/ayame"
+	p2p "github.com/piax/go-ayame/ayame/p2p"
 	ast "github.com/stretchr/testify/assert"
 )
 
@@ -51,7 +52,7 @@ func TestSorted(t *testing.T) {
 	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
 	rslt := rt.GetCloserCandidates()
 	fmt.Println(ayame.SliceString(rslt))
-	rslt = rt.GetCommonNeighbors(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
+	rslt = rt.GetCommonNeighbors(ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0}))
 	fmt.Println(ayame.SliceString(rslt))
 }
 
@@ -74,4 +75,22 @@ L:
 		}
 	}
 
+}
+
+func TestP2P(t *testing.T) {
+	numberOfPeers := 32
+	peers := make([]*BSNode, numberOfPeers)
+	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
+	fmt.Println(peers[0].parent.(*p2p.P2PNode).Host.ID().Pretty())
+	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+
+	for i := 1; i < numberOfPeers; i++ {
+		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
+		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		peers[i].Join(locator)
+	}
+
+	for i := 1; i < numberOfPeers; i++ {
+		fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
+	}
 }

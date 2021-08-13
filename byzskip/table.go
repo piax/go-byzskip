@@ -3,6 +3,7 @@ package byzskip
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/piax/go-ayame/ayame"
 	"github.com/thoas/go-funk"
@@ -75,8 +76,8 @@ type NeighborList struct {
 
 type RoutingTable interface {
 	// access entries
-	GetNeighbors(k ayame.Key) ([]KeyMV, int) // get k neighbors and its level
-	GetCommonNeighbors(kmv KeyMV) []KeyMV    // get neighbors which have common prefix with kmv
+	GetNeighbors(key ayame.Key) ([]KeyMV, int)             // get k neighbors and its level
+	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	Add(c KeyMV)
 	// order is not care
@@ -96,12 +97,48 @@ type RoutingTable interface {
 type SkipRoutingTable struct {
 	km            KeyMV           // self
 	NeighborLists []*NeighborList // level 0 to top
+	mutex         sync.Mutex
 }
 
 func NewSkipRoutingTable(km KeyMV) *SkipRoutingTable {
 	rt := &SkipRoutingTable{km: km, NeighborLists: []*NeighborList{}}
 	rt.ensureHeight(1) // level 0
 	return rt
+}
+
+func NodesEquals(a, b []KeyMV) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Key().Equals(b[i].Key()) {
+			return false
+		}
+	}
+	return true
+}
+
+func RoutingTableEquals(t1 RoutingTable, t2 RoutingTable) bool {
+	for i := 0; i < len(t1.GetNeighborLists()); i++ {
+		// terminate
+		if len(t1.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t1.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
+			return true
+		}
+		if len(t2.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t2.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
+			return true
+		}
+		if !NodesEquals(t1.GetNeighborLists()[i].Neighbors[LEFT], t2.GetNeighborLists()[i].Neighbors[LEFT]) {
+			fmt.Printf("%s, %s\n", ayame.SliceString(t1.GetNeighborLists()[i].Neighbors[LEFT]),
+				ayame.SliceString(t2.GetNeighborLists()[i].Neighbors[LEFT]))
+			return false
+		}
+		if !NodesEquals(t1.GetNeighborLists()[i].Neighbors[RIGHT], t2.GetNeighborLists()[i].Neighbors[RIGHT]) {
+			fmt.Printf("%s, %s\n", ayame.SliceString(t1.GetNeighborLists()[i].Neighbors[RIGHT]),
+				ayame.SliceString(t2.GetNeighborLists()[i].Neighbors[RIGHT]))
+			return false
+		}
+	}
+	return true
 }
 
 func (table *SkipRoutingTable) GetNeighborLists() []*NeighborList {
@@ -150,10 +187,10 @@ func (table *SkipRoutingTable) GetAll() []KeyMV {
 	return ret
 }
 
-func (table *SkipRoutingTable) GetCommonNeighbors(kmv KeyMV) []KeyMV {
+func (table *SkipRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV {
 	ret := []KeyMV{}
+	commonLen := table.km.MV().CommonPrefixLength(mv)
 	for l, singleLevel := range table.NeighborLists {
-		commonLen := table.km.MV().CommonPrefixLength(kmv.MV())
 		if l > commonLen { // no match
 			break
 		}
@@ -195,6 +232,7 @@ func (table *SkipRoutingTable) ensureHeight(level int) {
 }
 
 func (table *SkipRoutingTable) Add(c KeyMV) {
+	table.mutex.Lock()
 	if table.km.Equals(c) {
 		return // cannot add self
 	}
@@ -213,6 +251,7 @@ func (table *SkipRoutingTable) Add(c KeyMV) {
 		return !lv.hasDuplicatesInLeftsAndRights()
 	}).([]*NeighborList)
 	*/
+	table.mutex.Unlock()
 }
 
 //func NewKeyMV(key int, mv *ayame.MembershipVector) *KeyMV {

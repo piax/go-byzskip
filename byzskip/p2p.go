@@ -1,8 +1,12 @@
 package byzskip
 
 import (
+	"context"
 	"strconv"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-ayame/ayame"
 	p2p "github.com/piax/go-ayame/ayame/p2p"
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
@@ -17,14 +21,54 @@ func ConvertEvent(ev ayame.SchedEvent, sender *BSNode) *p2p.Message {
 	case BSFindNodeEvent:
 	}
 }*/
+func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
+	// Turn the destination into a multiaddr.
+	maddr, err := multiaddr.NewMultiaddr(locator)
+	if err != nil {
+		ayame.Log.Error(err)
+		return nil, err
+	}
+	// Extract the peer ID from the multiaddr.
+	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		ayame.Log.Error(err)
+		return nil, err
+	}
+	// Add the destination's peer multiaddress in the peerstore.
+	self := n.parent.(*p2p.P2PNode)
+	self.Host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 
-func ConvertPeers(sender *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
+	ret := &BSNode{
+		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
+		parent: p2p.NewIntroducerRemoteNode(self, info.ID, info.Addrs),
+		// stats is not generated at this time
+		IsFailure: false}
+	ret.RoutingTable = NewBSRoutingTable(ret)
+	return ret, nil
+}
+
+func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector) (*BSNode, error) {
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage)
+	if err != nil {
+		ayame.Log.Errorf("%s\n", err)
+		return nil, err
+	}
+	ret := NewBSNode(p2pNode, NewBSRoutingTable, false)
+	p2pNode.SetChild(ret)
+	return ret, nil
+}
+
+func ConvertPeers(self *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
 	ret := []*BSNode{}
 	for _, p := range peers {
-		parent := p2p.NewRemoteNode(sender, p)
-		ret = append(ret, NewBSNode(parent, NewBSRoutingTable, false))
+		ret = append(ret, ConvertPeer(self, p))
 	}
 	return ret
+}
+
+func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) *BSNode {
+	parent := p2p.NewRemoteNode(self, p)
+	return NewBSNode(parent, NewBSRoutingTable, false)
 }
 
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
@@ -38,15 +82,18 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			level:              level,
 			Channel:            make(chan bool),
 			AbstractSchedEvent: *ayame.NewSchedEvent()}
+		ev.SetSender(ConvertPeer(self, mes.Sender))
 	case pb.MessageType_FIND_NODE:
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,
 			TargetKey:          p2p.NewKey(mes.Data.Key),
+			TargetMV:           ayame.NewMembershipVectorFromBinary(mes.Data.Mv),
 			MessageId:          mes.Data.Id,
 			candidates:         ConvertPeers(self, mes.Data.CandidatePeers),
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
 			level:              level,
 			AbstractSchedEvent: *ayame.NewSchedEvent()}
+		ev.SetSender(ConvertPeer(self, mes.Sender))
 	}
 	return ev
 }

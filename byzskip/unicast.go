@@ -116,7 +116,7 @@ func (ue *BSUnicastEvent) String() string {
 func (ue *BSUnicastEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(fmt.Sprintf("%s-%s", sender.Key().String(), ue.MessageId),
-		pb.MessageType_UNICAST, ue.TargetKey)
+		pb.MessageType_UNICAST, ue.TargetKey, nil)
 	return ret
 }
 

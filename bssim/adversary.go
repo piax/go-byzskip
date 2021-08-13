@@ -37,11 +37,11 @@ func (table *AdversaryRoutingTable) GetAll() []bs.KeyMV {
 }
 
 // get all disjoint entries
-func (table *AdversaryRoutingTable) GetCommonNeighbors(kmv bs.KeyMV) []bs.KeyMV {
+func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []bs.KeyMV {
 	if FailureType == F_NONE {
-		return table.normal.GetCommonNeighbors(kmv)
+		return table.normal.GetCommonNeighbors(mv)
 	} else {
-		return table.adversarial.GetCommonNeighbors(kmv)
+		return table.adversarial.GetCommonNeighbors(mv)
 	}
 }
 
