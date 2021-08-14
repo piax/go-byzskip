@@ -17,6 +17,7 @@ type RemoteNode struct {
 	key   ayame.Key
 	mv    *ayame.MembershipVector
 	addrs []ma.Multiaddr
+	cert  []byte
 	id    peer.ID
 }
 
@@ -48,7 +49,7 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
-		Cert:       nil,                          // XXX not yet
+		Cert:       n.cert,
 		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
 }
@@ -107,6 +108,7 @@ func NewRemoteNode(self *P2PNode, p *p2p.Peer) *RemoteNode {
 		id:    id,
 		key:   NewKey(p.Key),
 		addrs: Addresses(p.Addrs),
+		cert:  p.Cert,
 		mv:    ayame.NewMembershipVectorFromBinary(p.Mv),
 	}
 }
