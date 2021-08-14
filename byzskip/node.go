@@ -22,11 +22,10 @@ import (
 
 // -- join
 type JoinStats struct {
-	closers    []*BSNode   // the current closer nodes
-	candidates []*BSNode   // the candidate nodes
-	queried    []*BSNode   // store the queried remote nodes
-	failed     []*BSNode   // store the queried (but failed) remote nodes
-	mutex      *sync.Mutex // access lock
+	closers    []*BSNode // the current closer nodes
+	candidates []*BSNode // the candidate nodes
+	queried    []*BSNode // store the queried remote nodes
+	failed     []*BSNode // store the queried (but failed) remote nodes
 }
 
 func (s *JoinStats) String() string {
@@ -51,8 +50,10 @@ type BSNode struct {
 	IsFailure    bool
 	QuerySeen    map[string]int
 
-	Procs map[string]*FindNodeProc
-	mutex sync.Mutex
+	Procs      map[string]*FindNodeProc
+	procsMutex sync.RWMutex // for r/w procs status
+	rtMutex    sync.RWMutex // for r/w routing table
+	statsMutex sync.RWMutex // for r/w join status
 }
 
 func (n *BSNode) Key() ayame.Key {
@@ -233,7 +234,7 @@ func (pe PathEntry) String() string {
 const (
 	JOIN_TIMEOUT          = 20
 	FIND_NODE_TIMEOUT     = 5
-	FIND_NODE_PARALLELISM = 3
+	FIND_NODE_PARALLELISM = 4
 	FIND_NODE_INTERVAL    = 1
 )
 
@@ -269,29 +270,36 @@ func (n *BSNode) IsIntroducer() bool {
 }
 
 //func (n *BSNode) Join(introducer *BSNode) {
-func (n *BSNode) Join(addr string) {
+func (n *BSNode) Join(ctx context.Context, addr string) {
 	introducer, _ := n.IntroducerNode(addr)
-	n.JoinWithNode(introducer)
+	n.JoinWithNode(ctx, introducer)
 }
 
-func (n *BSNode) JoinWithNode(introducer *BSNode) {
-	joinCtx, cancel := context.WithTimeout(context.TODO(), time.Duration(JOIN_TIMEOUT)*time.Second) // all request should be ended within
+func (n *BSNode) allQueried() bool {
+	ret := false
+	n.statsMutex.RLock()
+	ret = AllContained(n.stats.closers, n.stats.queried) &&
+		AllContained(n.stats.candidates, n.stats.queried)
+	n.statsMutex.RUnlock()
+	return ret
+}
+
+func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
+	joinCtx, cancel := context.WithTimeout(ctx, time.Duration(JOIN_TIMEOUT)*time.Second) // all request should be ended within
 
 	n.stats = &JoinStats{closers: []*BSNode{introducer},
-		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{},
-		mutex: &sync.Mutex{}}
+		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 
 	defer cancel()
 
 	findCh := make(chan string)
-	for !(AllContained(n.stats.closers, n.stats.queried) &&
-		AllContained(n.stats.candidates, n.stats.queried)) {
+	for !n.allQueried() {
 		reqCount := 0
 		cs := pickCandidates(n.stats, FIND_NODE_PARALLELISM)
 		if len(cs) == 1 && cs[0].IsIntroducer() { // remove the special node
-			n.stats.mutex.Lock()
+			n.statsMutex.Lock()
 			n.stats.closers = []*BSNode{}
-			n.stats.mutex.Unlock()
+			n.statsMutex.Unlock()
 		}
 		for _, c := range cs {
 			node := c // candidate
@@ -299,17 +307,22 @@ func (n *BSNode) JoinWithNode(introducer *BSNode) {
 			go func() { n.FindNode(joinCtx, findCh, node, NextId()) }()
 		}
 		// wait for the process
+		var mid string
+	L:
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-joinCtx.Done(): // after JOIN_TIMEOUT
 				ayame.Log.Debugf("FindNode ended with timeout")
-			case mid := <-findCh: // FindNode finished
-				ayame.Log.Debugf("%d th FindNode finished message-id=%s", i+1, mid)
-				n.mutex.Lock()
-				n.Procs[mid] = nil // completed
-				n.mutex.Unlock()
+				break L
+			case mid = <-findCh: // FindNode finished
+				ayame.Log.Debugf("%d th/ %d FindNode finished message-id=%s", i+1, reqCount, mid)
 			}
 		}
+		n.procsMutex.Lock()
+		delete(n.Procs, mid)
+		n.procsMutex.Unlock()
+		//XXX if needed
+		//time.Sleep(time.Duration(FIND_NODE_INTERVAL) * time.Second)
 		ayame.Log.Debugf("%s: join stats=%s", n.Key(), n.stats)
 	}
 }
@@ -325,10 +338,9 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan string, node *BSNode,
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
 	ch := make(chan string)
-	n.mutex.Lock()
+	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
-	n.mutex.Unlock()
-	ayame.Log.Debugf("Procs[%s] is stored\n", requestId)
+	n.procsMutex.Unlock()
 	n.SendEvent(node, ev)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
@@ -348,26 +360,41 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 		if ue.level == 0 {
 			ayame.Log.Debugf("reached matched nodes")
 		}
+		n.rtMutex.Lock()
 		n.RoutingTable.Add(ue.Sender().(*BSNode)) // XXX lock
-		n.stats.mutex.Lock()
+		n.rtMutex.Unlock()
+		n.statsMutex.Lock()
 		n.stats.closers = appendNodesIfMissing(n.stats.closers, ue.closers)
 		for _, c := range ue.candidates {
+			n.rtMutex.Lock()
 			n.RoutingTable.Add(c)
+			n.rtMutex.Unlock()
 		}
+		n.rtMutex.RLock()
 		n.stats.candidates = ksToNs(n.RoutingTable.GetCloserCandidates())
+		n.rtMutex.RUnlock()
 		n.stats.queried = appendNodeIfMissing(n.stats.queried, ue.Sender().(*BSNode))
 		ayame.Log.Debugf("received closers=%s, level=%d, candidates=%s\n", ayame.SliceString(ue.closers), ue.level, ayame.SliceString(ue.candidates))
-		n.stats.mutex.Unlock()
+		n.statsMutex.Unlock()
 		//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
-		n.mutex.Lock()
-		proc := n.Procs[ue.MessageId]
-		n.mutex.Unlock()
-		proc.ch <- ue.MessageId
+		n.procsMutex.RLock()
+		proc, exists := n.Procs[ue.MessageId]
+		n.procsMutex.RUnlock()
+		if exists {
+			proc.ch <- ue.MessageId
+		} else {
+			ayame.Log.Errorf("unregistered response %s from %s\n", ue.MessageId, ue.Sender().(*BSNode))
+			panic("unregisterd response")
+		}
 	} else {
 		kmv := ue.Sender().(*BSNode)
+		n.rtMutex.RLock()
 		closers, level, candidates := n.GetNeighborsAndCandidates(kmv.Key(), kmv.MV())
+		n.rtMutex.RUnlock()
 		ayame.Log.Debugf("returns closers=%s, level=%d, candidates=%s\n", ayame.SliceString(closers), level, ayame.SliceString(candidates))
+		n.rtMutex.Lock()
 		n.RoutingTable.Add(ue.Sender().(*BSNode)) // XXX lock
+		n.rtMutex.Unlock()
 		ev := NewBSFindNodeResEvent(ue, closers, level, candidates)
 		n.SendEvent(ue.Sender(), ev)
 	}

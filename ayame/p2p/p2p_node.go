@@ -33,6 +33,9 @@ type P2PNode struct {
 	mv        *ayame.MembershipVector
 	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent
 	child     ayame.Node
+	OutBytes  int64
+	InBytes   int64
+	InCount   int64
 }
 
 const MessageProto = "/message/0.0.0"
@@ -64,7 +67,7 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		return nil, err
 	}
 	host.ID()
-	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter}
+	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, OutBytes: 0, InBytes: 0, InCount: 0}
 	node.SetStreamHandler(MessageProto, node.onReceiveMessage)
 
 	return node, nil
@@ -122,6 +125,8 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
+	n.InBytes += int64(len(buf))
+	n.InCount++
 	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
 	s.Close()
 
@@ -131,7 +136,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
-	ayame.Log.Debugf("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
+	//ayame.Log.Debugf("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 
 	valid := n.authenticateMessage(mes, mes.Data, s)
 	if !valid {
@@ -140,6 +145,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	}
 	ev := n.converter(mes, n)
 	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
+	ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	ev.Run(n.child)
 }

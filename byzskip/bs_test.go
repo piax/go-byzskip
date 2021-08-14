@@ -3,6 +3,7 @@ package byzskip
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -78,19 +79,28 @@ L:
 }
 
 func TestP2P(t *testing.T) {
-	numberOfPeers := 32
+	fmt.Println(K)
+	InitK(4)
+	fmt.Println(K)
+	numberOfPeers := 100
+	keys := []int{}
+	for i := 0; i < numberOfPeers; i++ {
+		keys = append(keys, i)
+	}
+	rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
-	fmt.Println(peers[0].parent.(*p2p.P2PNode).Host.ID().Pretty())
+	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(keys[0]), ayame.NewMembershipVector(2))
+	fmt.Println(peers[0].Id().Pretty())
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
-		peers[i].Join(locator)
+		peers[i], _ = NewP2PNode(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2))
+		peers[i].Join(context.Background(), locator)
 	}
 
-	for i := 1; i < numberOfPeers; i++ {
-		fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
+	for i := 0; i < numberOfPeers; i++ {
+		fmt.Printf("key=%s, inBytes=%d, inCount=%d, avg=%f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
 	}
 }

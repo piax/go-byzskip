@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func TestP2P(t *testing.T) {
-	numberOfPeers := 32
+	numberOfPeers := 100
 	peers := make([]*bs.BSNode, numberOfPeers)
 	peers[0], _ = bs.NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
@@ -18,7 +19,7 @@ func TestP2P(t *testing.T) {
 	for i := 1; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
 		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
-		peers[i].Join(locator)
+		peers[i].Join(context.Background(), locator)
 	}
 
 	for i := 1; i < numberOfPeers; i++ {

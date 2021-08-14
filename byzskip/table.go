@@ -3,13 +3,10 @@ package byzskip
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/piax/go-ayame/ayame"
 	"github.com/thoas/go-funk"
 )
-
-// not yet.
 
 var (
 	K                         int = 4
@@ -97,7 +94,6 @@ type RoutingTable interface {
 type SkipRoutingTable struct {
 	km            KeyMV           // self
 	NeighborLists []*NeighborList // level 0 to top
-	mutex         sync.Mutex
 }
 
 func NewSkipRoutingTable(km KeyMV) *SkipRoutingTable {
@@ -232,7 +228,6 @@ func (table *SkipRoutingTable) ensureHeight(level int) {
 }
 
 func (table *SkipRoutingTable) Add(c KeyMV) {
-	table.mutex.Lock()
 	if table.km.Equals(c) {
 		return // cannot add self
 	}
@@ -251,7 +246,6 @@ func (table *SkipRoutingTable) Add(c KeyMV) {
 		return !lv.hasDuplicatesInLeftsAndRights()
 	}).([]*NeighborList)
 	*/
-	table.mutex.Unlock()
 }
 
 //func NewKeyMV(key int, mv *ayame.MembershipVector) *KeyMV {
