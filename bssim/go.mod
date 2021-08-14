@@ -18,6 +18,7 @@ require (
 	github.com/multiformats/go-multihash v0.0.15 // indirect
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7 // indirect
 	github.com/piax/go-ayame/ayame v0.0.0-20210804044908-86894c3be2c5 // indirect
+	github.com/piax/go-ayame/byzskip v0.0.0-00010101000000-000000000000 // indirect
 	github.com/piax/go-ayame/key_issuer v0.0.0-20210804044908-86894c3be2c5 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/thoas/go-funk v0.9.0 // indirect

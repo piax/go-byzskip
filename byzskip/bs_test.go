@@ -104,7 +104,13 @@ func TestP2P(t *testing.T) {
 		peers[i].Join(context.Background(), locator)
 	}
 
+	sumCount := int64(0)
+	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
-		fmt.Printf("key=%s, inBytes=%d, inCount=%d, avg=%f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
+		sumCount += peers[i].parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
 	}
+	fmt.Printf("avg-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
+	fmt.Printf("avg-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))
 }
