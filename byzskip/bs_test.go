@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/piax/go-ayame/authority"
 	"github.com/piax/go-ayame/ayame"
 	p2p "github.com/piax/go-ayame/ayame/p2p"
 	ast "github.com/stretchr/testify/assert"
@@ -79,7 +81,7 @@ L:
 }
 
 func TestP2P(t *testing.T) {
-	fmt.Println(K)
+	auth := authority.NewAuthorizer()
 	InitK(4)
 	fmt.Println(K)
 	numberOfPeers := 100
@@ -88,15 +90,17 @@ func TestP2P(t *testing.T) {
 		keys = append(keys, i)
 	}
 	rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
-
+	authFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+		return auth.Authorize(id, key, mv)
+	}
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(keys[0]), ayame.NewMembershipVector(2))
+	peers[0], _ = NewP2PNodeWithAuth("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), authFunc)
 	fmt.Println(peers[0].Id().Pretty())
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = NewP2PNode(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2))
+		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), authFunc)
 		peers[i].Join(context.Background(), locator)
 	}
 

@@ -47,6 +47,20 @@ func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
 	return ret, nil
 }
 
+func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector, authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte) (*BSNode, error) {
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage)
+	p2pNode.Cert = authorizer(p2pNode.Id(), key, mv)
+
+	//p2pNode, err := p2p.NewNodeWithAuth(context.TODO(), locator, key, mv, ConvertMessage, authorizer)
+	if err != nil {
+		ayame.Log.Errorf("%s\n", err)
+		return nil, err
+	}
+	ret := NewBSNode(p2pNode, NewBSRoutingTable, false)
+	p2pNode.SetChild(ret)
+	return ret, nil
+}
+
 func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector) (*BSNode, error) {
 	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage)
 	if err != nil {

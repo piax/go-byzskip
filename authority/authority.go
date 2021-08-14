@@ -1,0 +1,54 @@
+package authority
+
+import (
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/piax/go-ayame/ayame"
+)
+
+type Authorizer struct {
+	pubKey  crypto.PubKey
+	privKey crypto.PrivKey
+}
+
+func NewAuthorizer() *Authorizer {
+	priv, pub, err := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
+	if err != nil {
+		ayame.Log.Errorf("%s\n", err)
+		return nil
+	}
+	return &Authorizer{pubKey: pub, privKey: priv}
+}
+
+func (auth *Authorizer) PublicKey() crypto.PubKey {
+	return auth.pubKey
+}
+
+func (auth *Authorizer) Authorize(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+	return newJoinInfoCert(id, key, mv, auth.privKey)
+}
+
+func marshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+	ret, _ := id.MarshalBinary() // XXX discarded errors
+	bin, _ := key.Encode().Marshal()
+	ret = append(ret, bin...)
+	ret = append(ret, mv.Encode()...)
+	return ret
+}
+
+// Create a new node with its implemented protocols
+func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
+	data := marshalJoinInfo(id, key, mv)
+	res, err := pubKey.Verify(data, cert)
+	if err != nil {
+		ayame.Log.Errorf("Verify error: %s\n", err)
+		return false
+	}
+	return res
+}
+
+func newJoinInfoCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, privKey crypto.PrivKey) []byte {
+	data := marshalJoinInfo(id, key, mv)
+	res, _ := privKey.Sign(data) // XXX discarded errors
+	return res
+}

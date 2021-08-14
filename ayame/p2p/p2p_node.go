@@ -12,8 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	peerstore "github.com/libp2p/go-libp2p-peerstore"
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-ayame/ayame"
@@ -33,6 +33,7 @@ type P2PNode struct {
 	mv        *ayame.MembershipVector
 	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent
 	child     ayame.Node
+	Cert      []byte
 	OutBytes  int64
 	InBytes   int64
 	InCount   int64
@@ -40,7 +41,6 @@ type P2PNode struct {
 
 const MessageProto = "/message/0.0.0"
 
-// Create a new node with its implemented protocols
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
 	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent) (*P2PNode, error) {
 
@@ -94,7 +94,7 @@ func (n *P2PNode) Encode() *p2p.Peer {
 		Addrs:      EncodeAddrs(n.Addrs()),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
-		Cert:       nil,                          // XXX not yet
+		Cert:       n.Cert,                       // XXX not yet
 		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
 }
@@ -145,6 +145,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	}
 	ev := n.converter(mes, n)
 	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
+	//ayame.Log.Debugf("%s: Received from %s. size=%d, mes=%v\n", n.Key(), ev.Sender().Key(), len(buf), mes)
 	ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	ev.Run(n.child)
@@ -298,7 +299,7 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 			Mv:         n.mv.Encode(),
 			Key:        n.key.Encode(),
 			Addrs:      EncodeAddrs(n.Host.Addrs()),
-			Cert:       nil,                          // XXX not yet
+			Cert:       n.Cert,
 			Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 		},
 		AuthorPubKey: nodePubKey}
