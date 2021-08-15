@@ -34,6 +34,10 @@ func NewMembershipVectorLiteral(alpha int, literal []int) *MembershipVector {
 }
 
 func NewMembershipVectorFromBinary(bin []byte) *MembershipVector {
+	if len(bin) == 0 {
+		Log.Debugf("zero-length binary for MV\n")
+		return nil
+	}
 	val := make([]int, MembershipVectorSize)
 	for i := 0; i < len(bin); i++ {
 		v := int(bin[i])

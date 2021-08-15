@@ -83,7 +83,6 @@ L:
 func TestP2P(t *testing.T) {
 	auth := authority.NewAuthorizer()
 	InitK(4)
-	fmt.Println(K)
 	numberOfPeers := 100
 	keys := []int{}
 	for i := 0; i < numberOfPeers; i++ {
@@ -103,7 +102,6 @@ func TestP2P(t *testing.T) {
 		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), authFunc)
 		peers[i].Join(context.Background(), locator)
 	}
-
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
@@ -111,6 +109,25 @@ func TestP2P(t *testing.T) {
 		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
 	}
-	fmt.Printf("avg-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
-	fmt.Printf("avg-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))
+	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
+	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))
+	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
+	for i := 0; i < numberOfPeers; i++ { // RESET
+		peers[i].parent.(*p2p.P2PNode).InCount = 0
+		peers[i].parent.(*p2p.P2PNode).InBytes = 0
+	}
+	numberOfLookups := numberOfPeers
+	for i := 0; i < numberOfLookups; i++ {
+		src := rand.Intn(numberOfPeers)
+		dst := rand.Intn(numberOfPeers)
+		peers[src].Lookup(context.Background(), ayame.IntKey(dst))
+	}
+	sumCount = int64(0)
+	sumTraffic = int64(0)
+	for i := 0; i < numberOfPeers; i++ {
+		sumCount += peers[i].parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", (float64(sumCount)/float64(numberOfPeers))/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", (float64(sumTraffic)/float64(numberOfPeers))/float64(numberOfLookups))
 }

@@ -136,7 +136,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
-	//ayame.Log.Debugf("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
+	ayame.Log.Debugf("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 
 	valid := n.authenticateMessage(mes, mes.Data, s)
 	if !valid {
@@ -146,7 +146,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	ev := n.converter(mes, n)
 	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
 	//ayame.Log.Debugf("%s: Received from %s. size=%d, mes=%v\n", n.Key(), ev.Sender().Key(), len(buf), mes)
-	ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
+	//ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	ev.Run(n.child)
 }
@@ -287,13 +287,18 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 		panic("Failed to get public key for sender from local peer store.")
 	}
 
+	var mvData []byte
+	if mv != nil {
+		mvData = mv.Encode()
+	}
+
 	data := &p2p.MessageData{
 		Version:   Version,
 		Type:      mtype,
 		Timestamp: time.Now().Unix(),
 		Id:        messageId,
 		Key:       key.Encode(),
-		Mv:        mv.Encode(),
+		Mv:        mvData,
 		Author: &p2p.Peer{
 			Id:         peer.Encode(n.ID()),
 			Mv:         n.mv.Encode(),

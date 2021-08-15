@@ -41,7 +41,7 @@ enum MessageType {
     // 2, 3 are removed
 	FIND_NODE = 4;
 	PING = 5;
-    GET_CANDIDATES = 7;
+    DEL_NODE = 6;
     UNICAST = 8;
     MULTICAST = 9;
 }
