@@ -12,6 +12,7 @@ type Node interface {
 	Id() peer.ID // ID as an Endpoint
 	Send(ev SchedEvent)
 	Encode() *pb.Peer
+	Close()
 }
 
 type LocalNode struct {
@@ -41,6 +42,10 @@ func (n *LocalNode) Id() peer.ID {
 
 func (n *LocalNode) Encode() *pb.Peer {
 	return nil // empty result
+}
+
+func (n *LocalNode) Close() {
+	// nothing to do
 }
 
 func (an *LocalNode) Send(ev SchedEvent) {

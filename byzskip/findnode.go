@@ -22,7 +22,6 @@ type BSFindNodeEvent struct {
 }
 
 func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
-
 	ev := &BSFindNodeEvent{
 		isResponse:         false,
 		TargetKey:          targetKey,
@@ -70,5 +69,4 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 func (ue *BSFindNodeEvent) Run(node ayame.Node) {
 	n := node.(*BSNode)
 	n.handleFindNode(ue)
-
 }

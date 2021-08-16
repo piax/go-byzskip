@@ -50,8 +50,12 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
 		Cert:       n.cert,
-		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
+		Connection: ConnectionType(n.self.Network().Connectedness(n.id)),
 	}
+}
+
+func (n *RemoteNode) Close() {
+	// Nothing to do
 }
 
 func Addresses(addrs [][]byte) []ma.Multiaddr {

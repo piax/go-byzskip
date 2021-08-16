@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -37,6 +38,7 @@ type P2PNode struct {
 	OutBytes  int64
 	InBytes   int64
 	InCount   int64
+	mutex     sync.Mutex
 }
 
 const MessageProto = "/message/0.0.0"
@@ -99,6 +101,10 @@ func (n *P2PNode) Encode() *p2p.Peer {
 	}
 }
 
+func (n *P2PNode) Close() {
+	n.Host.Close()
+}
+
 func (n *P2PNode) SetChild(c ayame.Node) {
 	n.child = c
 }
@@ -125,8 +131,10 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
+	n.mutex.Lock()
 	n.InBytes += int64(len(buf))
 	n.InCount++
+	n.mutex.Unlock()
 	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
 	s.Close()
 
@@ -140,7 +148,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 
 	valid := n.authenticateMessage(mes, mes.Data, s)
 	if !valid {
-		ayame.Log.Error("Failed to authenticate message")
+		ayame.Log.Error("Failed to authenticate message, throw it all away")
 		return
 	}
 	ev := n.converter(mes, n)

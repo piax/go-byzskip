@@ -38,6 +38,7 @@ type FindNodeResponse struct {
 	closers    []*BSNode // the current closer nodes
 	candidates []*BSNode // the candidate nodes
 	level      int
+	isFailure  bool // the responder is in failure
 }
 
 // -- find node
@@ -97,6 +98,11 @@ func (n *BSNode) String() string {
 
 func (n *BSNode) Encode() *pb.Peer {
 	return n.parent.Encode()
+}
+
+func (n *BSNode) Close() {
+	n.NotifyDeletion()
+	n.parent.Close()
 }
 
 type BSRoutingTable struct {
@@ -318,14 +324,20 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 				break L
 			case response := <-findCh: // FindNode finished
 				ayame.Log.Debugf("%d th/ %d FindNode for %s to %s finished", i+1, reqCount, response.id, response.sender)
-
+				if response.isFailure { // timed out
+					// XXX TODO: should we try several times?
+					n.stats.queried = appendNodeIfMissing(n.stats.queried, response.sender)
+					n.stats.failed = appendNodeIfMissing(n.stats.failed, response.sender)
+					// XXX delete response.sender from the routing table if already exists.
+					continue L
+				}
 				if response.level == 0 {
 					ayame.Log.Debugf("reached matched nodes")
 				}
-				if response.sender == nil { // empty response; Find Node timed out
+				/*if response.sender == nil { // empty response; Find Node timed out
 					ayame.Log.Debugf("A FindNode ended with timeout")
 					break L
-				}
+				}*/
 				n.rtMutex.Lock()
 				n.RoutingTable.Add(response.sender) // XXX lock
 				n.rtMutex.Unlock()
@@ -355,12 +367,18 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 	}
 }
 
+func (n *BSNode) NotifyDeletion() {
+	for _, neighbor := range ksToNs(n.RoutingTable.GetAll()) {
+		n.SendEvent(neighbor, nil) // XXX implement nil
+	}
+}
+
 func (n *BSNode) allQueried() bool {
 	ret := false
-	n.statsMutex.RLock()
+	//n.statsMutex.RLock()
 	ret = AllContained(n.stats.closers, n.stats.queried) &&
 		AllContained(n.stats.candidates, n.stats.queried)
-	n.statsMutex.RUnlock()
+	//n.statsMutex.RUnlock()
 	return ret
 }
 
@@ -394,6 +412,11 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 				ayame.Log.Debugf("FindNode ended with %s", lookupCtx.Err())
 				break L
 			case response := <-lookupCh: // FindNode finished
+				if response.isFailure { // timed out
+					queried = appendNodeIfMissing(queried, response.sender)
+					// XXX delete response.sender from the routing table if already exists.
+					continue L
+				}
 				if response.level == 0 {
 					results = appendNodesIfMissing(results, response.closers)
 					if ContainsKey(key, results) {
@@ -427,7 +450,12 @@ func (n *BSNode) FindNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
-		findCh <- &FindNodeResponse{}
+		if findCtx.Err() == context.DeadlineExceeded {
+			// set the node as failure
+			findCh <- &FindNodeResponse{sender: node, isFailure: true}
+		} else {
+			findCh <- &FindNodeResponse{}
+		}
 	case response := <-ch: // FindNode finished
 		ayame.Log.Debugf("FindNode ended normally")
 		findCh <- response
@@ -447,7 +475,12 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
-		findCh <- &FindNodeResponse{}
+		if findCtx.Err() == context.DeadlineExceeded {
+			// set the node as failure
+			findCh <- &FindNodeResponse{sender: node, isFailure: true}
+		} else {
+			findCh <- &FindNodeResponse{}
+		}
 	case response := <-ch: // FindNode finished
 		ayame.Log.Debugf("FindNode ended normally")
 		findCh <- response
@@ -464,7 +497,7 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 		proc, exists := n.Procs[ue.MessageId]
 		n.procsMutex.RUnlock()
 		if exists {
-			proc.ch <- &FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closers: ue.closers, candidates: ue.candidates, level: ue.level}
+			proc.ch <- &FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closers: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
 		} else {
 			ayame.Log.Errorf("unregistered response %s from %s\n", ue.MessageId, ue.Sender().(*BSNode))
 			panic("unregisterd response") // it's implementation error
