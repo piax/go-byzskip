@@ -39,14 +39,19 @@ type PathEntry struct {
 	level int
 }
 
-var nextMessageId int = 0
+func PathEntries(nodes []*BSNode) []PathEntry {
+	ret := []PathEntry{}
+	for _, n := range nodes {
+		ret = append(ret, PathEntry{Node: n})
+	}
+	return ret
+}
 
-func NewBSUnicastEvent(receiver *BSNode, level int, target ayame.Key) *BSUnicastEvent {
-	nextMessageId++
+func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame.Key) *BSUnicastEvent {
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
-		MessageId:                  strconv.Itoa(nextMessageId),
-		path:                       []PathEntry{{Node: receiver, level: ayame.MembershipVectorSize}},
+		MessageId:                  messageId,
+		path:                       []PathEntry{{Node: sender, level: ayame.MembershipVectorSize}},
 		level:                      level,
 		hop:                        0,
 		Children:                   []*BSUnicastEvent{},
@@ -59,39 +64,42 @@ func NewBSUnicastEvent(receiver *BSNode, level int, target ayame.Key) *BSUnicast
 		finishTime:                 0,
 		AbstractSchedEvent:         *ayame.NewSchedEvent()}
 	ev.Root = ev
-	ev.SetSender(receiver)
-	ev.SetReceiver(receiver)
+	ev.SetSender(sender)   // XXX weird
+	ev.SetReceiver(sender) // XXX weird
 	return ev
 }
 
-func (ev *BSUnicastEvent) CheckAndSetAlreadySeen() bool {
-	myNode := ev.Receiver().(*BSNode)
+func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
+	myNode.seenMutex.RLock()
 	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
+	myNode.seenMutex.RUnlock()
 	if exists && msgLevel <= seenLevel {
-		ayame.Log.Debugf("already seen: %d at %d\n", ev.MessageId, seenLevel)
+		ayame.Log.Debugf("already seen: %s at %d\n", ev.MessageId, seenLevel)
 		return true
 	}
 	myNode.QuerySeen[ev.MessageId] = msgLevel
 	return false
 }
 
-func (ev *BSUnicastEvent) CheckAlreadySeen() bool {
-	myNode := ev.Receiver().(*BSNode)
+func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
+	myNode.seenMutex.RLock()
 	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
+	myNode.seenMutex.RUnlock()
 	if exists && msgLevel <= seenLevel {
-		ayame.Log.Debugf("already seen: %d at %d on %d\n", ev.MessageId, seenLevel, myNode.Key())
+		ayame.Log.Debugf("already seen: %s at %d on %s\n", ev.MessageId, seenLevel, myNode.Key())
 		return true
 	}
 	return false
 }
 
-func (ev *BSUnicastEvent) SetAlreadySeen() {
-	myNode := ev.Receiver().(*BSNode)
+func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 	msgLevel := ev.level
-	ayame.Log.Debugf("set seen: %d at %d on %d\n", ev.MessageId, msgLevel, myNode.Key())
+	ayame.Log.Debugf("set seen: %s at %d on %d\n", ev.MessageId, msgLevel, myNode.Key())
+	myNode.seenMutex.Lock()
 	myNode.QuerySeen[ev.MessageId] = msgLevel
+	myNode.seenMutex.Unlock()
 }
 
 func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicastEvent {
@@ -115,8 +123,14 @@ func (ue *BSUnicastEvent) String() string {
 
 func (ue *BSUnicastEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(fmt.Sprintf("%s-%s", sender.Key().String(), ue.MessageId),
+	ret := sender.NewMessage(ue.MessageId,
 		pb.MessageType_UNICAST, ue.TargetKey, nil)
+	var cpeers []*pb.Peer
+	for _, pe := range ue.path {
+		cpeers = append(cpeers, pe.Node.Encode())
+	}
+	ret.Data.CandidatePeers = cpeers
+	ret.Data.SenderAppData = strconv.Itoa(ue.level)
 	return ret
 }
 
@@ -130,23 +144,23 @@ func (ev *BSUnicastEvent) nextMsg(n *BSNode, level int) *BSUnicastEvent {
 
 var RoutingType = PRUNE_OPT2
 
-func (ev *BSUnicastEvent) findNextHops() []*BSUnicastEvent {
+func (ev *BSUnicastEvent) findNextHops(myNode *BSNode) []*BSUnicastEvent {
 	var ret []*BSUnicastEvent
 	switch RoutingType {
 	case SINGLE:
-		ret, _ = ev.findNextHopsSingle()
+		ret, _ = ev.findNextHopsSingle(myNode)
 	case PRUNE:
 		fallthrough
 	case PRUNE_OPT1:
 		fallthrough
 	case PRUNE_OPT2:
-		ret, _ = ev.findNextHopsPrune()
+		ret, _ = ev.findNextHopsPrune(myNode)
 	}
 	return ret
 }
 
-func (ev *BSUnicastEvent) findNextHopsSingle() ([]*BSUnicastEvent, error) {
-	myNode := ev.Receiver().(*BSNode)
+func (ev *BSUnicastEvent) findNextHopsSingle(myNode *BSNode) ([]*BSUnicastEvent, error) {
+	//	myNode := ev.Receiver().(*BSNode)
 	level := -1
 
 	var kNodes []*BSNode
@@ -170,9 +184,9 @@ const (
 	PRUNE_OPT2
 )
 
-func (ev *BSUnicastEvent) findNextHopsPrune() ([]*BSUnicastEvent, error) {
+func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, error) {
 	var err error = nil
-	myNode := ev.Receiver().(*BSNode)
+	//	myNode := ev.Receiver().(*BSNode)
 	// root node case(?)
 	var kNodes []*BSNode = []*BSNode{}
 	var destLevel int = ev.level - 1

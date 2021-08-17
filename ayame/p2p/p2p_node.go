@@ -35,16 +35,19 @@ type P2PNode struct {
 	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent
 	child     ayame.Node
 	Cert      []byte
-	OutBytes  int64
-	InBytes   int64
-	InCount   int64
-	mutex     sync.Mutex
+	Validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+
+	OutBytes int64
+	InBytes  int64
+	InCount  int64
+	mutex    sync.Mutex
 }
 
 const MessageProto = "/message/0.0.0"
 
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
-	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent) (*P2PNode, error) {
+	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent,
+	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*P2PNode, error) {
 
 	listen, err := multiaddr.NewMultiaddr(locator)
 	if err != nil {
@@ -69,7 +72,7 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		return nil, err
 	}
 	host.ID()
-	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, OutBytes: 0, InBytes: 0, InCount: 0}
+	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, Validator: validator, OutBytes: 0, InBytes: 0, InCount: 0}
 	node.SetStreamHandler(MessageProto, node.onReceiveMessage)
 
 	return node, nil
@@ -90,13 +93,20 @@ func (n *P2PNode) Id() peer.ID { // Endpoint
 	return n.ID()
 }
 
+func IfNeededSign(cert []byte) []byte {
+	if ayame.SecureKeyMV {
+		return cert
+	}
+	return nil
+}
+
 func (n *P2PNode) Encode() *p2p.Peer {
 	return &p2p.Peer{
 		Id:         peer.Encode(n.ID()),
 		Addrs:      EncodeAddrs(n.Addrs()),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
-		Cert:       n.Cert,                       // XXX not yet
+		Cert:       IfNeededSign(n.Cert),         // XXX not yet
 		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
 }
@@ -144,12 +154,14 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
-	ayame.Log.Debugf("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
+	ayame.Log.Infof("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 
-	valid := n.authenticateMessage(mes, mes.Data, s)
-	if !valid {
-		ayame.Log.Error("Failed to authenticate message, throw it all away")
-		return
+	if ayame.SecureKeyMV {
+		valid := n.authenticateMessage(mes, mes.Data, s)
+		if !valid {
+			ayame.Log.Error("Failed to authenticate message, throw it all away")
+			return
+		}
 	}
 	ev := n.converter(mes, n)
 	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
@@ -160,7 +172,6 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 }
 
 func (n *P2PNode) Send(ev ayame.SchedEvent) { // send to self..
-
 	mes := ev.Encode()
 	mes.Sender = n.Encode()
 	if ev.Sender().Key().Equals(n.Key()) { // author
@@ -168,9 +179,11 @@ func (n *P2PNode) Send(ev ayame.SchedEvent) { // send to self..
 		senderData := mes.Data.SenderAppData // ensure empty
 		mes.Data.SenderAppData = ""          // ensure empty
 		mes.Data.AuthorSign, _ = n.signProtoMessage(mes.Data)
+		mes.Data.AuthorSign = IfNeededSign(mes.Data.AuthorSign)
 		mes.Data.SenderAppData = senderData // restore
 	}
 	mes.SenderSign, _ = n.signProtoMessage(mes)
+	mes.SenderSign = IfNeededSign(mes.SenderSign)
 	//ayame.Log.Infof("sending mes=%v", ev)
 	n.sendProtoMessage(ev.Receiver().Id(), MessageProto, mes)
 }
@@ -312,10 +325,10 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 			Mv:         n.mv.Encode(),
 			Key:        n.key.Encode(),
 			Addrs:      EncodeAddrs(n.Host.Addrs()),
-			Cert:       n.Cert,
-			Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
+			Cert:       IfNeededSign(n.Cert),
+			Connection: p2p.ConnectionType_CONNECTED, // XXX myself is always connected
 		},
-		AuthorPubKey: nodePubKey}
+		AuthorPubKey: IfNeededSign(nodePubKey)}
 
 	return &p2p.Message{Data: data}
 

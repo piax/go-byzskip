@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"strconv"
 
 	"github.com/montanaflynn/stats"
 	"github.com/piax/go-ayame/ayame"
@@ -14,12 +15,19 @@ const (
 	EACH_UNICAST_TIMES  = 100
 )
 
+var SeqNo int = 0
+
+func NextId() string {
+	SeqNo++
+	return strconv.Itoa(SeqNo)
+}
+
 func expUnicastRecursive(trials int) {
 	msgs := []*bs.BSUnicastEvent{}
 	for i := 1; i <= trials; i++ {
 		src := NormalList[rand.Intn(len(NormalList))]
 		dst := NormalList[rand.Intn(len(NormalList))]
-		msg := bs.NewBSUnicastEvent(src, ayame.MembershipVectorSize, dst.Key()) // starts with the max level.
+		msg := bs.NewBSUnicastEvent(src, NextId(), ayame.MembershipVectorSize, dst.Key()) // starts with the max level.
 		msgs = append(msgs, msg)
 		ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
 		ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
@@ -66,7 +74,7 @@ func expUnicastEachRecursive() {
 		for j := 1; j <= EACH_UNICAST_TIMES; j++ {
 			count++
 			dst := NormalList[rand.Intn(len(NormalList))]
-			msg := bs.NewBSUnicastEvent(src, ayame.MembershipVectorSize, dst.Key()) // starts with the max level.
+			msg := bs.NewBSUnicastEvent(src, NextId(), ayame.MembershipVectorSize, dst.Key()) // starts with the max level.
 			msgs = append(msgs, msg)
 			ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
 			ayame.GlobalEventExecutor.RegisterEvent(msg, int64(count*1000))

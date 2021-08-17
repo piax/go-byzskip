@@ -186,6 +186,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				NormalList = append(NormalList, n)
 			}
 		}
+		n.SetUnicastHandler(bs.SimUnicastHandler)
 		nodes = append(nodes, n)
 	}
 
@@ -272,7 +273,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					}
 				}
 			}
-			msg := bs.NewBSUnicastEvent(nodes[index], ayame.MembershipVectorSize, localn.Key())
+			msg := bs.NewBSUnicastEvent(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key())
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 				localn.Send(msg)
 				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
@@ -454,13 +455,13 @@ var keyIssuer key_issuer.KeyIssuer
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 32, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.0, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	keyIssuerType = flag.String("issuerType", "asis", "issuer type (type-param) type={shuffle|random|asis}")
-	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
+	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	seed = flag.Int64("seed", 3, "give a random seed")

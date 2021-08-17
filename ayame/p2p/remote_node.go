@@ -49,7 +49,7 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
-		Cert:       n.cert,
+		Cert:       IfNeededSign(n.cert),
 		Connection: ConnectionType(n.self.Network().Connectedness(n.id)),
 	}
 }

@@ -2,6 +2,7 @@ package byzskip
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -47,8 +48,10 @@ func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
 	return ret, nil
 }
 
-func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector, authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte) (*BSNode, error) {
-	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage)
+func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector,
+	authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte,
+	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*BSNode, error) {
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage, validator)
 	p2pNode.Cert = authorizer(p2pNode.Id(), key, mv)
 
 	//p2pNode, err := p2p.NewNodeWithAuth(context.TODO(), locator, key, mv, ConvertMessage, authorizer)
@@ -62,7 +65,7 @@ func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVecto
 }
 
 func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector) (*BSNode, error) {
-	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage)
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage, nil)
 	if err != nil {
 		ayame.Log.Errorf("%s\n", err)
 		return nil, err
@@ -74,15 +77,23 @@ func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector) (*BSN
 
 func ConvertPeers(self *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
 	ret := []*BSNode{}
+
 	for _, p := range peers {
-		ret = append(ret, ConvertPeer(self, p))
+		if n, err := ConvertPeer(self, p); err == nil {
+			ret = append(ret, n)
+		} else {
+			panic("pubkey verify failed")
+		}
 	}
 	return ret
 }
 
-func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) *BSNode {
+func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
-	return NewBSNode(parent, NewBSRoutingTable, false)
+	if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+		return NewBSNode(parent, NewBSRoutingTable, false), nil
+	}
+	return nil, fmt.Errorf("invalid join certificate")
 }
 
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
@@ -95,8 +106,10 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			MessageId:          mes.Data.Id,
 			level:              level,
 			Channel:            make(chan bool),
+			path:               PathEntries(ConvertPeers(self, mes.Data.CandidatePeers)),
 			AbstractSchedEvent: *ayame.NewSchedEvent()}
-		ev.SetSender(ConvertPeer(self, mes.Sender))
+		p, _ := ConvertPeer(self, mes.Sender)
+		ev.SetSender(p)
 	case pb.MessageType_FIND_NODE:
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,
@@ -107,7 +120,11 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
 			level:              level,
 			AbstractSchedEvent: *ayame.NewSchedEvent()}
-		ev.SetSender(ConvertPeer(self, mes.Sender))
+		p, err := ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetSender(p)
 	}
 	return ev
 }

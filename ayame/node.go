@@ -15,6 +15,8 @@ type Node interface {
 	Close()
 }
 
+var SecureKeyMV bool = true
+
 type LocalNode struct {
 	key Key
 	mv  *MembershipVector

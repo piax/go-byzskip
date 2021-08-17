@@ -99,9 +99,10 @@ message MessageData {
     // protocol specific data added by sender (such as level info)
     string senderAppData = 12;
 
-    // Used to return peers closer to a key in FIND_NODE / UNICAST
+    // Used to return peers closer to a key in FIND_NODE
     repeated Peer closerPeers = 13;
-    // Used to return piggybacked candidate peers in FIND_NODE
+    // Used to include candidate peers in FIND_NODE
+    // used to include path in UNICAST
     repeated Peer candidatePeers = 14;
     // the record used to deliver in this message
     Record record = 15;
