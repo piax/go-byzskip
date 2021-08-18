@@ -1,3 +1,14 @@
+// Copyright 2021 Yuuichi Teranishi, NICT, Japan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// byzskip package provides a ByzSKip implementation.
+//
+// You can create a Node, Join to the network, Lookup a node, and Unicast a message to a node.
 package byzskip
 
 import (
@@ -14,13 +25,6 @@ import (
 	"github.com/thoas/go-funk"
 )
 
-// UpdateNeighborsProc
-// k-closests are updated
-// 1. candidates are updated by k-closests
-// after all candidates are queried,
-// 2. candidates are updated by current routing table entries
-
-// -- join
 type JoinStats struct {
 	closers    []*BSNode // the current closer nodes
 	candidates []*BSNode // the candidate nodes
@@ -293,7 +297,8 @@ func (n *BSNode) IsIntroducer() bool {
 	return n.Key() == nil
 }
 
-//func (n *BSNode) Join(introducer *BSNode) {
+// Join a node join to the network.
+// introducer's multiaddr is specified as a addr argument
 func (n *BSNode) Join(ctx context.Context, addr string) {
 	introducer, _ := n.IntroducerNode(addr)
 	n.JoinWithNode(ctx, introducer)
@@ -413,7 +418,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 			node := c // candidate
 			reqCount++
 			id := NextId()
-			go func() { n.FindNodeWithKey(lookupCtx, lookupCh, node, key, id) }()
+			go func() { n.findNodeWithKey(lookupCtx, lookupCh, node, key, id) }()
 		}
 	L:
 		for i := 0; i < reqCount; i++ {
@@ -446,6 +451,7 @@ func (n *BSNode) SetUnicastHandler(receiver func(*BSNode, *BSUnicastEvent, bool,
 	n.unicastHandler = receiver
 }
 
+// unicast a message with payload to a node with key
 func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
 	unicastCtx, cancel := context.WithTimeout(ctx, time.Duration(UNICAST_SEND_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
@@ -488,7 +494,7 @@ func (n *BSNode) SendEvent(receiver ayame.Node, ev ayame.SchedEvent) {
 	n.Send(ev)
 }
 
-func (n *BSNode) FindNodeWithKey(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, key ayame.Key, requestId string) chan *FindNodeResponse {
+func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, key ayame.Key, requestId string) chan *FindNodeResponse {
 	ev := NewBSFindNodeReqEvent(n, requestId, key, nil)
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()

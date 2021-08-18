@@ -197,3 +197,19 @@ func TestUnicast(t *testing.T) {
 		fmt.Printf("%s\n", ayame.SliceString(lst))
 	}
 }
+
+func Example() {
+	numberOfPeers := 32
+	InitK(4)
+	ayame.SecureKeyMV = false
+	peers := make([]*BSNode, numberOfPeers)
+	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
+	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+
+	for i := 1; i < numberOfPeers; i++ {
+		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
+		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		peers[i].Join(context.Background(), locator)
+	}
+	peers[1].Lookup(context.Background(), ayame.IntKey(50))
+}

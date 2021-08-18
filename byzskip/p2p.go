@@ -90,10 +90,14 @@ func ConvertPeers(self *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
 
 func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
-	if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+	if ayame.SecureKeyMV {
+		if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+			return NewBSNode(parent, NewBSRoutingTable, false), nil
+		}
+		return nil, fmt.Errorf("invalid join certificate")
+	} else {
 		return NewBSNode(parent, NewBSRoutingTable, false), nil
 	}
-	return nil, fmt.Errorf("invalid join certificate")
 }
 
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
