@@ -186,7 +186,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				NormalList = append(NormalList, n)
 			}
 		}
-		n.SetUnicastHandler(bs.SimUnicastHandler)
+		n.SetUnicastHandler(simUnicastHandler)
 		nodes = append(nodes, n)
 	}
 
@@ -455,7 +455,7 @@ var keyIssuer key_issuer.KeyIssuer
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
 	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 32, "number of nodes")
+	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.0, "failure ratio")

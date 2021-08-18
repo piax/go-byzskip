@@ -217,14 +217,14 @@ func ContainsKey(key ayame.Key, nodes []*BSNode) bool {
 	return false
 }
 
-func appendNodesIfMissing(lst []*BSNode, nodes []*BSNode) []*BSNode {
+func AppendNodesIfMissing(lst []*BSNode, nodes []*BSNode) []*BSNode {
 	for _, ele := range nodes {
-		lst = appendNodeIfMissing(lst, ele)
+		lst = AppendNodeIfMissing(lst, ele)
 	}
 	return lst
 }
 
-func appendNodeIfMissing(lst []*BSNode, node *BSNode) []*BSNode {
+func AppendNodeIfMissing(lst []*BSNode, node *BSNode) []*BSNode {
 	for _, ele := range lst {
 		if ele.Equals(node) {
 			return lst
@@ -237,7 +237,7 @@ func PathsString(paths [][]PathEntry) string {
 	ret := ""
 	for _, path := range paths {
 		ret += "[" + strings.Join(funk.Map(path, func(pe PathEntry) string {
-			return fmt.Sprintf("%s@%d", pe.Node, pe.level)
+			return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
 		}).([]string), ",") + "]"
 	}
 	return ret
@@ -245,7 +245,7 @@ func PathsString(paths [][]PathEntry) string {
 
 func PathString(path []PathEntry) string {
 	return "[" + strings.Join(funk.Map(path, func(pe PathEntry) string {
-		return fmt.Sprintf("%s@%d", pe.Node, pe.level)
+		return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
 	}).([]string), ",") + "]"
 }
 
@@ -275,14 +275,14 @@ func pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		ret = appendNodeIfMissing(ret, c)
+		ret = AppendNodeIfMissing(ret, c)
 		ret = UnincludedNodes(ret, stat.queried)
 	}
 	for _, c := range stat.candidates {
 		if len(ret) == count {
 			return ret
 		}
-		ret = appendNodeIfMissing(ret, c)
+		ret = AppendNodeIfMissing(ret, c)
 		ret = UnincludedNodes(ret, stat.queried)
 	}
 	// not enough number
@@ -335,8 +335,8 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 				ayame.Log.Debugf("%d th/ %d FindNode for %s to %s finished", i+1, reqCount, response.id, response.sender)
 				if response.isFailure { // timed out
 					// XXX TODO: should we try several times?
-					n.stats.queried = appendNodeIfMissing(n.stats.queried, response.sender)
-					n.stats.failed = appendNodeIfMissing(n.stats.failed, response.sender)
+					n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+					n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
 					// XXX delete response.sender from the routing table if already exists.
 					continue L
 				}
@@ -358,11 +358,11 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 				}
 				//n.statsMutex.Lock()
 				// XXX should append if closer
-				n.stats.closers = appendNodesIfMissing(n.stats.closers, response.closers)
+				n.stats.closers = AppendNodesIfMissing(n.stats.closers, response.closers)
 				n.rtMutex.RLock()
 				n.stats.candidates = ksToNs(n.RoutingTable.GetCloserCandidates())
 				n.rtMutex.RUnlock()
-				n.stats.queried = appendNodeIfMissing(n.stats.queried, response.sender)
+				n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
 				//n.statsMutex.Unlock()
 				ayame.Log.Debugf("%s: received closers=%s, level=%d, candidates=%s\n", n.Key(), ayame.SliceString(response.closers), response.level, ayame.SliceString(response.candidates))
 				n.procsMutex.Lock()
@@ -423,19 +423,19 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 				break L
 			case response := <-lookupCh: // FindNode finished
 				if response.isFailure { // timed out
-					queried = appendNodeIfMissing(queried, response.sender)
+					queried = AppendNodeIfMissing(queried, response.sender)
 					// XXX delete response.sender from the routing table if already exists.
 					continue L
 				}
 				if response.level == 0 {
-					results = appendNodesIfMissing(results, response.closers)
+					results = AppendNodesIfMissing(results, response.closers)
 					if ContainsKey(key, results) {
 						return results // cancel other FindNode
 					}
 				}
 				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
-				queried = appendNodeIfMissing(queried, response.sender)
-				closers = appendNodesIfMissing(closers, response.closers)
+				queried = AppendNodeIfMissing(queried, response.sender)
+				closers = AppendNodesIfMissing(closers, response.closers)
 			}
 		}
 	}
@@ -576,33 +576,33 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 
 func SimUnicastHandler(n *BSNode, msg *BSUnicastEvent, alreadySeen bool, alreadyOnThePath bool) {
 	if alreadySeen {
-		msg.Root.numberOfDuplicatedMessages++
+		msg.Root.NumberOfDuplicatedMessages++
 		//msg.root.results = appendIfMissing(msg.root.results, m)
-		msg.Root.Paths = append(msg.Root.Paths, msg.path)
+		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	} else if alreadyOnThePath {
 		ayame.Log.Debugf("I, %d, found %d is on the path %s, do nothing\n", n.key, msg.Receiver().Key(),
-			strings.Join(funk.Map(msg.path, func(pe PathEntry) string {
-				return fmt.Sprintf("%s@%d", pe.Node, pe.level)
+			strings.Join(funk.Map(msg.Path, func(pe PathEntry) string {
+				return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
 			}).([]string), ","))
-		msg.Root.Results = appendNodeIfMissing(msg.Root.Results, n)
-		msg.Root.Paths = append(msg.Root.Paths, msg.path)
+		msg.Root.Results = AppendNodeIfMissing(msg.Root.Results, n)
+		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	} else {
 		ayame.Log.Debugf("level=0 on %d msg=%s\n", n.key, msg)
 		// reached to the destination.
 		if Contains(n, msg.Root.Destinations) { // already arrived.
-			ayame.Log.Debugf("redundant result: %s, path:%s\n", msg, PathsString([][]PathEntry{msg.path}))
+			ayame.Log.Debugf("redundant result: %s, path:%s\n", msg, PathsString([][]PathEntry{msg.Path}))
 		} else { // NEW!
 			msg.Root.Destinations = append(msg.Root.Destinations, n)
-			msg.Root.DestinationPaths = append(msg.Root.DestinationPaths, msg.path)
+			msg.Root.DestinationPaths = append(msg.Root.DestinationPaths, msg.Path)
 
-			if len(msg.Root.Destinations) == msg.Root.expectedNumberOfResults {
+			if len(msg.Root.Destinations) == msg.Root.ExpectedNumberOfResults {
 				// XXX need to send UnicastReply
 				ayame.Log.Debugf("dst=%d: completed %d, paths:%s\n", msg.TargetKey, len(msg.Root.Destinations),
 					PathsString(msg.Root.DestinationPaths))
 				//msg.root.channel <- true
 				//msg.root.finishTime = sev.Time()
 			} else {
-				if len(msg.Root.Destinations) >= msg.Root.expectedNumberOfResults {
+				if len(msg.Root.Destinations) >= msg.Root.ExpectedNumberOfResults {
 					ayame.Log.Debugf("redundant results: %s, paths:%s\n", ayame.SliceString(msg.Root.Destinations), PathsString(msg.Root.DestinationPaths))
 				} else {
 					ayame.Log.Debugf("wait for another result: currently %d\n", len(msg.Root.Destinations))
@@ -610,8 +610,8 @@ func SimUnicastHandler(n *BSNode, msg *BSUnicastEvent, alreadySeen bool, already
 			}
 		}
 		// add anyway to check redundancy & record number of messages
-		msg.Root.Results = appendNodeIfMissing(msg.Root.Results, n)
-		msg.Root.Paths = append(msg.Root.Paths, msg.path)
+		msg.Root.Results = AppendNodeIfMissing(msg.Root.Results, n)
+		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	}
 }
 
@@ -637,7 +637,7 @@ func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 				ayame.Log.Debugf("I, %d, am one of the dest: %d, pass to myself\n", n.key, node.key)
 				n.handleUnicast(next, true)
 			} else {
-				if Contains(node, funk.Map(msg.path, func(pe PathEntry) *BSNode { return pe.Node.(*BSNode) }).([]*BSNode)) {
+				if Contains(node, funk.Map(msg.Path, func(pe PathEntry) *BSNode { return pe.Node.(*BSNode) }).([]*BSNode)) {
 					n.unicastHandler(n, msg, false, true)
 				} else {
 					msg.SetAlreadySeen(n)

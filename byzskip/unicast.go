@@ -16,27 +16,27 @@ type BSUnicastEvent struct {
 	///sourceNode *SGNode
 	TargetKey ayame.Key
 	MessageId string
-	path      []PathEntry // node-ids
+	Path      []PathEntry // node-ids
 	Paths     [][]PathEntry
 	level     int
 	hop       int
 	Children  []*BSUnicastEvent
 	Root      *BSUnicastEvent
 	// root only
-	expectedNumberOfResults    int
+	ExpectedNumberOfResults    int
 	Results                    []*BSNode
 	Destinations               []*BSNode // distinct results
 	DestinationPaths           [][]PathEntry
 	Channel                    chan bool
 	numberOfMessages           int
-	numberOfDuplicatedMessages int
+	NumberOfDuplicatedMessages int
 	finishTime                 int64
 	ayame.AbstractSchedEvent
 }
 
 type PathEntry struct {
 	Node  ayame.Node
-	level int
+	Level int
 }
 
 func PathEntries(nodes []*BSNode) []PathEntry {
@@ -51,16 +51,16 @@ func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
 		MessageId:                  messageId,
-		path:                       []PathEntry{{Node: sender, level: ayame.MembershipVectorSize}},
+		Path:                       []PathEntry{{Node: sender, Level: ayame.MembershipVectorSize}},
 		level:                      level,
 		hop:                        0,
 		Children:                   []*BSUnicastEvent{},
-		expectedNumberOfResults:    K,
+		ExpectedNumberOfResults:    K,
 		Results:                    []*BSNode{},
 		Paths:                      []([]PathEntry){},
 		Channel:                    make(chan bool),
 		numberOfMessages:           0,
-		numberOfDuplicatedMessages: 0,
+		NumberOfDuplicatedMessages: 0,
 		finishTime:                 0,
 		AbstractSchedEvent:         *ayame.NewSchedEvent()}
 	ev.Root = ev
@@ -104,10 +104,10 @@ func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 
 func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicastEvent {
 	var sub BSUnicastEvent = *ue
-	sub.path = append([]PathEntry{}, ue.path...)
+	sub.Path = append([]PathEntry{}, ue.Path...)
 	sub.SetReceiver(nextHop)
 	sub.SetSender(ue.Receiver())
-	sub.path = append(sub.path, PathEntry{Node: nextHop, level: level})
+	sub.Path = append(sub.Path, PathEntry{Node: nextHop, Level: level})
 	sub.hop = ue.hop + 1
 	sub.level = level
 	sub.Children = []*BSUnicastEvent{}
@@ -116,8 +116,8 @@ func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicas
 }
 
 func (ue *BSUnicastEvent) String() string {
-	return ue.Receiver().String() + "<" + strings.Join(funk.Map(ue.path, func(pe PathEntry) string {
-		return fmt.Sprintf("%s@%d", pe.Node, pe.level)
+	return ue.Receiver().String() + "<" + strings.Join(funk.Map(ue.Path, func(pe PathEntry) string {
+		return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
 	}).([]string), ",") + ">"
 }
 
@@ -126,7 +126,7 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	ret := sender.NewMessage(ue.MessageId,
 		pb.MessageType_UNICAST, ue.TargetKey, nil)
 	var cpeers []*pb.Peer
-	for _, pe := range ue.path {
+	for _, pe := range ue.Path {
 		cpeers = append(cpeers, pe.Node.Encode())
 	}
 	ret.Data.CandidatePeers = cpeers

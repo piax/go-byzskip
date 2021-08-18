@@ -106,7 +106,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			MessageId:          mes.Data.Id,
 			level:              level,
 			Channel:            make(chan bool),
-			path:               PathEntries(ConvertPeers(self, mes.Data.CandidatePeers)),
+			Path:               PathEntries(ConvertPeers(self, mes.Data.CandidatePeers)),
 			AbstractSchedEvent: *ayame.NewSchedEvent()}
 		p, _ := ConvertPeer(self, mes.Sender)
 		ev.SetSender(p)

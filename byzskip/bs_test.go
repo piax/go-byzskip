@@ -167,7 +167,7 @@ func TestUnicast(t *testing.T) {
 				}
 				lock.Unlock()
 			}
-			fmt.Printf("%s received message for mid=%s key=%s %v %v %s\n", node, ev.MessageId, ev.TargetKey, alreadySeen, alreadyOnThePath, PathString(ev.path))
+			fmt.Printf("%s received message for mid=%s key=%s %v %v %s\n", node, ev.MessageId, ev.TargetKey, alreadySeen, alreadyOnThePath, PathString(ev.Path))
 		})
 
 	}
