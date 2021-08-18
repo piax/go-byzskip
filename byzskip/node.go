@@ -461,7 +461,7 @@ func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
 	mid := NextId()
 	for _, c := range closers {
 		localc := c
-		ev := NewBSUnicastEvent(n, mid, level, key)
+		ev := NewBSUnicastEvent(n, mid, level, key, payload)
 		n.unicastEvent(ch, localc, ev)
 	}
 L:

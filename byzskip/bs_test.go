@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestUnicast(t *testing.T) {
 	ayame.Log.Debugf("------- UNICAST STARTS ---------")
 
 	lock := sync.Mutex{}
-	results := make(map[string][]ayame.IntKey)
+	results := make(map[string][]ayame.Key)
 
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].parent.(*p2p.P2PNode).InCount = 0
@@ -161,13 +162,13 @@ func TestUnicast(t *testing.T) {
 				lock.Lock()
 				v, found := results[ev.MessageId]
 				if !found {
-					results[ev.MessageId] = []ayame.IntKey{node.Key().(ayame.IntKey)}
+					results[ev.MessageId] = []ayame.Key{node.Key().(ayame.IntKey)}
 				} else {
-					results[ev.MessageId] = append(v, node.Key().(ayame.IntKey))
+					results[ev.MessageId] = append(v, node.Key()) //ayame.AppendIfMissing(v, node.Key())
 				}
 				lock.Unlock()
 			}
-			fmt.Printf("%s received message for mid=%s key=%s %v %v %s\n", node, ev.MessageId, ev.TargetKey, alreadySeen, alreadyOnThePath, PathString(ev.Path))
+			fmt.Printf("%s received message '%s'for mid=%s key=%s %v %v %s\n", node, string(ev.Payload), ev.MessageId, ev.TargetKey, alreadySeen, alreadyOnThePath, PathString(ev.Path))
 		})
 
 	}
@@ -178,7 +179,7 @@ func TestUnicast(t *testing.T) {
 		for src == dst {
 			dst = rand.Intn(numberOfPeers)
 		}
-		peers[src].Unicast(context.Background(), ayame.IntKey(dst), []byte("hello"))
+		peers[src].Unicast(context.Background(), ayame.IntKey(dst), []byte("hello from "+strconv.Itoa(src)))
 	}
 	time.Sleep(time.Duration(1) * time.Second)
 	sumCount := int64(0)

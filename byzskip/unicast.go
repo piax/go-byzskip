@@ -13,16 +13,18 @@ import (
 )
 
 type BSUnicastEvent struct {
-	///sourceNode *SGNode
 	TargetKey ayame.Key
 	MessageId string
-	Path      []PathEntry // node-ids
-	Paths     [][]PathEntry
-	level     int
-	hop       int
-	Children  []*BSUnicastEvent
-	Root      *BSUnicastEvent
-	// root only
+	Path      []PathEntry // the path entry (level is only available in simulation)
+	Payload   []byte      // the payload to send
+
+	ayame.AbstractSchedEvent
+
+	Paths                      [][]PathEntry
+	level                      int
+	hop                        int
+	Children                   []*BSUnicastEvent
+	Root                       *BSUnicastEvent
 	ExpectedNumberOfResults    int
 	Results                    []*BSNode
 	Destinations               []*BSNode // distinct results
@@ -31,7 +33,6 @@ type BSUnicastEvent struct {
 	numberOfMessages           int
 	NumberOfDuplicatedMessages int
 	finishTime                 int64
-	ayame.AbstractSchedEvent
 }
 
 type PathEntry struct {
@@ -47,11 +48,12 @@ func PathEntries(nodes []*BSNode) []PathEntry {
 	return ret
 }
 
-func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame.Key) *BSUnicastEvent {
+func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
 		MessageId:                  messageId,
 		Path:                       []PathEntry{{Node: sender, Level: ayame.MembershipVectorSize}},
+		Payload:                    payload,
 		level:                      level,
 		hop:                        0,
 		Children:                   []*BSUnicastEvent{},
@@ -112,6 +114,7 @@ func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicas
 	sub.level = level
 	sub.Children = []*BSUnicastEvent{}
 	ue.Children = append(ue.Children, &sub)
+	sub.Payload = ue.Payload
 	return &sub
 }
 
@@ -131,6 +134,7 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	}
 	ret.Data.CandidatePeers = cpeers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)
+	ret.Data.Record = &pb.Record{Value: ue.Payload}
 	return ret
 }
 
