@@ -55,6 +55,10 @@ func (table *AdversaryRoutingTable) Add(c bs.KeyMV) {
 	table.normal.Add(c)
 }
 
+func (table *AdversaryRoutingTable) Delete(key ayame.Key) {
+	table.normal.Delete(key)
+}
+
 // called by adversarial community
 func (table *AdversaryRoutingTable) AddAdversarial(c bs.KeyMV) {
 	table.adversarial.Add(c)

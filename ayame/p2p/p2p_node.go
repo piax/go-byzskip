@@ -113,6 +113,7 @@ func (n *P2PNode) Encode() *p2p.Peer {
 
 func (n *P2PNode) Close() {
 	n.Host.Close()
+	ayame.Log.Debugf("%s's host is closed\n", n.Key())
 }
 
 func (n *P2PNode) SetChild(c ayame.Node) {
@@ -184,7 +185,7 @@ func (n *P2PNode) Send(ev ayame.SchedEvent) { // send to self..
 	}
 	mes.SenderSign, _ = n.signProtoMessage(mes)
 	mes.SenderSign = IfNeededSign(mes.SenderSign)
-	//ayame.Log.Infof("sending mes=%v", ev)
+	ayame.Log.Infof("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 	n.sendProtoMessage(ev.Receiver().Id(), MessageProto, mes)
 }
 
@@ -338,7 +339,7 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 func (n *P2PNode) sendProtoMessage(id peer.ID, p protocol.ID, data proto.Message) bool {
 	s, err := n.NewStream(context.Background(), id, p)
 	if err != nil {
-		ayame.Log.Errorf("NewStream to %s: %s\n", id, err)
+		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return false
 	}
 	defer s.Close()

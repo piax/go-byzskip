@@ -14,7 +14,8 @@ type MembershipVector struct {
 
 const (
 	MembershipVectorSize = 32
-	DefaultAlpha         = 2
+
+//	DefaultAlpha         = 2
 )
 
 func NewMembershipVector(alpha int) *MembershipVector {

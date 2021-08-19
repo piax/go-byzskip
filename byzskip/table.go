@@ -77,6 +77,8 @@ type RoutingTable interface {
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	Add(c KeyMV)
+	Delete(c ayame.Key)
+
 	// order is not care
 	GetAll() []KeyMV // get all disjoint entries
 	// get all in order of closeness
@@ -246,6 +248,34 @@ func (table *SkipRoutingTable) Add(c KeyMV) {
 		return !lv.hasDuplicatesInLeftsAndRights()
 	}).([]*NeighborList)
 	*/
+}
+
+// Delete an entry from KeyMV slice that matches the key.
+// returns modified slice and modified status (true if modified)
+func delNode(kms []KeyMV, key ayame.Key) ([]KeyMV, bool) {
+	for i := range kms {
+		if kms[i].Key().Equals(key) {
+			return append(kms[:i], kms[i+1:]...), true
+		}
+	}
+	return kms, false
+}
+
+// Delete entries which have specified key
+func (table *SkipRoutingTable) Delete(key ayame.Key) {
+	if table.km.Key().Equals(key) {
+		return // cannot delete self
+	}
+	for _, levelTable := range table.NeighborLists {
+		deleted, modified := delNode(levelTable.Neighbors[LEFT], key)
+		if modified {
+			levelTable.Neighbors[LEFT] = deleted
+		}
+		deleted, modified = delNode(levelTable.Neighbors[RIGHT], key)
+		if modified {
+			levelTable.Neighbors[RIGHT] = deleted
+		}
+	}
 }
 
 //func NewKeyMV(key int, mv *ayame.MembershipVector) *KeyMV {

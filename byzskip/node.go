@@ -107,7 +107,8 @@ func (n *BSNode) Encode() *pb.Peer {
 }
 
 func (n *BSNode) Close() {
-	n.NotifyDeletion()
+	n.NotifyDeletion(context.Background())
+	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
 	n.parent.Close()
 }
 
@@ -260,10 +261,13 @@ func (pe PathEntry) String() string {
 const (
 	JOIN_TIMEOUT          = 30
 	LOOKUP_TIMEOUT        = 30
+	DELNODE_TIMEOUT       = 30
 	FIND_NODE_TIMEOUT     = 10
 	FIND_NODE_PARALLELISM = 4
 	FIND_NODE_INTERVAL    = 1
 	UNICAST_SEND_TIMEOUT  = 1
+	DELNODE_SEND_TIMEOUT  = 300 // millisecond
+	DURATION_BEFORE_CLOSE = 100 // millisecond
 )
 
 var SeqNo int = 0
@@ -382,10 +386,44 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 	}
 }
 
-func (n *BSNode) NotifyDeletion() {
-	for _, neighbor := range ksToNs(n.RoutingTable.GetAll()) {
-		n.SendEvent(neighbor, nil) // XXX implement nil
+func (n *BSNode) NotifyDeletion(ctx context.Context) {
+	deleteCtx, cancel := context.WithTimeout(ctx, time.Duration(DELNODE_TIMEOUT)*time.Second) // all request should be ended within
+	defer cancel()
+	// all entries without myself
+	n.rtMutex.RLock()
+	entries, _ := delNode(n.RoutingTable.GetAll(), n.Key())
+	n.rtMutex.RUnlock()
+	pos := 0
+	ch := make(chan struct{}, 1)
+	total := 0
+	for pos < len(entries) {
+		reqCount := 0
+		for i := 0; i < FIND_NODE_PARALLELISM; i++ {
+			ayame.Log.Debugf("%s: %d/%d\n", n.Key(), pos, len(entries))
+			if pos == len(entries) {
+				ayame.Log.Debugf("%d/%d break!\n", pos, len(entries))
+				break
+			}
+			ev := NewBSDelNodeEvent(n, NextId(), n.Key())
+			reqCount++
+			go func(to *BSNode, ev *BSDelNodeEvent) {
+				n.sendDelNodeEvent(ctx, ch, to, ev)
+			}(entries[pos].(*BSNode), ev)
+			pos++
+		}
+	L:
+		for i := 0; i < reqCount; i++ {
+			select {
+			case <-deleteCtx.Done(): // after UNICAST_SEND_TIMEOUT
+				ayame.Log.Debugf("DelNode %s ended with %s during %d/%d\n", n.Key(), deleteCtx.Err(), i, reqCount)
+				break L
+			case <-ch:
+				total++
+				ayame.Log.Debugf("%s: DelNode sent %d/%d\n", n.Key(), total, len(entries))
+			}
+		}
 	}
+	ayame.Log.Debugf("%s: DelNode process finished %d/%d\n", n.Key(), total, len(entries))
 }
 
 func (n *BSNode) allQueried() bool {
@@ -474,7 +512,23 @@ L:
 			ayame.Log.Debugf("A unicast sent %d/%d\n", i, len(closers))
 		}
 	}
+}
 
+func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *BSNode, ev *BSDelNodeEvent) {
+	sendCtx, cancel := context.WithTimeout(ctx, time.Duration(DELNODE_SEND_TIMEOUT)*time.Millisecond)
+	defer cancel()
+	sch := make(chan struct{}, 1)
+	go func() {
+		ayame.Log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
+		n.SendEvent(node, ev)
+		sch <- struct{}{}
+	}()
+	select {
+	case <-sendCtx.Done():
+		ayame.Log.Debugf("%s: delnode ended with %s, continue anyway\n", n.Key(), sendCtx.Err())
+	case <-sch:
+	}
+	ch <- struct{}{}
 }
 
 func (n *BSNode) unicastEvent(ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
@@ -489,7 +543,7 @@ func (n *BSNode) unicastEvent(ch chan struct{}, node *BSNode, ev *BSUnicastEvent
 }
 
 func (n *BSNode) SendEvent(receiver ayame.Node, ev ayame.SchedEvent) {
-	ev.SetSender(n) // author of the message
+	ev.SetSender(n)
 	ev.SetReceiver(receiver)
 	n.Send(ev)
 }
@@ -580,6 +634,7 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 	}
 }
 
+/*
 func SimUnicastHandler(n *BSNode, msg *BSUnicastEvent, alreadySeen bool, alreadyOnThePath bool) {
 	if alreadySeen {
 		msg.Root.NumberOfDuplicatedMessages++
@@ -620,7 +675,7 @@ func SimUnicastHandler(n *BSNode, msg *BSUnicastEvent, alreadySeen bool, already
 		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	}
 }
-
+*/
 func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 	msg := sev.(*BSUnicastEvent)
 	ayame.Log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
@@ -654,6 +709,18 @@ func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 			}
 
 		}
+	}
+	return nil
+}
+
+func (n *BSNode) handleDelNode(sev ayame.SchedEvent) error {
+	ev := sev.(*BSDelNodeEvent)
+	if ev.TargetKey.Equals(sev.Sender().Key()) { // only if the sender has the targetKey
+		n.rtMutex.Lock()
+		n.RoutingTable.Delete(ev.TargetKey)
+		n.rtMutex.Unlock()
+
+		// need to re-construct the routing table. crawl again?
 	}
 	return nil
 }

@@ -33,6 +33,10 @@ func (table *StopRoutingTable) Add(c bs.KeyMV) {
 	// do nothing.
 }
 
+func (table *StopRoutingTable) Delete(key ayame.Key) {
+	// do nothing.
+}
+
 func (table *StopRoutingTable) GetNeighborLists() []*bs.NeighborList {
 	return []*bs.NeighborList{}
 }

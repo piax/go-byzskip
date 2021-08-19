@@ -16,6 +16,16 @@ import (
 	ast "github.com/stretchr/testify/assert"
 )
 
+func TestTableDeletion(t *testing.T) {
+	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVector(2)})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVector(2)})
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVector(2)})
+
+	rt.Delete(ayame.IntKey(2))
+	rt.Delete(ayame.IntKey(3))
+	ast.Equal(t, rt.Size(), 0, "expected 0")
+}
+
 func TestTable(t *testing.T) {
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVector(2)})
 	rt.ensureHeight(3)
@@ -172,8 +182,8 @@ func TestUnicast(t *testing.T) {
 		})
 
 	}
-	numberOfLookups := numberOfPeers
-	for i := 0; i < numberOfLookups; i++ {
+	numberOfUnicasts := numberOfPeers
+	for i := 0; i < numberOfUnicasts; i++ {
 		src := rand.Intn(numberOfPeers)
 		dst := rand.Intn(numberOfPeers)
 		for src == dst {
@@ -192,11 +202,24 @@ func TestUnicast(t *testing.T) {
 	}
 
 	fmt.Printf("sum-count: %d\n", sumCount)
-	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
-	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+	fmt.Printf("avg-unicast-num-msgs: %f\n", float64(sumCount)/float64(numberOfUnicasts))
+	fmt.Printf("avg-unicast-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfUnicasts))
 	for _, lst := range results {
 		fmt.Printf("%s\n", ayame.SliceString(lst))
 	}
+}
+
+func TestClose(t *testing.T) {
+	numberOfPeers := 16
+	peers := setupNodes(numberOfPeers)
+	ayame.Log.Debugf("------- Closing nodes ---------")
+	for i := 0; i < numberOfPeers; i++ {
+		peers[i].Close()
+	}
+	for i := 0; i < numberOfPeers; i++ {
+		fmt.Printf("%d: %d\n", peers[i].Key(), peers[i].RoutingTable.Size())
+	}
+
 }
 
 func Example() {

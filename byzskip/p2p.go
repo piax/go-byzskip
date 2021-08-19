@@ -130,6 +130,16 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
 		}
 		ev.SetSender(p)
+	case pb.MessageType_DEL_NODE:
+		ev = &BSDelNodeEvent{
+			MessageId: mes.Data.Id,
+			TargetKey: p2p.NewKey(mes.Data.Key),
+		}
+		p, err := ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetSender(p)
 	}
 	return ev
 }
