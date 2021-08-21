@@ -219,7 +219,6 @@ func TestClose(t *testing.T) {
 	for i := 0; i < numberOfPeers; i++ {
 		fmt.Printf("%d: %d\n", peers[i].Key(), peers[i].RoutingTable.Size())
 	}
-
 }
 
 func Example() {

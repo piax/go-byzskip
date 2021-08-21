@@ -36,3 +36,18 @@ func TestP2P(t *testing.T) {
 		ast.Equal(t, bs.RoutingTableEquals(peers[i].RoutingTable, localPeers[i].RoutingTable), true, "routing table equals")
 	}
 }
+
+func TestTableIndex(t *testing.T) {
+	numberOfPeers := 100
+	localPeers := make([]*bs.BSNode, numberOfPeers)
+	for i := 0; i < numberOfPeers; i++ {
+		localPeers[i] = bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(i), ayame.NewMembershipVector(2)), bs.NewBSRoutingTable, false)
+	}
+	FastJoinAllByCheat(localPeers)
+	for i := 1; i < numberOfPeers; i++ {
+		fmt.Printf("key=%s\n%s", localPeers[i].Key(), localPeers[i].RoutingTable)
+		for _, idx := range localPeers[i].RoutingTable.(*bs.BSRoutingTable).GetTableIndex() {
+			fmt.Printf("index level=%d, min=%s, max=%s\n", idx.Level, idx.Min, idx.Max)
+		}
+	}
+}

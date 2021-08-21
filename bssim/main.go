@@ -29,6 +29,8 @@ var unicastType *string
 var keyIssuerType *string
 var uniRoutingType *string
 var experiment *string
+var useTableIndex *bool
+var tableLimitMargin *int
 var seed *int64
 var verbose *bool
 
@@ -283,7 +285,8 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					//
 					localn.RoutingTable.Add(nodes[index])
 
-					umsgs, hijacked := FastUpdateNeighbors(localn, nodes[index], msg.Results, []*bs.BSNode{})
+					// XXX candidate list length
+					umsgs, hijacked, _ := FastUpdateNeighbors(localn, msg.Results, []*bs.BSNode{})
 					sumMsgs += umsgs
 					if hijacked {
 						allFaultyCount++
@@ -359,6 +362,7 @@ func FastJoinAllByLookup(nodes []*bs.BSNode) error {
 	count := 0
 	prev := 0
 	faultyCount := 0
+	sumCandidates := 0
 	for i, n := range nodes {
 		if n.IsFailure {
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
@@ -377,13 +381,14 @@ func FastJoinAllByLookup(nodes []*bs.BSNode) error {
 		}
 		if index != i {
 			ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
-			rets, _, msgs, _, lmsgs, faulty := FastNodeLookup(n, nodes[index])
+			rets, _, msgs, _, lmsgs, faulty, candidateLen := FastNodeLookup(n, nodes[index])
 			if faulty {
 				faultyCount++
 			}
 			ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
+			sumCandidates += candidateLen
 		}
 
 		count++
@@ -395,6 +400,7 @@ func FastJoinAllByLookup(nodes []*bs.BSNode) error {
 	}
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
+	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
 
 	ncount := 0
 	fcount := 0
@@ -458,12 +464,14 @@ func main() {
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
-	failureRatio = flag.Float64("f", 0.0, "failure ratio")
+	failureRatio = flag.Float64("f", 0.3, "failure ratio")
 	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	keyIssuerType = flag.String("issuerType", "asis", "issuer type (type-param) type={shuffle|random|asis}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
+	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
+	tableLimitMargin = flag.Int("margin", 0, "num of additional candidates beyond table limit")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -558,6 +566,7 @@ func main() {
 			fmt.Printf("%skey=%d [%s]\n%s", mark, n.Key(), n.MV().String(), n.RoutingTableString())
 		}
 	}
+
 	path_lengths := []float64{}
 	nums_msgs := []int{}
 	match_lengths := []float64{}

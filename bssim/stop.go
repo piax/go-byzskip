@@ -45,6 +45,14 @@ func (table *StopRoutingTable) AddNeighborList(s *bs.NeighborList) {
 	// do nothing.
 }
 
+func (table *StopRoutingTable) GetNeighborCandidates(mv *ayame.MembershipVector, req *bs.CandidatesRequest) []bs.KeyMV {
+	return []bs.KeyMV{}
+}
+
+func (table *StopRoutingTable) GetTableIndex() []*bs.TableIndex {
+	return []*bs.TableIndex{}
+}
+
 func (table *StopRoutingTable) GetCloserCandidates() []bs.KeyMV {
 	// should be confused?
 	return []bs.KeyMV{}

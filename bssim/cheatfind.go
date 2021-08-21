@@ -39,6 +39,16 @@ func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.
 	return nb, lv, can
 }
 
+func FastFindNodeWithIndex(node *bs.BSNode, target *bs.BSNode, req *bs.CandidatesRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
+	can := node.RoutingTable.GetNeighborCandidates(target.MV(), req)
+	nb, lv := node.GetNeighbors(target.Key())
+	//ayame.Log.Debugf("%s: adding %s\n", node, target)
+	node.RoutingTable.Add(target)
+	//ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n updated:\n %s\n", node, target.key, ayame.SliceString(nb), lv,
+	//	node.routingTable.String())
+	return nb, lv, ksToNs(can)
+}
+
 const (
 	CONFUSED_ROUTING_TABLE = true
 )
@@ -46,8 +56,24 @@ const (
 func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode) []*bs.BSNode {
 	//ret := node.GetCandidates()
 	ret := node.RoutingTable.GetCommonNeighbors(target.MV())
+
 	//	if !node.isFailure || FailureType == F_NONE {
-	//ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
+	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
+	node.RoutingTable.Add(target)
+	//ayame.Log.Debugf("%s: %d \n updated:\n %s\n", node, target, node.routingTable.String())
+	for _, n := range piggyback {
+		node.RoutingTable.Add(n)
+	}
+	//	}
+	return ksToNs(ret)
+}
+
+func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode, req *bs.CandidatesRequest) []*bs.BSNode {
+	//ret := node.GetCandidates()
+	ret := node.RoutingTable.GetNeighborCandidates(target.MV(), req)
+
+	//	if !node.isFailure || FailureType == F_NONE {
+	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
 	node.RoutingTable.Add(target)
 	//ayame.Log.Debugf("%s: %d \n updated:\n %s\n", node, target, node.routingTable.String())
 	for _, n := range piggyback {
@@ -126,7 +152,7 @@ func FastLookup(key ayame.Key, source *bs.BSNode) ([]*bs.BSNode, int, int, int, 
 
 //length, _ := maxPathLength(msg.paths)
 //hops = int(length)
-func FastUpdateNeighbors(target *bs.BSNode, source *bs.BSNode, initialNodes []*bs.BSNode, queried []*bs.BSNode) (int, bool) {
+func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried []*bs.BSNode) (int, bool, int) {
 	hijacked := false
 	if !target.IsFailure && isFaultySet(initialNodes) {
 		hijacked = true
@@ -134,11 +160,10 @@ func FastUpdateNeighbors(target *bs.BSNode, source *bs.BSNode, initialNodes []*b
 	}
 
 	msgs := 0
+	sumCandidates := 0
 	candidates := initialNodes
-	ayame.Log.Debugf("queried %d neighbors for %d = %s\n", source.Key(), target.Key(), ayame.SliceString(candidates))
-
 	ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", target.Key(), ayame.SliceString(candidates), ayame.SliceString(queried))
-
+	ayame.Log.Debugf("initial: %s\n", target.RoutingTable)
 	for len(candidates) != 0 {
 		next := candidates[0]
 		// XXX use message
@@ -147,7 +172,17 @@ func FastUpdateNeighbors(target *bs.BSNode, source *bs.BSNode, initialNodes []*b
 		if PiggybackJoinRequest {
 			piggyback = target.GetCandidates()
 		}
-		newCandidates := FastJoinRequest(next, target, piggyback)
+		var newCandidates []*bs.BSNode
+		if *useTableIndex {
+			idxs := target.RoutingTable.GetTableIndex()
+			for _, idx := range idxs {
+				ayame.Log.Debugf("%s: index level=%d, min=%s, max=%s\n", target, idx.Level, idx.Min, idx.Max)
+			}
+			newCandidates = FastJoinRequestWithIndex(next, target, piggyback, &bs.CandidatesRequest{RequesterKey: target.Key(), TableIndexList: idxs, Margin: *tableLimitMargin})
+		} else {
+			newCandidates = FastJoinRequest(next, target, piggyback)
+		}
+		sumCandidates += len(newCandidates)
 		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), ayame.SliceString(newCandidates))
 		msgs++
 		queried = append(queried, next)
@@ -163,27 +198,31 @@ func FastUpdateNeighbors(target *bs.BSNode, source *bs.BSNode, initialNodes []*b
 		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
 	}
 	ayame.Log.Debugf("%d: update neighbors msgs %d\n", target.Key(), msgs)
-	return msgs, hijacked
+	ayame.Log.Debugf("%d: finish\n%s", target.Key(), target.RoutingTable)
+	return msgs, hijacked, sumCandidates
 }
 
-func FastNodeLookup(target *bs.BSNode, source *bs.BSNode) ([]*bs.BSNode, int, int, int, int, bool) {
+func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int, int, int, int, bool, int) {
 	hops := 0
 	msgs := 0
 	hops_to_match := -1
 	msgs_to_lookup := 0
+	respCount := 0 // neighbor candidate node data size other than closer nodes data
 
 	hops++ // request
 	msgs++
-	neighbors, level, candidates := FastFindNode(source, target)
-	ayame.Log.Debugf("queried %d, neighbors for %d = %s @ level %d\n", source.Key(), target.Key(), ayame.SliceString(neighbors), level)
+	neighbors, level, candidates := FastFindNode(introducer, target)
+	ayame.Log.Debugf("queried %d, neighbors for %d = %s @ level %d\n", introducer.Key(), target.Key(), ayame.SliceString(neighbors), level)
 	hops++
 	msgs++ // response
 
-	//ayame.Log.Debugf("%s: adding %s\n", target, source)
-	target.RoutingTable.Add(source)
+	respCount += len(candidates)
+
+	ayame.Log.Debugf("%s: adding %s\n", target, introducer)
+	target.RoutingTable.Add(introducer)
 
 	rets := []*bs.BSNode{}
-	queried := []*bs.BSNode{source}
+	queried := []*bs.BSNode{introducer}
 	if level == 0 {
 		rets = append(rets, neighbors...)
 		if hops_to_match < 0 {
@@ -206,7 +245,16 @@ func FastNodeLookup(target *bs.BSNode, source *bs.BSNode) ([]*bs.BSNode, int, in
 		hops++ // request
 		for _, next := range nexts {
 			msgs++
-			curNeighbors, curLevel, curCandidates := FastFindNode(next, target)
+			var curNeighbors, curCandidates []*bs.BSNode
+			var curLevel int
+			if *useTableIndex {
+				idxs := target.RoutingTable.GetTableIndex()
+				req := &bs.CandidatesRequest{RequesterKey: target.Key(), TableIndexList: idxs, Margin: *tableLimitMargin}
+				curNeighbors, curLevel, curCandidates = FastFindNodeWithIndex(next, target, req)
+			} else {
+				curNeighbors, curLevel, curCandidates = FastFindNode(next, target)
+			}
+			respCount += len(curCandidates)
 			ayame.Log.Debugf("queried %d, neighbors for %d = %s @ level %d\n", next.Key(), target.Key(), ayame.SliceString(curNeighbors), curLevel)
 			//ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curCandidates))
 			msgs++
@@ -221,7 +269,7 @@ func FastNodeLookup(target *bs.BSNode, source *bs.BSNode) ([]*bs.BSNode, int, in
 				}
 			}
 			if JoinType == J_ITER_P {
-				//ayame.Log.Debugf("%s: adding %s\n", target, ayame.SliceString(curCandidates))
+				ayame.Log.Debugf("%s: adding %s\n", target, ayame.SliceString(curCandidates))
 				for _, c := range curCandidates {
 					target.RoutingTable.Add(c)
 				}
@@ -243,9 +291,10 @@ func FastNodeLookup(target *bs.BSNode, source *bs.BSNode) ([]*bs.BSNode, int, in
 	}
 	ayame.Log.Debugf("%d: table=%s, candidates=%s, queried=%s\n", target.Key(), ayame.SliceString(target.RoutingTable.GetAll()), ayame.SliceString(candidates), ayame.SliceString(queried))
 	//processed := []*bs.BSNode{}
-	umsgs, failure := FastUpdateNeighbors(target, source, candidates, queried)
+	umsgs, failure, sumCandidates := FastUpdateNeighbors(target, candidates, queried)
+	respCount += sumCandidates
 	msgs += umsgs
 	ayame.Log.Debugf("%d: join-msgs %d\n", target.Key(), msgs)
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
-	return rets, hops, msgs, hops_to_match, msgs_to_lookup, failure
+	return rets, hops, msgs, hops_to_match, msgs_to_lookup, failure, respCount
 }
