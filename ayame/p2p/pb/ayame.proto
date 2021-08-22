@@ -73,12 +73,26 @@ message Record {
     int64 timestamp = 5;
 }
 
+message TableIndex {
+    int32 level = 1;
+    Key min = 2;
+    Key max = 3;
+}
+
+message FindNodeRequest {
+    Key key = 1;
+    bytes MV = 2;
+    repeated TableIndex neighborListIndex = 3;
+}
+
 // designed to be used in all protocols
 message MessageData {
     string version = 1;      // version information
     MessageType type = 2;
     int64 timestamp = 3;     // The time when the message was originated
     string id = 4;           // the message identifier
+
+    FindNodeRequest req = 5;
 
     // Used to specify the key associated with this message (may be a range in multicast)
     Key key = 6;
@@ -106,14 +120,13 @@ message MessageData {
     repeated Peer candidatePeers = 14;
     // the record used to deliver in this message
     Record record = 15;
-
 }
 
 message Message {
     MessageData data = 1;
     // signature of message by sender node
     bytes senderSign = 2;
-    // peer information of the node who sent the message=base58(multihash(nodePubKey))
+    // peer information of the node who sent the message
     Peer sender = 3;
     bool isResponse = 4;  // true if message is response
 }

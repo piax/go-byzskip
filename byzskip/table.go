@@ -75,9 +75,9 @@ type RoutingTable interface {
 	// access entries
 
 	// XXX refactoring plan: Rename to GetNearestNodes with FindNode request
-	GetNeighbors(key ayame.Key) ([]KeyMV, int) // get k neighbors and its level
+	GetClosestNodes(key ayame.Key) ([]KeyMV, int) // get k neighbors and its level
 	// XXX refactoring plan: Rename to GetNeighborNodes with FindNode request
-	GetNeighborCandidates(mv *ayame.MembershipVector, req *CandidatesRequest) []KeyMV
+	GetNeighborNodes(req *FindNodeRequest) []KeyMV
 
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
@@ -106,10 +106,12 @@ type TableIndex struct {
 	Min   ayame.Key
 }
 
-type CandidatesRequest struct {
-	RequesterKey   ayame.Key
-	TableIndexList []*TableIndex
-	Margin         int
+type FindNodeRequest struct {
+	// requester's key and
+	Key               ayame.Key
+	MV                *ayame.MembershipVector
+	ClosestIndex      *TableIndex
+	NeighborListIndex []*TableIndex
 }
 
 type SkipRoutingTable struct {
@@ -166,7 +168,7 @@ func (table *SkipRoutingTable) AddNeighborList(s *NeighborList) {
 	table.NeighborLists = append(table.NeighborLists, s)
 }
 
-func (table *SkipRoutingTable) GetNeighbors(key ayame.Key) ([]KeyMV, int) {
+func (table *SkipRoutingTable) GetClosestNodes(key ayame.Key) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	// find the lowest level
@@ -179,6 +181,15 @@ func (table *SkipRoutingTable) GetNeighbors(key ayame.Key) ([]KeyMV, int) {
 		}
 	}
 	return ret, level
+}
+
+func (table *SkipRoutingTable) GetFindNodeRequest(k int) *FindNodeRequest {
+	return &FindNodeRequest{
+		Key:               table.km.Key(),
+		MV:                table.km.MV(),
+		NeighborListIndex: table.GetTableIndex(),
+	}
+
 }
 
 func (table *SkipRoutingTable) GetTableIndex() []*TableIndex {
@@ -224,8 +235,8 @@ func (table *SkipRoutingTable) GetAll() []KeyMV {
 	return ret
 }
 
-func (req *CandidatesRequest) findIndexWithLevel(level int) *TableIndex {
-	for _, ti := range req.TableIndexList {
+func (req *FindNodeRequest) findIndexWithLevel(level int) *TableIndex {
+	for _, ti := range req.NeighborListIndex {
 		if ti.Level == level {
 			return ti
 		}
@@ -233,12 +244,12 @@ func (req *CandidatesRequest) findIndexWithLevel(level int) *TableIndex {
 	return nil
 }
 
-func (rts *NeighborList) concatenateWithIndex(req *CandidatesRequest, includeSelf bool) []KeyMV {
+func (rts *NeighborList) concatenateWithIndex(req *FindNodeRequest, includeSelf bool) []KeyMV {
 	ret := []KeyMV{}
 	idx := req.findIndexWithLevel(rts.level)
 	for _, n := range rts.Neighbors[LEFT] {
-		if idx == nil || isOrderedSimple(idx.Min, n.Key(), req.RequesterKey) ||
-			isOrderedSimple(req.RequesterKey, n.Key(), idx.Max) {
+		if idx == nil || isOrderedSimple(idx.Min, n.Key(), req.Key) ||
+			isOrderedSimple(req.Key, n.Key(), idx.Max) {
 			ret = append(ret, n)
 		}
 	}
@@ -249,22 +260,22 @@ func (rts *NeighborList) concatenateWithIndex(req *CandidatesRequest, includeSel
 		ret = append(ret, rts.owner)
 	}
 	for _, n := range rts.Neighbors[RIGHT] {
-		if idx == nil || isOrderedSimple(idx.Min, n.Key(), req.RequesterKey) ||
-			isOrderedSimple(req.RequesterKey, n.Key(), idx.Max) {
+		if idx == nil || isOrderedSimple(idx.Min, n.Key(), req.Key) ||
+			isOrderedSimple(req.Key, n.Key(), idx.Max) {
 			ret = append(ret, n)
 		}
 	}
 	if idx != nil {
-		ayame.Log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.RequesterKey, idx.Max, ayame.SliceString(ret))
+		ayame.Log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.Key, idx.Max, ayame.SliceString(ret))
 	} else {
 		ayame.Log.Debugf("@%d,resp=%s\n", rts.level, ayame.SliceString(ret))
 	}
 	return ret
 }
 
-func (table *SkipRoutingTable) GetNeighborCandidates(mv *ayame.MembershipVector, req *CandidatesRequest) []KeyMV {
+func (table *SkipRoutingTable) GetNeighborNodes(req *FindNodeRequest) []KeyMV {
 	ret := []KeyMV{}
-	commonLen := table.km.MV().CommonPrefixLength(mv)
+	commonLen := table.km.MV().CommonPrefixLength(req.MV)
 	ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
 	for l, singleLevel := range table.NeighborLists {
 		if l > commonLen { // no match

@@ -67,8 +67,9 @@ type BSNode struct {
 	procsMutex sync.RWMutex // for r/w procs status
 	rtMutex    sync.RWMutex // for r/w routing table
 	//statsMutex sync.RWMutex // for r/w join status
-	seenMutex      sync.RWMutex                               // for r/w QuerySeen
-	unicastHandler func(*BSNode, *BSUnicastEvent, bool, bool) // received event, already seen, next already on the path
+	seenMutex       sync.RWMutex                               // for r/w QuerySeen
+	unicastHandler  func(*BSNode, *BSUnicastEvent, bool, bool) // received event, already seen, next already on the path
+	messageReceiver func(*BSNode, *BSUnicastEvent)             // a function when received a message
 }
 
 func (n *BSNode) Key() ayame.Key {
@@ -79,8 +80,8 @@ func (node *BSNode) Id() peer.ID { // Endpoint
 	return node.parent.Id()
 }
 
-func (node *BSNode) Send(ev ayame.SchedEvent) {
-	node.parent.Send(ev)
+func (node *BSNode) Send(ev ayame.SchedEvent, sign bool) {
+	node.parent.Send(ev, sign)
 }
 
 func (n *BSNode) MV() *ayame.MembershipVector {
@@ -131,7 +132,7 @@ func ksToNs(lst []KeyMV) []*BSNode {
 }
 
 func (node *BSNode) GetNeighborsAndCandidatesWithIndex(key ayame.Key, mv *ayame.MembershipVector, idx *TableIndex) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.GetNeighbors(key)
+	ret, level := node.RoutingTable.GetClosestNodes(key)
 	//can := node.routingTable.GetAll()
 	can := node.RoutingTable.GetCommonNeighbors(mv)
 	return ksToNs(ret), level, ksToNs(can)
@@ -139,7 +140,7 @@ func (node *BSNode) GetNeighborsAndCandidatesWithIndex(key ayame.Key, mv *ayame.
 
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
 func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.MembershipVector) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.GetNeighbors(key)
+	ret, level := node.RoutingTable.GetClosestNodes(key)
 	//can := node.routingTable.GetAll()
 	can := node.RoutingTable.GetCommonNeighbors(mv)
 	return ksToNs(ret), level, ksToNs(can)
@@ -158,8 +159,8 @@ func NewBSNode(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bo
 }
 
 // for local
-func (node *BSNode) GetNeighbors(key ayame.Key) ([]*BSNode, int) {
-	nb, lv := node.RoutingTable.GetNeighbors(key)
+func (node *BSNode) GetClosestNodes(key ayame.Key) ([]*BSNode, int) {
+	nb, lv := node.RoutingTable.GetClosestNodes(key)
 	return ksToNs(nb), lv
 }
 
@@ -440,7 +441,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 	lookupCtx, cancel := context.WithTimeout(ctx, time.Duration(LOOKUP_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
 
-	closers, level := n.GetNeighbors(key)
+	closers, level := n.GetClosestNodes(key)
 	if level == 0 {
 		ayame.Log.Debugf("FindNode ended locally")
 		return closers
@@ -486,22 +487,26 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 	return results
 }
 
-func (n *BSNode) SetUnicastHandler(receiver func(*BSNode, *BSUnicastEvent, bool, bool)) {
-	n.unicastHandler = receiver
+func (n *BSNode) SetMessageReceiver(receiver func(*BSNode, *BSUnicastEvent)) {
+	n.messageReceiver = receiver
+}
+
+func (n *BSNode) SetUnicastHandler(handler func(*BSNode, *BSUnicastEvent, bool, bool)) {
+	n.unicastHandler = handler
 }
 
 // unicast a message with payload to a node with key
 func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
 	unicastCtx, cancel := context.WithTimeout(ctx, time.Duration(UNICAST_SEND_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
-	closers, level := n.GetNeighbors(key)
+	closers, level := n.GetClosestNodes(key)
 	ayame.Log.Debugf("from=%s,to=%s,first level=%d %s\n", n.Key(), key, level, ayame.SliceString(closers))
 	ch := make(chan struct{}, 1)
 	mid := NextId()
 	for _, c := range closers {
 		localc := c
 		ev := NewBSUnicastEvent(n, mid, level, key, payload)
-		n.unicastEvent(ch, localc, ev)
+		n.sendUnicastEvent(ch, localc, ev)
 	}
 L:
 	for i := 0; i < len(closers); i++ {
@@ -521,7 +526,7 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	sch := make(chan struct{}, 1)
 	go func() {
 		ayame.Log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
-		n.SendEvent(node, ev)
+		n.SendEvent(node, ev, false)
 		sch <- struct{}{}
 	}()
 	select {
@@ -532,21 +537,21 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	ch <- struct{}{}
 }
 
-func (n *BSNode) unicastEvent(ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
+func (n *BSNode) sendUnicastEvent(ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
 	go func() {
 		if node.Equals(n) {
 			n.handleUnicast(ev, true)
 		} else {
-			n.SendEvent(node, ev)
+			n.SendEvent(node, ev, true)
 		}
 		ch <- struct{}{}
 	}()
 }
 
-func (n *BSNode) SendEvent(receiver ayame.Node, ev ayame.SchedEvent) {
+func (n *BSNode) SendEvent(receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
 	ev.SetSender(n)
 	ev.SetReceiver(receiver)
-	n.Send(ev)
+	n.Send(ev, sign)
 }
 
 func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, key ayame.Key, requestId string) chan *FindNodeResponse {
@@ -557,7 +562,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
-	n.SendEvent(node, ev)
+	n.SendEvent(node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
@@ -582,7 +587,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
-	n.SendEvent(node, ev)
+	n.SendEvent(node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
@@ -619,7 +624,7 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 		var level int
 		if ue.TargetMV == nil {
 			n.rtMutex.RLock()
-			closers, level = n.GetNeighbors(ue.TargetKey)
+			closers, level = n.GetClosestNodes(ue.TargetKey)
 			n.rtMutex.RUnlock()
 		} else {
 			n.rtMutex.RLock()
@@ -631,20 +636,35 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 		n.RoutingTable.Add(ue.Sender().(*BSNode))
 		n.rtMutex.Unlock()
 		ev := NewBSFindNodeResEvent(ue, closers, level, candidates)
-		n.SendEvent(ue.Sender(), ev)
+		n.SendEvent(ue.Sender(), ev, false)
 	}
 }
 
 func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 	msg := sev.(*BSUnicastEvent)
 	ayame.Log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
+	if ayame.SecureKeyMV {
+		if !sendToSelf && !msg.IsVerified() {
+			return fmt.Errorf("failed to verify message %s, throw it all away", msg.MessageId)
+		}
+	}
+
 	if !sendToSelf && msg.CheckAlreadySeen(n) {
-		n.unicastHandler(n, msg, true, false)
+		if n.unicastHandler != nil {
+			n.unicastHandler(n, msg, true, false)
+		}
 		ayame.Log.Debugf("called already seen handler\n")
 		return nil
 	}
 	if msg.level == 0 { // level 0 means destination
-		n.unicastHandler(n, msg, false, false)
+		msg.SetAlreadySeen(n)
+		//ayame.Log.Debugf("node: %d, m: %s\n", n, msg)
+		if n.unicastHandler != nil {
+			n.unicastHandler(n, msg, false, false)
+		}
+		if n.messageReceiver != nil {
+			n.messageReceiver(n, msg)
+		}
 	} else {
 		nextMsgs := msg.findNextHops(n)
 		//ayame.Log.Debugf("next msgs: %v\n", nextMsgs)
@@ -658,12 +678,14 @@ func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 				n.handleUnicast(next, true)
 			} else {
 				if Contains(node, funk.Map(msg.Path, func(pe PathEntry) *BSNode { return pe.Node.(*BSNode) }).([]*BSNode)) {
-					n.unicastHandler(n, msg, false, true)
+					if n.unicastHandler != nil {
+						n.unicastHandler(n, msg, false, true)
+					}
 				} else {
 					msg.SetAlreadySeen(n)
-					ayame.Log.Debugf("I, %d, am not one of the dest: %d, forward\n", n.key, node.key)
+					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
-					n.SendEvent(node, next)
+					n.SendEvent(node, next, true)
 				}
 			}
 

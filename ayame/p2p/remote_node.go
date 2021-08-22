@@ -126,6 +126,6 @@ func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *R
 	}
 }
 
-func (n *RemoteNode) Send(ev ayame.SchedEvent) {
+func (n *RemoteNode) Send(ev ayame.SchedEvent, sign bool) {
 	// XXX wrong behavior
 }

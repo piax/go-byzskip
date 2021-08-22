@@ -15,13 +15,17 @@ type Event interface {
 	SetSendTime(int64)
 	Time() int64
 	SetTime(int64)
+	Encode() *p2p.Message
+	SetVerified(bool)
+	IsVerified() bool
 }
 
 type AbstractEvent struct {
-	sender   Node
-	receiver Node
-	sendTime int64
-	vTime    int64
+	sender     Node
+	receiver   Node
+	sendTime   int64
+	vTime      int64
+	isVerified bool
 }
 
 func (ev *AbstractEvent) Sender() Node {
@@ -56,19 +60,24 @@ func (ev *AbstractEvent) SetTime(t int64) {
 	ev.vTime = t
 }
 
+func (ev *AbstractEvent) SetVerified(v bool) {
+	ev.isVerified = v
+}
+
+func (ev *AbstractEvent) IsVerified() bool {
+	return ev.isVerified
+}
+
 func NewEvent() *AbstractEvent {
 	return &AbstractEvent{sender: nil, receiver: nil, sendTime: -1, vTime: -1}
 }
 
 type SchedEvent interface {
-	//SetJob(job func(se SchedEvent, node Node))
-	//Job() func(se SchedEvent, node Node)
 	SetJob(job func())
 	Job() func()
 	Run(node Node)
 	SetCanceled(c bool)
 	IsCanceled() bool
-	Encode() *p2p.Message
 	Event
 }
 

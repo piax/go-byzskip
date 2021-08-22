@@ -17,7 +17,6 @@ type BSUnicastEvent struct {
 	MessageId string
 	Path      []PathEntry // the path entry (level is only available in simulation)
 	Payload   []byte      // the payload to send
-
 	ayame.AbstractSchedEvent
 
 	Paths                      [][]PathEntry
@@ -127,7 +126,7 @@ func (ue *BSUnicastEvent) String() string {
 func (ue *BSUnicastEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId,
-		pb.MessageType_UNICAST, ue.TargetKey, nil)
+		pb.MessageType_UNICAST, ue.TargetKey, nil, true)
 	var cpeers []*pb.Peer
 	for _, pe := range ue.Path {
 		cpeers = append(cpeers, pe.Node.Encode())
@@ -139,7 +138,9 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 }
 
 func (ue *BSUnicastEvent) Run(node ayame.Node) {
-	node.(*BSNode).handleUnicast(ue, false)
+	if err := node.(*BSNode).handleUnicast(ue, false); err != nil {
+		panic(err)
+	}
 }
 
 func (ev *BSUnicastEvent) nextMsg(n *BSNode, level int) *BSUnicastEvent {
@@ -170,7 +171,7 @@ func (ev *BSUnicastEvent) findNextHopsSingle(myNode *BSNode) ([]*BSUnicastEvent,
 	var kNodes []*BSNode
 	nextMsgs := []*BSUnicastEvent{}
 
-	ks, lv := myNode.GetNeighbors(ev.TargetKey)
+	ks, lv := myNode.GetClosestNodes(ev.TargetKey)
 	kNodes = ks
 	level = lv
 	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
@@ -195,7 +196,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 	var kNodes []*BSNode = []*BSNode{}
 	var destLevel int = ev.level - 1
 	if ev == ev.Root {
-		kNodes, destLevel = myNode.GetNeighbors(ev.TargetKey)
+		kNodes, destLevel = myNode.GetClosestNodes(ev.TargetKey)
 		ayame.Log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.TargetKey, destLevel, ayame.SliceString(kNodes))
 	} else {
 		if ev.level == 0 {

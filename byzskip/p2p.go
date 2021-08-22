@@ -100,7 +100,7 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	}
 }
 
-func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
+func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
 	switch mes.Data.Type {
@@ -115,6 +115,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode) ayame.SchedEvent {
 			Payload:            mes.Data.Record.Value}
 		p, _ := ConvertPeer(self, mes.Sender)
 		ev.SetSender(p)
+		ev.SetVerified(valid) // verification conscious
 	case pb.MessageType_FIND_NODE:
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,

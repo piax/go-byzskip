@@ -130,6 +130,11 @@ func setupNodes(num int) []*BSNode {
 	return peers
 }
 
+func TestJoin(t *testing.T) {
+	numberOfPeers := 100
+	setupNodes(numberOfPeers)
+}
+
 func TestLookup(t *testing.T) {
 	numberOfPeers := 100
 	peers := setupNodes(numberOfPeers)
@@ -167,18 +172,16 @@ func TestUnicast(t *testing.T) {
 		peers[i].parent.(*p2p.P2PNode).InCount = 0
 		peers[i].parent.(*p2p.P2PNode).InBytes = 0
 
-		peers[i].SetUnicastHandler(func(node *BSNode, ev *BSUnicastEvent, alreadySeen bool, alreadyOnThePath bool) {
-			if !alreadySeen && !alreadyOnThePath {
-				lock.Lock()
-				v, found := results[ev.MessageId]
-				if !found {
-					results[ev.MessageId] = []ayame.Key{node.Key().(ayame.IntKey)}
-				} else {
-					results[ev.MessageId] = append(v, node.Key()) //ayame.AppendIfMissing(v, node.Key())
-				}
-				lock.Unlock()
+		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
+			lock.Lock()
+			v, found := results[ev.MessageId]
+			if !found {
+				results[ev.MessageId] = []ayame.Key{node.Key().(ayame.IntKey)}
+			} else {
+				results[ev.MessageId] = append(v, node.Key()) //ayame.AppendIfMissing(v, node.Key())
 			}
-			fmt.Printf("%s received message '%s'for mid=%s key=%s %v %v %s\n", node, string(ev.Payload), ev.MessageId, ev.TargetKey, alreadySeen, alreadyOnThePath, PathString(ev.Path))
+			lock.Unlock()
+			fmt.Printf("%s received message '%s'for mid=%s key=%s %s\n", node, string(ev.Payload), ev.MessageId, ev.TargetKey, PathString(ev.Path))
 		})
 
 	}
@@ -221,7 +224,7 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func Example() {
+func TestExample(t *testing.T) {
 	numberOfPeers := 32
 	InitK(4)
 	ayame.SecureKeyMV = false
@@ -233,6 +236,11 @@ func Example() {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
 		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
 		peers[i].Join(context.Background(), locator)
+		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
+			fmt.Printf("%d: received '%s'\n", node.Key(), string(ev.Payload))
+		})
 	}
-	peers[1].Lookup(context.Background(), ayame.IntKey(50))
+	peers[2].Lookup(context.Background(), ayame.IntKey(16))
+	peers[1].Unicast(context.Background(), ayame.IntKey(17), []byte("hello world"))
+	time.Sleep(time.Duration(100) * time.Millisecond)
 }

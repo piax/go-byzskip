@@ -12,11 +12,15 @@ import (
 
 type BSFindNodeEvent struct {
 	isResponse bool
+	req        *FindNodeRequest
 	TargetKey  ayame.Key
 	TargetMV   *ayame.MembershipVector
 	MessageId  string
-	level      int
-	closers    []*BSNode
+	// level in response
+	level int
+	// closest nodes in response
+	closers []*BSNode
+	// neighbor nodes in response
 	candidates []*BSNode
 	ayame.AbstractSchedEvent
 }
@@ -50,7 +54,7 @@ func (ue *BSFindNodeEvent) String() string {
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, ue.TargetKey, ue.TargetMV)
+	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, ue.TargetKey, ue.TargetMV, false)
 	ret.IsResponse = ue.isResponse
 	var cpeers []*pb.Peer
 	for _, n := range ue.candidates {

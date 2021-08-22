@@ -32,7 +32,7 @@ type P2PNode struct {
 	host.Host // libp2p host
 	key       ayame.Key
 	mv        *ayame.MembershipVector
-	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent
+	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent
 	child     ayame.Node
 	Cert      []byte
 	Validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
@@ -46,7 +46,7 @@ type P2PNode struct {
 const MessageProto = "/message/0.0.0"
 
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
-	converter func(*p2p.Message, *P2PNode) ayame.SchedEvent,
+	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*P2PNode, error) {
 
 	listen, err := multiaddr.NewMultiaddr(locator)
@@ -157,14 +157,12 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	}
 	ayame.Log.Infof("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 
+	var valid bool = false
 	if ayame.SecureKeyMV {
-		valid := n.authenticateMessage(mes, mes.Data, s)
-		if !valid {
-			ayame.Log.Error("Failed to authenticate message, throw it all away")
-			return
-		}
+		valid = n.authenticateMessage(mes, mes.Data, s)
 	}
-	ev := n.converter(mes, n)
+	ev := n.converter(mes, n, valid)
+
 	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
 	//ayame.Log.Debugf("%s: Received from %s. size=%d, mes=%v\n", n.Key(), ev.Sender().Key(), len(buf), mes)
 	//ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
@@ -172,19 +170,22 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	ev.Run(n.child)
 }
 
-func (n *P2PNode) Send(ev ayame.SchedEvent) { // send to self..
+// Node API
+func (n *P2PNode) Send(ev ayame.SchedEvent, sign bool) {
 	mes := ev.Encode()
 	mes.Sender = n.Encode()
-	if ev.Sender().Key().Equals(n.Key()) { // author
-		mes.Data.AuthorSign = nil            // ensure empty
-		senderData := mes.Data.SenderAppData // ensure empty
-		mes.Data.SenderAppData = ""          // ensure empty
-		mes.Data.AuthorSign, _ = n.signProtoMessage(mes.Data)
-		mes.Data.AuthorSign = IfNeededSign(mes.Data.AuthorSign)
-		mes.Data.SenderAppData = senderData // restore
+	if sign { // if verification conscious
+		if ev.Sender().Key().Equals(n.Key()) { // author
+			mes.Data.AuthorSign = nil            // ensure empty
+			senderData := mes.Data.SenderAppData // ensure empty
+			mes.Data.SenderAppData = ""          // ensure empty
+			mes.Data.AuthorSign, _ = n.signProtoMessage(mes.Data)
+			mes.Data.AuthorSign = IfNeededSign(mes.Data.AuthorSign)
+			mes.Data.SenderAppData = senderData // restore
+		}
+		mes.SenderSign, _ = n.signProtoMessage(mes)
+		mes.SenderSign = IfNeededSign(mes.SenderSign) // if needed by configuration
 	}
-	mes.SenderSign, _ = n.signProtoMessage(mes)
-	mes.SenderSign = IfNeededSign(mes.SenderSign)
 	ayame.Log.Infof("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 	n.sendProtoMessage(ev.Receiver().Id(), MessageProto, mes)
 }
@@ -300,20 +301,23 @@ func (n *P2PNode) verifyData(data []byte, signature []byte, peerId peer.ID, pubK
 
 // helper method - generate message data (only the common part)
 // messageId: unique for requests, copied from request to responses
-func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.Key, mv *ayame.MembershipVector) *p2p.Message {
+func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.Key, mv *ayame.MembershipVector, includePubKey bool) *p2p.Message {
 	// Add protobufs bin data for message author public key
 	// this is useful for authenticating  messages forwarded by a node authored by another node
-	nodePubKey, err := crypto.MarshalPublicKey(n.Peerstore().PubKey(n.ID()))
-
-	if err != nil {
-		panic("Failed to get public key for sender from local peer store.")
+	var nodePubKey []byte = nil
+	if includePubKey {
+		pKey, err := crypto.MarshalPublicKey(n.Peerstore().PubKey(n.ID()))
+		if err != nil {
+			panic("Failed to get public key for sender from local peer store.")
+		}
+		nodePubKey = pKey
 	}
 
 	var mvData []byte
 	if mv != nil {
 		mvData = mv.Encode()
 	}
-
+	nodePubKey = IfNeededSign(nodePubKey)
 	data := &p2p.MessageData{
 		Version:   Version,
 		Type:      mtype,
@@ -329,7 +333,7 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 			Cert:       IfNeededSign(n.Cert),
 			Connection: p2p.ConnectionType_CONNECTED, // XXX myself is always connected
 		},
-		AuthorPubKey: IfNeededSign(nodePubKey)}
+		AuthorPubKey: nodePubKey}
 
 	return &p2p.Message{Data: data}
 

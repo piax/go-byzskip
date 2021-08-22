@@ -172,7 +172,7 @@ func (sg *SGNode) handleUnicast(sev ayame.SchedEvent) error {
 		return nil
 	}
 	ev := msg.createSubMessage(nextNode, level)
-	sg.Send(ev)
+	sg.Send(ev, true) // the second argument is ommited
 	return nil
 }
 

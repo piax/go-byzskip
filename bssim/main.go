@@ -277,7 +277,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 			}
 			msg := bs.NewBSUnicastEvent(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				localn.Send(msg)
+				localn.Send(msg, true) // the second argument (sign) is ommited in simulation
 				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 
 					sumMsgs += len(msg.Results) // number of reply messages
@@ -470,7 +470,7 @@ func main() {
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
-	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
+	useTableIndex = flag.Bool("index", false, "use table index to get candidates")
 	tableLimitMargin = flag.Int("margin", 0, "num of additional candidates beyond table limit")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")

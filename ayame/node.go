@@ -10,7 +10,7 @@ type Node interface {
 	MV() *MembershipVector
 	String() string
 	Id() peer.ID // ID as an Endpoint
-	Send(ev SchedEvent)
+	Send(ev SchedEvent, sign bool)
 	Encode() *pb.Peer
 	Close()
 }
@@ -50,7 +50,7 @@ func (n *LocalNode) Close() {
 	// nothing to do
 }
 
-func (an *LocalNode) Send(ev SchedEvent) {
+func (an *LocalNode) Send(ev SchedEvent, sign bool) {
 	ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 }

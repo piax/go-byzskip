@@ -16,7 +16,7 @@ func NewStopRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 	return &StopRoutingTable{} //, nodes: make(map[int]*BSNode)}
 }
 
-func (table *StopRoutingTable) GetNeighbors(k ayame.Key) ([]bs.KeyMV, int) {
+func (table *StopRoutingTable) GetClosestNodes(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
@@ -45,7 +45,7 @@ func (table *StopRoutingTable) AddNeighborList(s *bs.NeighborList) {
 	// do nothing.
 }
 
-func (table *StopRoutingTable) GetNeighborCandidates(mv *ayame.MembershipVector, req *bs.CandidatesRequest) []bs.KeyMV {
+func (table *StopRoutingTable) GetNeighborNodes(req *bs.FindNodeRequest) []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 

@@ -26,7 +26,7 @@ func ksToNs(lst []bs.KeyMV) []*bs.BSNode {
 
 // called by remote
 func FastFindKey(node *bs.BSNode, key ayame.Key) ([]*bs.BSNode, int) {
-	nb, lv := node.RoutingTable.GetNeighbors(key)
+	nb, lv := node.RoutingTable.GetClosestNodes(key)
 	return ksToNs(nb), lv
 }
 
@@ -39,9 +39,9 @@ func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.
 	return nb, lv, can
 }
 
-func FastFindNodeWithIndex(node *bs.BSNode, target *bs.BSNode, req *bs.CandidatesRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
-	can := node.RoutingTable.GetNeighborCandidates(target.MV(), req)
-	nb, lv := node.GetNeighbors(target.Key())
+func FastFindNodeWithRequest(node *bs.BSNode, target *bs.BSNode, req *bs.FindNodeRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
+	can := node.RoutingTable.GetNeighborNodes(req)
+	nb, lv := node.GetClosestNodes(req.Key)
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
 	node.RoutingTable.Add(target)
 	//ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n updated:\n %s\n", node, target.key, ayame.SliceString(nb), lv,
@@ -68,9 +68,9 @@ func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode)
 	return ksToNs(ret)
 }
 
-func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode, req *bs.CandidatesRequest) []*bs.BSNode {
+func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode, req *bs.FindNodeRequest) []*bs.BSNode {
 	//ret := node.GetCandidates()
-	ret := node.RoutingTable.GetNeighborCandidates(target.MV(), req)
+	ret := node.RoutingTable.GetNeighborNodes(req)
 
 	//	if !node.isFailure || FailureType == F_NONE {
 	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
@@ -178,7 +178,7 @@ func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried [
 			for _, idx := range idxs {
 				ayame.Log.Debugf("%s: index level=%d, min=%s, max=%s\n", target, idx.Level, idx.Min, idx.Max)
 			}
-			newCandidates = FastJoinRequestWithIndex(next, target, piggyback, &bs.CandidatesRequest{RequesterKey: target.Key(), TableIndexList: idxs, Margin: *tableLimitMargin})
+			newCandidates = FastJoinRequestWithIndex(next, target, piggyback, &bs.FindNodeRequest{Key: target.Key(), MV: target.MV(), NeighborListIndex: idxs})
 		} else {
 			newCandidates = FastJoinRequest(next, target, piggyback)
 		}
@@ -249,8 +249,8 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 			var curLevel int
 			if *useTableIndex {
 				idxs := target.RoutingTable.GetTableIndex()
-				req := &bs.CandidatesRequest{RequesterKey: target.Key(), TableIndexList: idxs, Margin: *tableLimitMargin}
-				curNeighbors, curLevel, curCandidates = FastFindNodeWithIndex(next, target, req)
+				req := &bs.FindNodeRequest{Key: target.Key(), MV: target.MV(), NeighborListIndex: idxs}
+				curNeighbors, curLevel, curCandidates = FastFindNodeWithRequest(next, target, req)
 			} else {
 				curNeighbors, curLevel, curCandidates = FastFindNode(next, target)
 			}
