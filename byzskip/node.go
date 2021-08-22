@@ -604,6 +604,8 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	return ch
 }
 
+var USE_TABLE_INDEX = false
+
 func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 	ue := ev.(*BSFindNodeEvent)
 	if ue.isResponse {
@@ -619,16 +621,21 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 			panic("unregisterd response") // it's implementation error
 		}
 	} else {
-		kmv := ue.Sender().(*BSNode)
+		//kmv := ue.Sender().(*BSNode)
 		var closers, candidates []*BSNode
 		var level int
-		if ue.TargetMV == nil {
+		if ue.req.MV == nil {
 			n.rtMutex.RLock()
-			closers, level = n.GetClosestNodes(ue.TargetKey)
+			closers, level = n.GetClosestNodes(ue.req.Key)
 			n.rtMutex.RUnlock()
 		} else {
 			n.rtMutex.RLock()
-			closers, level, candidates = n.GetNeighborsAndCandidates(kmv.Key(), kmv.MV())
+			if USE_TABLE_INDEX {
+				candidates = ksToNs(n.RoutingTable.GetNeighborNodes(ue.req))
+				closers, level = n.GetClosestNodes(ue.req.Key)
+			} else {
+				closers, level, candidates = n.GetNeighborsAndCandidates(ue.req.Key, ue.req.MV)
+			}
 			n.rtMutex.RUnlock()
 		}
 		ayame.Log.Debugf("returns closers=%s, level=%d, candidates=%s\n", ayame.SliceString(closers), level, ayame.SliceString(candidates))

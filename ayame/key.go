@@ -106,7 +106,7 @@ func (t FloatKey) Encode() *p2p.Key {
 	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, bits)
 	return &p2p.Key{
-		Type: p2p.KeyType_INT,
+		Type: p2p.KeyType_FLOAT,
 		Body: bytes}
 }
 

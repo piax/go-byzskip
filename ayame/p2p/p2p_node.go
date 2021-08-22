@@ -233,22 +233,30 @@ func (n *P2PNode) authenticateMessage(message *p2p.Message, data *p2p.MessageDat
 		return false
 	}
 
-	authorPubKey, err := crypto.UnmarshalPublicKey(data.AuthorPubKey)
-	if err != nil {
-		ayame.Log.Error(err, "Failed to extract key from message key data")
-		return false
+	var authorPubKey crypto.PubKey
+	if data.AuthorPubKey != nil {
+		apk, err := crypto.UnmarshalPublicKey(data.AuthorPubKey)
+		if err != nil {
+			ayame.Log.Error(err, "Failed to extract key from message key data")
+			return false
+		}
+		authorPubKey = apk
 	}
 
 	// verify the data was authored by the signing peer identified by the public key
 	// and signature included in the message
-	senderPubKey := s.Conn().RemotePublicKey()
-	if !n.verifyData(senderBin, []byte(message.SenderSign), senderId, senderPubKey) {
-		ayame.Log.Errorf("Failed to verify sender")
-		return false
+	if message.SenderSign != nil {
+		senderPubKey := s.Conn().RemotePublicKey()
+		if !n.verifyData(senderBin, []byte(message.SenderSign), senderId, senderPubKey) {
+			ayame.Log.Errorf("Failed to verify sender")
+			return false
+		}
 	}
-	if !n.verifyData(bin, []byte(authorSign), authorId, authorPubKey) {
-		ayame.Log.Errorf("Failed to verify author")
-		return false
+	if authorSign != nil {
+		if !n.verifyData(bin, []byte(authorSign), authorId, authorPubKey) {
+			ayame.Log.Errorf("Failed to verify author")
+			return false
+		}
 	}
 	return true
 }
@@ -299,7 +307,7 @@ func (n *P2PNode) verifyData(data []byte, signature []byte, peerId peer.ID, pubK
 	return res
 }
 
-// helper method - generate message data (only the common part)
+// helper method - generate message data
 // messageId: unique for requests, copied from request to responses
 func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.Key, mv *ayame.MembershipVector, includePubKey bool) *p2p.Message {
 	// Add protobufs bin data for message author public key
@@ -317,13 +325,18 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 	if mv != nil {
 		mvData = mv.Encode()
 	}
+	var keyData *p2p.Key
+	if key != nil {
+		keyData = key.Encode()
+	}
+
 	nodePubKey = IfNeededSign(nodePubKey)
 	data := &p2p.MessageData{
 		Version:   Version,
 		Type:      mtype,
 		Timestamp: time.Now().Unix(),
 		Id:        messageId,
-		Key:       key.Encode(),
+		Key:       keyData,
 		Mv:        mvData,
 		Author: &p2p.Peer{
 			Id:         peer.Encode(n.ID()),

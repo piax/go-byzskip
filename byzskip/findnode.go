@@ -10,12 +10,47 @@ import (
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
+type FindNodeRequest struct {
+	// requester's key and
+	Key               ayame.Key
+	MV                *ayame.MembershipVector
+	ClosestIndex      *TableIndex
+	NeighborListIndex []*TableIndex
+}
+
+func (req *FindNodeRequest) Encode() *pb.FindNodeRequest {
+	var idxs []*pb.TableIndex
+	for _, idx := range req.NeighborListIndex {
+		idxs = append(idxs, idx.Encode())
+	}
+	ret := &pb.FindNodeRequest{
+		Key:               req.Key.Encode(),
+		MV:                req.MV.Encode(),
+		NeighborListIndex: idxs,
+	}
+	return ret
+}
+
+type TableIndex struct {
+	Level int
+	Max   ayame.Key
+	Min   ayame.Key
+}
+
+func (idx *TableIndex) Encode() *pb.TableIndex {
+	return &pb.TableIndex{
+		Min:   idx.Min.Encode(),
+		Max:   idx.Max.Encode(),
+		Level: int32(idx.Level),
+	}
+}
+
 type BSFindNodeEvent struct {
 	isResponse bool
 	req        *FindNodeRequest
-	TargetKey  ayame.Key
-	TargetMV   *ayame.MembershipVector
-	MessageId  string
+	//	TargetKey  ayame.Key
+	//	TargetMV   *ayame.MembershipVector
+	MessageId string
 	// level in response
 	level int
 	// closest nodes in response
@@ -27,9 +62,10 @@ type BSFindNodeEvent struct {
 
 func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
-		isResponse:         false,
-		TargetKey:          targetKey,
-		TargetMV:           targetMV,
+		isResponse: false,
+		req:        &FindNodeRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
+		//		TargetKey:          targetKey,
+		//		TargetMV:           targetMV,
 		MessageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent()}
 	return ev
@@ -37,9 +73,9 @@ func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key
 
 func NewBSFindNodeResEvent(request *BSFindNodeEvent, closers []*BSNode, level int, candidates []*BSNode) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
-		isResponse:         true,
-		TargetKey:          request.Sender().Key(), // no meaning, just fill
-		TargetMV:           request.Sender().MV(),  // no meaning, just fill
+		isResponse: true,
+		//TargetKey:          request.Sender().Key(), // no meaning, just fill
+		//TargetMV:           request.Sender().MV(),  // no meaning, just fill
 		MessageId:          request.MessageId,
 		closers:            closers,
 		candidates:         candidates,
@@ -54,8 +90,15 @@ func (ue *BSFindNodeEvent) String() string {
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, ue.TargetKey, ue.TargetMV, false)
+	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, nil, nil, false)
+	if ue.req != nil {
+		ret.Data.Req = ue.req.Encode()
+	}
 	ret.IsResponse = ue.isResponse
+	/*var idxs = []*pb.TableIndex
+	for _, idx := range ue.req.NeighborListIndex {
+		idxs = append (idxs, idx.Encode())
+	}*/
 	var cpeers []*pb.Peer
 	for _, n := range ue.candidates {
 		cpeers = append(cpeers, n.parent.Encode())

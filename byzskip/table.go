@@ -100,20 +100,6 @@ type RoutingTable interface {
 	Size() int
 }
 
-type TableIndex struct {
-	Level int
-	Max   ayame.Key
-	Min   ayame.Key
-}
-
-type FindNodeRequest struct {
-	// requester's key and
-	Key               ayame.Key
-	MV                *ayame.MembershipVector
-	ClosestIndex      *TableIndex
-	NeighborListIndex []*TableIndex
-}
-
 type SkipRoutingTable struct {
 	km            KeyMV           // self
 	NeighborLists []*NeighborList // level 0 to top

@@ -91,12 +91,40 @@ func ConvertPeers(self *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
 func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
 	if ayame.SecureKeyMV {
-		if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+		if self.Validator != nil {
+			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+				return NewBSNode(parent, NewBSRoutingTable, false), nil
+			}
+		} else { // no validator case
 			return NewBSNode(parent, NewBSRoutingTable, false), nil
 		}
 		return nil, fmt.Errorf("invalid join certificate")
 	} else {
 		return NewBSNode(parent, NewBSRoutingTable, false), nil
+	}
+}
+
+func ConvertTableIndex(idx *pb.TableIndex) *TableIndex {
+	return &TableIndex{
+		Min:   p2p.NewKey(idx.Min),
+		Max:   p2p.NewKey(idx.Max),
+		Level: int(idx.Level),
+	}
+}
+
+func ConvertTableIndexList(idxs []*pb.TableIndex) []*TableIndex {
+	ret := []*TableIndex{}
+	for _, idx := range idxs {
+		ret = append(ret, ConvertTableIndex(idx))
+	}
+	return ret
+}
+
+func ConvertFindNodeRequest(req *pb.FindNodeRequest) *FindNodeRequest {
+	return &FindNodeRequest{
+		Key:               p2p.NewKey(req.Key),
+		MV:                ayame.NewMembershipVectorFromBinary(req.MV),
+		NeighborListIndex: ConvertTableIndexList(req.NeighborListIndex),
 	}
 }
 
@@ -117,10 +145,14 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetSender(p)
 		ev.SetVerified(valid) // verification conscious
 	case pb.MessageType_FIND_NODE:
+		var req *FindNodeRequest = nil
+		if mes.Data.Req != nil {
+			req = ConvertFindNodeRequest(mes.Data.Req)
+		}
+
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,
-			TargetKey:          p2p.NewKey(mes.Data.Key),
-			TargetMV:           ayame.NewMembershipVectorFromBinary(mes.Data.Mv),
+			req:                req, //ConvertFindNodeRequest(mes.Data.Req),
 			MessageId:          mes.Data.Id,
 			candidates:         ConvertPeers(self, mes.Data.CandidatePeers),
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
