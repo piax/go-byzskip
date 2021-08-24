@@ -6,9 +6,9 @@
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// byzskip package provides a ByzSKip implementation.
+// Package byzskip provides a ByzSkip implementation.
 //
-// You can create a Node, Join to the network, Lookup a node, and Unicast a message to a node.
+// You can create a Node, Join to a network, Lookup a node, and Unicast a message to a node.
 package byzskip
 
 import (
@@ -80,8 +80,8 @@ func (node *BSNode) Id() peer.ID { // Endpoint
 	return node.parent.Id()
 }
 
-func (node *BSNode) Send(ev ayame.SchedEvent, sign bool) {
-	node.parent.Send(ev, sign)
+func (node *BSNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
+	node.parent.Send(ctx, ev, sign)
 }
 
 func (n *BSNode) MV() *ayame.MembershipVector {
@@ -506,7 +506,7 @@ func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
 	for _, c := range closers {
 		localc := c
 		ev := NewBSUnicastEvent(n, mid, level, key, payload)
-		n.sendUnicastEvent(ch, localc, ev)
+		n.sendUnicastEvent(ctx, ch, localc, ev)
 	}
 L:
 	for i := 0; i < len(closers); i++ {
@@ -526,7 +526,7 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	sch := make(chan struct{}, 1)
 	go func() {
 		ayame.Log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
-		n.SendEvent(node, ev, false)
+		n.SendEvent(ctx, node, ev, false)
 		sch <- struct{}{}
 	}()
 	select {
@@ -537,21 +537,21 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	ch <- struct{}{}
 }
 
-func (n *BSNode) sendUnicastEvent(ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
+func (n *BSNode) sendUnicastEvent(ctx context.Context, ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
 	go func() {
 		if node.Equals(n) {
-			n.handleUnicast(ev, true)
+			n.handleUnicast(ctx, ev, true)
 		} else {
-			n.SendEvent(node, ev, true)
+			n.SendEvent(ctx, node, ev, true)
 		}
 		ch <- struct{}{}
 	}()
 }
 
-func (n *BSNode) SendEvent(receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
+func (n *BSNode) SendEvent(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
 	ev.SetSender(n)
 	ev.SetReceiver(receiver)
-	n.Send(ev, sign)
+	n.Send(ctx, ev, sign)
 }
 
 func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, key ayame.Key, requestId string) chan *FindNodeResponse {
@@ -562,7 +562,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
-	n.SendEvent(node, ev, false)
+	n.SendEvent(ctx, node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
@@ -587,7 +587,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
-	n.SendEvent(node, ev, false)
+	n.SendEvent(ctx, node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
@@ -604,9 +604,9 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	return ch
 }
 
-var USE_TABLE_INDEX = false
+var USE_TABLE_INDEX = true
 
-func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
+func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) {
 	ue := ev.(*BSFindNodeEvent)
 	if ue.isResponse {
 		ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
@@ -643,11 +643,11 @@ func (n *BSNode) handleFindNode(ev ayame.SchedEvent) {
 		n.RoutingTable.Add(ue.Sender().(*BSNode))
 		n.rtMutex.Unlock()
 		ev := NewBSFindNodeResEvent(ue, closers, level, candidates)
-		n.SendEvent(ue.Sender(), ev, false)
+		n.SendEvent(ctx, ue.Sender(), ev, false)
 	}
 }
 
-func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
+func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendToSelf bool) error {
 	msg := sev.(*BSUnicastEvent)
 	ayame.Log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
 	if ayame.SecureKeyMV {
@@ -682,7 +682,7 @@ func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 			if node.Equals(n) {
 				// myself
 				ayame.Log.Debugf("I, %d, am one of the dest: %d, pass to myself\n", n.key, node.key)
-				n.handleUnicast(next, true)
+				n.handleUnicast(ctx, next, true)
 			} else {
 				if Contains(node, funk.Map(msg.Path, func(pe PathEntry) *BSNode { return pe.Node.(*BSNode) }).([]*BSNode)) {
 					if n.unicastHandler != nil {
@@ -692,7 +692,7 @@ func (n *BSNode) handleUnicast(sev ayame.SchedEvent, sendToSelf bool) error {
 					msg.SetAlreadySeen(n)
 					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
-					n.SendEvent(node, next, true)
+					n.SendEvent(ctx, node, next, true)
 				}
 			}
 

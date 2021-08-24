@@ -224,7 +224,7 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func TestExample(t *testing.T) {
+func Example() {
 	numberOfPeers := 32
 	InitK(4)
 	ayame.SecureKeyMV = false

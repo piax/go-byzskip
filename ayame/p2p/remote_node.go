@@ -1,6 +1,7 @@
 package ayame
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/libp2p/go-libp2p-core/network"
@@ -126,6 +127,6 @@ func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *R
 	}
 }
 
-func (n *RemoteNode) Send(ev ayame.SchedEvent, sign bool) {
+func (n *RemoteNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
 	// XXX wrong behavior
 }

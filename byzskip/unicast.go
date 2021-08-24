@@ -1,6 +1,7 @@
 package byzskip
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -137,8 +138,8 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSUnicastEvent) Run(node ayame.Node) {
-	if err := node.(*BSNode).handleUnicast(ue, false); err != nil {
+func (ue *BSUnicastEvent) Run(ctx context.Context, node ayame.Node) {
+	if err := node.(*BSNode).handleUnicast(ctx, ue, false); err != nil {
 		panic(err)
 	}
 }

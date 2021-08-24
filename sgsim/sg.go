@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -77,7 +78,7 @@ func (ue *UnicastEvent) createSubMessage(nextHop *SGNode, level int) *UnicastEve
 	return &sub
 }
 
-func (ue *UnicastEvent) Run(node ayame.Node) {
+func (ue *UnicastEvent) Run(ctx context.Context, node ayame.Node) {
 	//	fmt.Print(node.Id())
 	node.(*SGNode).handleUnicast(ue)
 }
@@ -172,7 +173,7 @@ func (sg *SGNode) handleUnicast(sev ayame.SchedEvent) error {
 		return nil
 	}
 	ev := msg.createSubMessage(nextNode, level)
-	sg.Send(ev, true) // the second argument is ommited
+	sg.Send(context.TODO(), ev, true) // the second argument is ommited
 	return nil
 }
 

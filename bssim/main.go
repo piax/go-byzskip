@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -277,7 +278,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 			}
 			msg := bs.NewBSUnicastEvent(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				localn.Send(msg, true) // the second argument (sign) is ommited in simulation
+				localn.Send(context.TODO(), msg, true) // the second argument (sign) is ommited in simulation
 				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 
 					sumMsgs += len(msg.Results) // number of reply messages

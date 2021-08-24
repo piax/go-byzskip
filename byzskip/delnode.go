@@ -1,6 +1,8 @@
 package byzskip
 
 import (
+	"context"
+
 	"github.com/piax/go-ayame/ayame"
 	p2p "github.com/piax/go-ayame/ayame/p2p"
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
@@ -26,7 +28,7 @@ func (ue *BSDelNodeEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSDelNodeEvent) Run(node ayame.Node) {
+func (ue *BSDelNodeEvent) Run(ctx context.Context, node ayame.Node) {
 	n := node.(*BSNode)
 	n.handleDelNode(ue)
 }

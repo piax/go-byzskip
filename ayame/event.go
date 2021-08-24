@@ -1,6 +1,7 @@
 package ayame
 
 import (
+	"context"
 	"fmt"
 
 	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
@@ -75,7 +76,7 @@ func NewEvent() *AbstractEvent {
 type SchedEvent interface {
 	SetJob(job func())
 	Job() func()
-	Run(node Node)
+	Run(ctx context.Context, node Node)
 	SetCanceled(c bool)
 	IsCanceled() bool
 	Event
@@ -117,7 +118,7 @@ func (aj *AsyncJobEvent) Run(node Node) {
 	<-ch // wait for the job
 }
 
-func (se *AbstractSchedEvent) Run(node Node) {
+func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
 	//se.Job()(se, node)
 	se.Job()()
 }

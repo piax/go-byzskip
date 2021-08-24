@@ -1,6 +1,8 @@
 package ayame
 
 import (
+	"context"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
@@ -10,7 +12,7 @@ type Node interface {
 	MV() *MembershipVector
 	String() string
 	Id() peer.ID // ID as an Endpoint
-	Send(ev SchedEvent, sign bool)
+	Send(ctx context.Context, ev SchedEvent, sign bool)
 	Encode() *pb.Peer
 	Close()
 }
@@ -50,7 +52,7 @@ func (n *LocalNode) Close() {
 	// nothing to do
 }
 
-func (an *LocalNode) Send(ev SchedEvent, sign bool) {
+func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) {
 	ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 }

@@ -1,6 +1,7 @@
 package byzskip
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -113,7 +114,7 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSFindNodeEvent) Run(node ayame.Node) {
+func (ue *BSFindNodeEvent) Run(ctx context.Context, node ayame.Node) {
 	n := node.(*BSNode)
-	n.handleFindNode(ue)
+	n.handleFindNode(ctx, ue)
 }

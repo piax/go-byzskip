@@ -2,6 +2,7 @@ package ayame
 
 import (
 	"container/heap"
+	"context"
 )
 
 type EventExecutor struct {
@@ -36,7 +37,7 @@ func (ee *EventExecutor) RunForever() {
 		ee.time = sev.Time()
 		if !sev.IsCanceled() {
 			n := sev.Receiver()
-			sev.Run(n)
+			sev.Run(context.TODO(), n)
 		}
 		if ee.finishTime <= ee.time {
 			ee.running = false
