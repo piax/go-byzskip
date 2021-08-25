@@ -128,5 +128,6 @@ message Message {
     bytes senderSign = 2;
     // peer information of the node who sent the message
     Peer sender = 3;
-    bool isResponse = 4;  // true if message is response
+    bool isRequest = 4;  // true if message is a request (requires response)
+    bool isResponse = 5;  // true if message is the response
 }

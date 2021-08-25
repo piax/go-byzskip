@@ -32,3 +32,7 @@ func (ue *BSDelNodeEvent) Run(ctx context.Context, node ayame.Node) {
 	n := node.(*BSNode)
 	n.handleDelNode(ue)
 }
+
+func (ue *BSDelNodeEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
+	panic("del_node does not support request")
+}

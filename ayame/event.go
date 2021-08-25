@@ -19,6 +19,8 @@ type Event interface {
 	Encode() *p2p.Message
 	SetVerified(bool)
 	IsVerified() bool
+	SetRequest(bool)
+	IsRequest() bool
 }
 
 type AbstractEvent struct {
@@ -27,6 +29,7 @@ type AbstractEvent struct {
 	sendTime   int64
 	vTime      int64
 	isVerified bool
+	isRequest  bool
 }
 
 func (ev *AbstractEvent) Sender() Node {
@@ -69,14 +72,23 @@ func (ev *AbstractEvent) IsVerified() bool {
 	return ev.isVerified
 }
 
+func (ev *AbstractEvent) SetRequest(v bool) {
+	ev.isRequest = v
+}
+
+func (ev *AbstractEvent) IsRequest() bool {
+	return ev.isRequest
+}
+
 func NewEvent() *AbstractEvent {
-	return &AbstractEvent{sender: nil, receiver: nil, sendTime: -1, vTime: -1}
+	return &AbstractEvent{sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
 }
 
 type SchedEvent interface {
 	SetJob(job func())
 	Job() func()
 	Run(ctx context.Context, node Node)
+	ProcessRequest(ctx context.Context, node Node) SchedEvent
 	SetCanceled(c bool)
 	IsCanceled() bool
 	Event
@@ -121,6 +133,11 @@ func (aj *AsyncJobEvent) Run(node Node) {
 func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
 	//se.Job()(se, node)
 	se.Job()()
+}
+
+func (se *AbstractSchedEvent) ProcessRequest(ctx context.Context, n Node) SchedEvent {
+	//se.Job()(se, node)
+	return nil
 }
 
 func (se *AbstractSchedEvent) IsCanceled() bool {

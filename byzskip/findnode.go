@@ -24,12 +24,22 @@ func (req *FindNodeRequest) Encode() *pb.FindNodeRequest {
 	for _, idx := range req.NeighborListIndex {
 		idxs = append(idxs, idx.Encode())
 	}
-	ret := &pb.FindNodeRequest{
-		Key:               req.Key.Encode(),
-		MV:                req.MV.Encode(),
-		NeighborListIndex: idxs,
+	if req.MV != nil {
+		ret := &pb.FindNodeRequest{
+			Key:               req.Key.Encode(),
+			MV:                req.MV.Encode(),
+			NeighborListIndex: idxs,
+		}
+		return ret
+	} else { // lookup (find key)
+		ret := &pb.FindNodeRequest{
+			Key:               req.Key.Encode(),
+			MV:                nil,
+			NeighborListIndex: nil,
+		}
+		return ret
 	}
-	return ret
+
 }
 
 type TableIndex struct {
@@ -69,6 +79,7 @@ func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key
 		//		TargetMV:           targetMV,
 		MessageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent()}
+	ev.SetRequest(true)
 	return ev
 }
 
@@ -96,6 +107,7 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 		ret.Data.Req = ue.req.Encode()
 	}
 	ret.IsResponse = ue.isResponse
+	ret.IsRequest = ue.IsRequest()
 	/*var idxs = []*pb.TableIndex
 	for _, idx := range ue.req.NeighborListIndex {
 		idxs = append (idxs, idx.Encode())
@@ -117,4 +129,9 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 func (ue *BSFindNodeEvent) Run(ctx context.Context, node ayame.Node) {
 	n := node.(*BSNode)
 	n.handleFindNode(ctx, ue)
+}
+
+func (ue *BSFindNodeEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
+	n := node.(*BSNode)
+	return n.handleFindNodeRequest(ctx, ue)
 }

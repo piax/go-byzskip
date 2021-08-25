@@ -558,7 +558,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	ev := NewBSFindNodeReqEvent(n, requestId, key, nil)
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
-	ch := make(chan *FindNodeResponse)
+	ch := make(chan *FindNodeResponse, 1)
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
@@ -609,6 +609,15 @@ var USE_TABLE_INDEX = true
 func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) {
 	ue := ev.(*BSFindNodeEvent)
 	if ue.isResponse {
+		n.handleFindNodeRequest(ctx, ev)
+	} else {
+		n.SendEvent(ctx, ue.Sender(), n.handleFindNodeRequest(ctx, ev), false)
+	}
+}
+
+func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent) ayame.SchedEvent {
+	ue := ev.(*BSFindNodeEvent)
+	if ue.isResponse {
 		ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
 		//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 		n.procsMutex.RLock()
@@ -620,6 +629,7 @@ func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) {
 			ayame.Log.Errorf("unregistered response %s from %s\n", ue.MessageId, ue.Sender().(*BSNode))
 			panic("unregisterd response") // it's implementation error
 		}
+		return nil
 	} else {
 		//kmv := ue.Sender().(*BSNode)
 		var closers, candidates []*BSNode
@@ -643,7 +653,8 @@ func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) {
 		n.RoutingTable.Add(ue.Sender().(*BSNode))
 		n.rtMutex.Unlock()
 		ev := NewBSFindNodeResEvent(ue, closers, level, candidates)
-		n.SendEvent(ctx, ue.Sender(), ev, false)
+		ev.SetSender(n)
+		return ev
 	}
 }
 

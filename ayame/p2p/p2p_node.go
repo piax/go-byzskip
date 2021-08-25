@@ -3,6 +3,7 @@ package ayame
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -43,7 +44,9 @@ type P2PNode struct {
 	mutex    sync.Mutex
 }
 
-const MessageProto = "/message/0.0.0"
+const (
+	sendMessageProto = "/msg/0.0.0"
+)
 
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
@@ -73,7 +76,7 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 	}
 	host.ID()
 	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, Validator: validator, OutBytes: 0, InBytes: 0, InCount: 0}
-	node.SetStreamHandler(MessageProto, node.onReceiveMessage)
+	node.SetStreamHandler(sendMessageProto, node.onReceiveMessage)
 
 	return node, nil
 }
@@ -132,17 +135,18 @@ func NewKey(key *p2p.Key) ayame.Key {
 	return nil
 }
 
-type streamKey struct{}
-
-var StreamKey = streamKey{}
-
 // a stream handler
 func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	// get request data
 	mes := &p2p.Message{}
 	r := msgio.NewVarintReaderSize(s, network.MessageSizeMax)
+	defer s.Close()
 	buf, err := r.ReadMsg()
 	if err != nil {
+		r.ReleaseMsg(buf)
+		if err == io.EOF {
+			return
+		}
 		s.Reset()
 		ayame.Log.Error(err)
 		return
@@ -152,8 +156,6 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	n.InCount++
 	n.mutex.Unlock()
 	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
-	ctx := context.WithValue(context.Background(), StreamKey, s)
-	defer s.Close()
 
 	// unmarshal it
 	err = proto.Unmarshal(buf, mes)
@@ -161,23 +163,28 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
+	r.ReleaseMsg(buf)
 	ayame.Log.Infof("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
-
 	var valid bool = false
 	if ayame.SecureKeyMV {
 		valid = n.authenticateMessage(mes, mes.Data, s)
 	}
 	ev := n.converter(mes, n, valid)
-
-	//ayame.Log.Infof("%s: storing %s->%s", s.Conn().LocalPeer(), ev.Sender().Id(), s.Conn().RemoteMultiaddr())
-	//ayame.Log.Debugf("%s: Received from %s. size=%d, mes=%v\n", n.Key(), ev.Sender().Key(), len(buf), mes)
-	//ayame.Log.Debugf("%s: Received from %s. size=%d\n", n.Key(), ev.Sender().Key(), len(buf))
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
-	ev.Run(ctx, n.child)
+	if mes.IsRequest {
+		resp := ev.ProcessRequest(context.TODO(), n.child)
+		//		resp.SetSender(n.child)
+		mes := resp.Encode()
+		mes.Sender = n.Encode()
+		ayame.Log.Infof("%s: PROCESSED REQUEST. response size=%d\n", s.Conn().LocalPeer(), mes.Size())
+		// no sign
+		n.sendMsgToStream(context.TODO(), s, mes)
+	} else {
+		ev.Run(context.TODO(), n.child)
+	}
 }
 
-// Node API
-func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
+func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 	mes := ev.Encode()
 	mes.Sender = n.Encode()
 	if sign { // if verification conscious
@@ -192,8 +199,25 @@ func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
 		mes.SenderSign, _ = n.signProtoMessage(mes)
 		mes.SenderSign = IfNeededSign(mes.SenderSign) // if needed by configuration
 	}
+	return mes
+}
+
+// Node API
+func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
 	ayame.Log.Infof("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
-	n.sendProtoMessage(ctx, ev.Receiver().Id(), MessageProto, mes)
+
+	id := ev.Receiver().Id()
+
+	s, err := n.NewStream(ctx, id, sendMessageProto)
+	if err != nil {
+		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
+		return
+	}
+	defer s.Close()
+	n.sendMsgToStream(ctx, s, n.sign(ev, sign))
+	if ev.IsRequest() {
+		n.onReceiveMessage(s)
+	}
 }
 
 // Authenticate incoming p2p message
@@ -358,21 +382,23 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType, key ayame.
 
 }
 
-// XXX Open stream, Send, and Close
-func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.ID, data proto.Message) bool {
-	s, err := n.NewStream(context.Background(), id, p)
-	if err != nil {
-		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
-		return false
-	}
-	defer s.Close() //XXX closed by remote
-
+func (n *P2PNode) sendMsgToStream(ctx context.Context, s network.Stream, msg proto.Message) bool {
 	writer := protoio.NewDelimitedWriter(s)
-	err = writer.WriteMsg(data)
+	err := writer.WriteMsg(msg)
 	if err != nil {
 		ayame.Log.Errorf("write msg %s\n", err)
 		s.Reset()
 		return false
 	}
 	return true
+}
+
+func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.ID, data proto.Message) bool {
+	s, err := n.NewStream(context.Background(), id, p)
+	if err != nil {
+		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
+		return false
+	}
+	defer s.Close()
+	return n.sendMsgToStream(ctx, s, data)
 }

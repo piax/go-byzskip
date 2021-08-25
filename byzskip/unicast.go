@@ -240,3 +240,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, err
 }
+
+func (ue *BSUnicastEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
+	panic("unicast does not support request")
+}
