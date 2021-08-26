@@ -16,12 +16,12 @@ func NewStopRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 	return &StopRoutingTable{} //, nodes: make(map[int]*BSNode)}
 }
 
-func (table *StopRoutingTable) GetClosestNodes(k ayame.Key) ([]bs.KeyMV, int) {
+func (table *StopRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
 // get all disjoint entries
-func (table *StopRoutingTable) GetAll() []bs.KeyMV {
+func (table *StopRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 
@@ -45,17 +45,12 @@ func (table *StopRoutingTable) AddNeighborList(s *bs.NeighborList) {
 	// do nothing.
 }
 
-func (table *StopRoutingTable) GetNeighborNodes(req *bs.FindNodeRequest) []bs.KeyMV {
+func (table *StopRoutingTable) Neighbors(req *bs.FindNodeRequest) []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 
 func (table *StopRoutingTable) GetTableIndex() []*bs.TableIndex {
 	return []*bs.TableIndex{}
-}
-
-func (table *StopRoutingTable) GetCloserCandidates() []bs.KeyMV {
-	// should be confused?
-	return []bs.KeyMV{}
 }
 
 func (table *StopRoutingTable) String() string {

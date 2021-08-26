@@ -19,21 +19,18 @@ func NewAdversaryRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 }
 
 // get k neighbors and its level
-func (table *AdversaryRoutingTable) GetClosestNodes(k ayame.Key) ([]bs.KeyMV, int) {
+func (table *AdversaryRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
 	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
-		return table.normal.GetClosestNodes(k)
+		return table.normal.KClosest(k)
 	} else {
-		return table.adversarial.GetClosestNodes(k)
+		return table.adversarial.KClosest(k)
 	}
 }
 
 // get all disjoint entries
-func (table *AdversaryRoutingTable) GetAll() []bs.KeyMV {
-	if FailureType == F_COLLAB_AFTER {
-		return table.normal.GetAll()
-	} else {
-		return table.adversarial.GetAll()
-	}
+func (table *AdversaryRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
+	// Use normal neighbors to advertise itself(adversarial) to the normal network.
+	return table.normal.AllNeighbors(includeSelf, sorted)
 }
 
 // get all disjoint entries
@@ -47,12 +44,12 @@ func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVecto
 }
 
 // get neighbor candidates that belongs to the same ring and satisfies index
-func (table *AdversaryRoutingTable) GetNeighborNodes(req *bs.FindNodeRequest) []bs.KeyMV {
+func (table *AdversaryRoutingTable) Neighbors(req *bs.FindNodeRequest) []bs.KeyMV {
 	if FailureType == F_COLLAB_AFTER {
-		return table.normal.GetNeighborNodes(req)
+		return table.normal.Neighbors(req)
 	} else {
 		// stronger attacker
-		return table.adversarial.GetNeighborNodes(req)
+		return table.adversarial.Neighbors(req)
 	}
 }
 
@@ -62,11 +59,6 @@ func (table *AdversaryRoutingTable) GetTableIndex() []*bs.TableIndex {
 	} else {
 		return table.adversarial.GetTableIndex()
 	}
-}
-
-func (table *AdversaryRoutingTable) GetCloserCandidates() []bs.KeyMV {
-	// should be confused?
-	return table.normal.GetAll()
 }
 
 // called as a normal behavior

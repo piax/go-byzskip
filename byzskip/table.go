@@ -74,22 +74,22 @@ type NeighborList struct {
 type RoutingTable interface {
 	// access entries
 
-	// XXX refactoring plan: Rename to GetNearestNodes with FindNode request
-	GetClosestNodes(key ayame.Key) ([]KeyMV, int) // get k neighbors and its level
-	// XXX refactoring plan: Rename to GetNeighborNodes with FindNode request
-	GetNeighborNodes(req *FindNodeRequest) []KeyMV
+	// Returns k closest and its level
+	KClosest(key ayame.Key) ([]KeyMV, int)
+	// Returns requested neighbor entry list
+	Neighbors(req *FindNodeRequest) []KeyMV
+	// Returns all disjoint neighbor entry list.
+	// If includeSelf is true, returns a list which include owner entry.
+	// If sorted is true, returns a sorted list in order of closeness.
+	AllNeighbors(includeSelf bool, sorted bool) []KeyMV
 
+	// Deprecated: nodes with common prefix
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	GetTableIndex() []*TableIndex
 
 	Add(c KeyMV)
 	Delete(c ayame.Key)
-
-	// order is not care
-	GetAll() []KeyMV // get all disjoint entries
-	// get all in order of closeness
-	GetCloserCandidates() []KeyMV
 
 	// neighbor list API
 	GetNeighborLists() []*NeighborList
@@ -154,7 +154,7 @@ func (table *SkipRoutingTable) AddNeighborList(s *NeighborList) {
 	table.NeighborLists = append(table.NeighborLists, s)
 }
 
-func (table *SkipRoutingTable) GetClosestNodes(key ayame.Key) ([]KeyMV, int) {
+func (table *SkipRoutingTable) KClosest(key ayame.Key) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	// find the lowest level
@@ -207,15 +207,38 @@ func appendKeyMVIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
 	return append(lst, node)
 }
 
-// get all candidates //XXX higher than level 1
-func (table *SkipRoutingTable) GetAll() []KeyMV {
+func (table *SkipRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []KeyMV {
 	ret := []KeyMV{}
-	// find the lowest level
-	for _, singleLevel := range table.NeighborLists {
-		for _, n := range singleLevel.concatenate(true) {
-			//			if n.mv.CommonPrefixLength(s.mv) >= 1 {
-			ret = appendKeyMVIfMissing(ret, n)
-			//			}
+	if sorted {
+		if includeSelf {
+			ret = []KeyMV{table.km}
+		}
+		right := []KeyMV{}
+		left := []KeyMV{}
+		// sorted list from bottom.
+		for _, singleLevel := range table.NeighborLists {
+			for _, n := range singleLevel.Neighbors[RIGHT] {
+				right = appendKeyMVIfMissing(right, n)
+			}
+			for _, n := range singleLevel.Neighbors[LEFT] {
+				left = appendKeyMVIfMissing(left, n)
+			}
+		}
+		for len(right) > 0 || len(left) > 0 {
+			if len(right) > 0 {
+				ret = appendKeyMVIfMissing(ret, right[0])
+				right = right[1:]
+			}
+			if len(left) > 0 {
+				ret = appendKeyMVIfMissing(ret, left[0])
+				left = left[1:]
+			}
+		}
+	} else {
+		for _, singleLevel := range table.NeighborLists {
+			for _, n := range singleLevel.concatenate(includeSelf) {
+				ret = appendKeyMVIfMissing(ret, n)
+			}
 		}
 	}
 	return ret
@@ -259,7 +282,7 @@ func (rts *NeighborList) concatenateWithIndex(req *FindNodeRequest, includeSelf 
 	return ret
 }
 
-func (table *SkipRoutingTable) GetNeighborNodes(req *FindNodeRequest) []KeyMV {
+func (table *SkipRoutingTable) Neighbors(req *FindNodeRequest) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(req.MV)
 	ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
@@ -479,6 +502,7 @@ func SortCircular(base int, kms []KeyMV) {
 	})
 }*/
 
+// Deprecated: merged to AllNeighbors
 func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	right := []KeyMV{}
 	left := []KeyMV{}
@@ -617,7 +641,7 @@ func (rts *NeighborList) Add(d int, u KeyMV) {
 	if d == LEFT {
 		reverseSlice(rts.Neighbors[d])
 	}
-	i := rts.satisfuctionIndex(d)
+	i := rts.satisfactionIndex(d)
 	if i > 0 {
 		rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
 	}
@@ -727,7 +751,7 @@ func lessThanExists(lst []int, x int) bool {
 }
 
 // Returns negative value if all
-func (rts *NeighborList) satisfuctionIndex(d int) int {
+func (rts *NeighborList) satisfactionIndex(d int) int {
 	//	if len(rts.Neighbors[d]) > 6 {
 	//		ayame.Log.Debugf("%d\n", len(rts.Neighbors[d]))
 	//	}
@@ -745,7 +769,7 @@ func (rts *NeighborList) satisfuctionIndex(d int) int {
 }
 
 func (rts *NeighborList) hasSufficientNodes(d int) bool {
-	return rts.satisfuctionIndex(d) > 0
+	return rts.satisfactionIndex(d) > 0
 }
 
 func (table *SkipRoutingTable) ExtendRoutingTable(level int) {

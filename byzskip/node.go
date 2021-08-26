@@ -132,7 +132,7 @@ func ksToNs(lst []KeyMV) []*BSNode {
 }
 
 func (node *BSNode) GetNeighborsAndCandidatesWithIndex(key ayame.Key, mv *ayame.MembershipVector, idx *TableIndex) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.GetClosestNodes(key)
+	ret, level := node.RoutingTable.KClosest(key)
 	//can := node.routingTable.GetAll()
 	can := node.RoutingTable.GetCommonNeighbors(mv)
 	return ksToNs(ret), level, ksToNs(can)
@@ -140,7 +140,7 @@ func (node *BSNode) GetNeighborsAndCandidatesWithIndex(key ayame.Key, mv *ayame.
 
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
 func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.MembershipVector) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.GetClosestNodes(key)
+	ret, level := node.RoutingTable.KClosest(key)
 	//can := node.routingTable.GetAll()
 	can := node.RoutingTable.GetCommonNeighbors(mv)
 	return ksToNs(ret), level, ksToNs(can)
@@ -158,24 +158,24 @@ func NewBSNode(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bo
 	return ret
 }
 
-// for local
 func (node *BSNode) GetClosestNodes(key ayame.Key) ([]*BSNode, int) {
-	nb, lv := node.RoutingTable.GetClosestNodes(key)
+	nb, lv := node.RoutingTable.KClosest(key)
 	return ksToNs(nb), lv
 }
 
-func (node *BSNode) GetCandidates() []*BSNode {
-	return ksToNs(node.RoutingTable.GetAll())
+func (node *BSNode) GetList(includeSelf bool, sorted bool) []*BSNode {
+	return ksToNs(node.RoutingTable.AllNeighbors(includeSelf, sorted))
 }
 
-func (node *BSNode) GetCloserCandidates() []*BSNode {
-	return ksToNs(node.RoutingTable.GetCloserCandidates())
+/*
+func (node *BSNode) GetCandidates() []*BSNode {
+	return ksToNs(node.RoutingTable.GetList())
 }
 
 func (node *BSNode) RoutingTableString() string {
 	return node.RoutingTable.String()
 }
-
+*/
 func UnincludedNodes(nodes []*BSNode, queried []*BSNode) []*BSNode {
 	ret := []*BSNode{}
 	for _, n := range nodes {
@@ -285,7 +285,7 @@ func NextId() string {
 	return strconv.Itoa(SeqNo)
 }
 
-func pickCandidates(stat *JoinStats, count int) []*BSNode {
+func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 	ret := []*BSNode{}
 	for _, c := range stat.closers {
 		if len(ret) == count {
@@ -293,6 +293,7 @@ func pickCandidates(stat *JoinStats, count int) []*BSNode {
 		}
 		ret = AppendNodeIfMissing(ret, c)
 		ret = UnincludedNodes(ret, stat.queried)
+		ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
 	}
 	for _, c := range stat.candidates {
 		if len(ret) == count {
@@ -327,7 +328,7 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 	findCh := make(chan *FindNodeResponse, 1)
 	for !n.allQueried() {
 		reqCount := 0
-		cs := pickCandidates(n.stats, FIND_NODE_PARALLELISM)
+		cs := n.pickCandidates(n.stats, FIND_NODE_PARALLELISM)
 		if len(cs) == 1 && cs[0].IsIntroducer() { // remove the special node
 			//n.statsMutex.Lock()
 			n.stats.closers = []*BSNode{}
@@ -346,10 +347,10 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-joinCtx.Done(): // after JOIN_TIMEOUT
-				ayame.Log.Debugf("A FindNode ended with %s\n", joinCtx.Err())
+				ayame.Log.Debugf("%s: Join process ended with %s\n", n, joinCtx.Err())
 				break L
 			case response := <-findCh: // FindNode finished
-				ayame.Log.Debugf("%d th/ %d FindNode for %s to %s finished", i+1, reqCount, response.id, response.sender)
+				ayame.Log.Debugf("%s: %d th/ %d FindNode for %s to %s finished", n, i+1, reqCount, response.id, response.sender)
 				if response.isFailure { // timed out
 					// XXX TODO: should we try several times?
 					n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
@@ -372,7 +373,7 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 				// XXX should append if close
 				n.stats.closers = AppendNodesIfMissing(n.stats.closers, response.closers)
 				n.rtMutex.RLock()
-				n.stats.candidates = ksToNs(n.RoutingTable.GetCloserCandidates())
+				n.stats.candidates = n.GetList(false, true)
 				n.rtMutex.RUnlock()
 				n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
 
@@ -393,7 +394,7 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 	defer cancel()
 	// all entries without myself
 	n.rtMutex.RLock()
-	entries, _ := delNode(n.RoutingTable.GetAll(), n.Key())
+	entries, _ := delNode(n.RoutingTable.AllNeighbors(false, false), n.Key())
 	n.rtMutex.RUnlock()
 	pos := 0
 	ch := make(chan struct{}, 1)
@@ -431,7 +432,8 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 func (n *BSNode) allQueried() bool {
 	ret := false
 	//n.statsMutex.RLock()
-	ret = AllContained(n.stats.closers, n.stats.queried) &&
+	exceptMe := UnincludedNodes(n.stats.closers, []*BSNode{n})
+	ret = AllContained(exceptMe, n.stats.queried) &&
 		AllContained(n.stats.candidates, n.stats.queried)
 	//n.statsMutex.RUnlock()
 	return ret
@@ -565,7 +567,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	n.SendEvent(ctx, node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
+		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindNodeResponse{sender: node, isFailure: true}
@@ -573,7 +575,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 			findCh <- &FindNodeResponse{}
 		}
 	case response := <-ch: // FindNode finished
-		ayame.Log.Debugf("FindNode ended normally")
+		ayame.Log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 	return ch
@@ -587,10 +589,11 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
+	ayame.Log.Debugf("%s: FindNode to %s started", n, node)
 	n.SendEvent(ctx, node, ev, false)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("FindNode ended with %s", findCtx.Err())
+		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindNodeResponse{sender: node, isFailure: true}
@@ -598,7 +601,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 			findCh <- &FindNodeResponse{}
 		}
 	case response := <-ch: // FindNode finished
-		ayame.Log.Debugf("FindNode ended normally")
+		ayame.Log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 	return ch
@@ -641,7 +644,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 		} else {
 			n.rtMutex.RLock()
 			if USE_TABLE_INDEX {
-				candidates = ksToNs(n.RoutingTable.GetNeighborNodes(ue.req))
+				candidates = ksToNs(n.RoutingTable.Neighbors(ue.req))
 				closers, level = n.GetClosestNodes(ue.req.Key)
 			} else {
 				closers, level, candidates = n.GetNeighborsAndCandidates(ue.req.Key, ue.req.MV)

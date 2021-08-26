@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/piax/go-ayame/ayame"
 	bs "github.com/piax/go-ayame/byzskip"
@@ -19,9 +20,11 @@ func TestP2P(t *testing.T) {
 	for i := 1; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
 		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
-		peers[i].Join(context.Background(), locator)
+		go func(pos int) {
+			peers[pos].Join(context.Background(), locator)
+		}(i)
 	}
-
+	time.Sleep(time.Duration(20) * time.Second)
 	for i := 1; i < numberOfPeers; i++ {
 		fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
 	}
@@ -33,7 +36,7 @@ func TestP2P(t *testing.T) {
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
 		fmt.Printf("cheat key=%s\n%s\n", localPeers[i].Key(), localPeers[i].RoutingTable)
-		ast.Equal(t, bs.RoutingTableEquals(peers[i].RoutingTable, localPeers[i].RoutingTable), true, "routing table equals")
+		ast.Equal(t, bs.RoutingTableEquals(peers[i].RoutingTable, localPeers[i].RoutingTable), true, fmt.Sprintf("routing table real=%s and cheat=%s equals", peers[i].RoutingTable, localPeers[i].RoutingTable))
 	}
 }
 

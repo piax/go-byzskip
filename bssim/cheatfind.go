@@ -26,7 +26,7 @@ func ksToNs(lst []bs.KeyMV) []*bs.BSNode {
 
 // called by remote
 func FastFindKey(node *bs.BSNode, key ayame.Key) ([]*bs.BSNode, int) {
-	nb, lv := node.RoutingTable.GetClosestNodes(key)
+	nb, lv := node.RoutingTable.KClosest(key)
 	return ksToNs(nb), lv
 }
 
@@ -40,7 +40,7 @@ func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.
 }
 
 func FastFindNodeWithRequest(node *bs.BSNode, target *bs.BSNode, req *bs.FindNodeRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
-	can := node.RoutingTable.GetNeighborNodes(req)
+	can := node.RoutingTable.Neighbors(req)
 	nb, lv := node.GetClosestNodes(req.Key)
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
 	node.RoutingTable.Add(target)
@@ -70,7 +70,7 @@ func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode)
 
 func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode, req *bs.FindNodeRequest) []*bs.BSNode {
 	//ret := node.GetCandidates()
-	ret := node.RoutingTable.GetNeighborNodes(req)
+	ret := node.RoutingTable.Neighbors(req)
 
 	//	if !node.isFailure || FailureType == F_NONE {
 	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
@@ -170,7 +170,7 @@ func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried [
 		msgs++
 		piggyback := []*bs.BSNode{}
 		if PiggybackJoinRequest {
-			piggyback = target.GetCandidates()
+			piggyback = target.GetList(true, false)
 		}
 		var newCandidates []*bs.BSNode
 		if *useTableIndex {
@@ -193,7 +193,7 @@ func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried [
 		}
 		//ayame.Log.Debugf("%s: table is updated\ntable:%s\n", target, target.routingTable.String())
 
-		candidates = target.GetCloserCandidates()
+		candidates = target.GetList(false, true)
 		candidates = bs.UnincludedNodes(candidates, queried)
 		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
 	}
@@ -284,12 +284,12 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 	msgs_to_lookup = msgs
 	// the nodes in the current routing table, in order of closeness. (R->L->R->L in each level)
 	if JoinType == J_ITER_P {
-		candidates = bs.UnincludedNodes(ksToNs(target.RoutingTable.GetCloserCandidates()), queried)
+		candidates = bs.UnincludedNodes(ksToNs(target.RoutingTable.AllNeighbors(false, true)), queried)
 	} else {
 		candidates = rets
 		queried = []*bs.BSNode{}
 	}
-	ayame.Log.Debugf("%d: table=%s, candidates=%s, queried=%s\n", target.Key(), ayame.SliceString(target.RoutingTable.GetAll()), ayame.SliceString(candidates), ayame.SliceString(queried))
+	ayame.Log.Debugf("%d: table=%s, candidates=%s, queried=%s\n", target.Key(), ayame.SliceString(target.RoutingTable.AllNeighbors(false, false)), ayame.SliceString(candidates), ayame.SliceString(queried))
 	//processed := []*bs.BSNode{}
 	umsgs, failure, sumCandidates := FastUpdateNeighbors(target, candidates, queried)
 	respCount += sumCandidates

@@ -93,7 +93,15 @@ L:
 
 }
 
-func setupNodes(num int) []*BSNode {
+func addr(port int, quic bool) string {
+	if quic {
+		return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", port)
+	} else {
+		return fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port)
+	}
+}
+
+func setupNodes(num int, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
 	InitK(4)
 	numberOfPeers := num
@@ -110,14 +118,17 @@ func setupNodes(num int) []*BSNode {
 		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
 	}
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNodeWithAuth("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), authFunc, validateFunc)
-	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+	peers[0], _ = NewP2PNodeWithAuth(addr(9000, useQuic), ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), authFunc, validateFunc)
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
-		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
+		addr := addr(9000+i, useQuic)
 		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), authFunc, validateFunc)
-		peers[i].Join(context.Background(), locator)
+		func(pos int) {
+			peers[pos].Join(context.Background(), locator)
+		}(i)
 	}
+	time.Sleep(time.Duration(10) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
@@ -133,12 +144,12 @@ func setupNodes(num int) []*BSNode {
 
 func TestJoin(t *testing.T) {
 	numberOfPeers := 100
-	setupNodes(numberOfPeers)
+	setupNodes(numberOfPeers, true)
 }
 
 func TestLookup(t *testing.T) {
 	numberOfPeers := 100
-	peers := setupNodes(numberOfPeers)
+	peers := setupNodes(numberOfPeers, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].parent.(*p2p.P2PNode).InCount = 0
@@ -163,7 +174,7 @@ func TestLookup(t *testing.T) {
 
 func TestUnicast(t *testing.T) {
 	numberOfPeers := 32
-	peers := setupNodes(numberOfPeers)
+	peers := setupNodes(numberOfPeers, true)
 	ayame.Log.Debugf("------- UNICAST STARTS ---------")
 
 	lock := sync.Mutex{}
@@ -215,7 +226,7 @@ func TestUnicast(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	numberOfPeers := 16
-	peers := setupNodes(numberOfPeers)
+	peers := setupNodes(numberOfPeers, true)
 	ayame.Log.Debugf("------- Closing nodes ---------")
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
@@ -244,4 +255,10 @@ func Example() {
 	peers[2].Lookup(context.Background(), ayame.IntKey(16))
 	peers[1].Unicast(context.Background(), ayame.IntKey(17), []byte("hello world"))
 	time.Sleep(time.Duration(100) * time.Millisecond)
+}
+
+func TestTCP(t *testing.T) {
+	numberOfPeers := 100
+	p2p.USE_QUIC = false
+	setupNodes(numberOfPeers, false)
 }

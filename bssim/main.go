@@ -564,7 +564,7 @@ func main() {
 			if n.IsFailure {
 				mark += "*"
 			}
-			fmt.Printf("%skey=%d [%s]\n%s", mark, n.Key(), n.MV().String(), n.RoutingTableString())
+			fmt.Printf("%skey=%d [%s]\n%s", mark, n.Key(), n.MV().String(), n.RoutingTable)
 		}
 	}
 

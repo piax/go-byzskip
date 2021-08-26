@@ -131,7 +131,6 @@ func (aj *AsyncJobEvent) Run(node Node) {
 }
 
 func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
-	//se.Job()(se, node)
 	se.Job()()
 }
 

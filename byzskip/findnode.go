@@ -12,8 +12,9 @@ import (
 )
 
 type FindNodeRequest struct {
-	// requester's key and
-	Key               ayame.Key
+	// requester's key
+	Key ayame.Key
+	// requester's Membership Vector. can be nil.
 	MV                *ayame.MembershipVector
 	ClosestIndex      *TableIndex
 	NeighborListIndex []*TableIndex

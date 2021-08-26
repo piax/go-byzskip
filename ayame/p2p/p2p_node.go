@@ -18,6 +18,7 @@ import (
 	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 	"github.com/libp2p/go-msgio"
 	"github.com/libp2p/go-msgio/protoio"
+	libp2ptcp "github.com/libp2p/go-tcp-transport"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-ayame/ayame"
 	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
@@ -48,6 +49,8 @@ const (
 	sendMessageProto = "/msg/0.0.0"
 )
 
+var USE_QUIC = true
+
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*P2PNode, error) {
@@ -63,18 +66,34 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		ayame.Log.Errorf("%s\n", err)
 		return nil, err
 	}
-	host, err := libp2p.New(
-		ctx,
-		libp2p.ListenAddrs(listen),
-		libp2p.Identity(priv),
-		// support QUIC
-		libp2p.Transport(libp2pquic.NewTransport),
-	)
-	if err != nil {
-		ayame.Log.Errorf("libp2p.New %s\n", err)
-		return nil, err
+	var host host.Host
+	if USE_QUIC { // XXX future work: option constructor.
+		h, err := libp2p.New(
+			ctx,
+			libp2p.ListenAddrs(listen),
+			libp2p.Identity(priv),
+			// support QUIC
+			libp2p.Transport(libp2pquic.NewTransport),
+		)
+		if err != nil {
+			ayame.Log.Errorf("libp2p.New %s\n", err)
+			return nil, err
+		}
+		host = h
+	} else {
+		h, err := libp2p.New(
+			ctx,
+			libp2p.ListenAddrs(listen),
+			libp2p.Identity(priv),
+			libp2p.Transport(libp2ptcp.NewTCPTransport),
+		)
+		if err != nil {
+			ayame.Log.Errorf("libp2p.New %s\n", err)
+			return nil, err
+		}
+		host = h
 	}
-	host.ID()
+
 	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, Validator: validator, OutBytes: 0, InBytes: 0, InCount: 0}
 	node.SetStreamHandler(sendMessageProto, node.onReceiveMessage)
 
