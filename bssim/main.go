@@ -477,7 +477,7 @@ func main() {
 	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
-
+	ayame.SecureKeyMV = false // skip authentication
 	bs.InitK(*kValue)
 
 	bs.ALPHA = *alpha

@@ -480,24 +480,27 @@ func SortCircular(base int, kms []KeyMV) {
 }*/
 
 func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
-	ret := []KeyMV{}
-
+	right := []KeyMV{}
+	left := []KeyMV{}
 	// sorted list from bottom.
-	kms := []KeyMV{}
 	for _, singleLevel := range rt.NeighborLists {
-		for _, n := range singleLevel.concatenate(false) {
-			kms = appendKeyMVIfMissing(kms, n)
+		for _, n := range singleLevel.Neighbors[RIGHT] {
+			right = appendKeyMVIfMissing(right, n)
+		}
+		for _, n := range singleLevel.Neighbors[LEFT] {
+			left = appendKeyMVIfMissing(left, n)
 		}
 	}
-
-	right := append([]KeyMV{}, kms...)
-	//SortC(rt.km.Key(), right)
-	left := append([]KeyMV{}, kms...)
-	//SortC(rt.km.Key(), left)
-	reverseSlice(left)
-	for i := 0; i < len(kms); i++ {
-		ret = appendKeyMVIfMissing(ret, right[i])
-		ret = appendKeyMVIfMissing(ret, left[i])
+	ret := []KeyMV{}
+	for len(right) > 0 || len(left) > 0 {
+		if len(right) > 0 {
+			ret = appendKeyMVIfMissing(ret, right[0])
+			right = right[1:]
+		}
+		if len(left) > 0 {
+			ret = appendKeyMVIfMissing(ret, left[0])
+			left = left[1:]
+		}
 	}
 	return ret
 }

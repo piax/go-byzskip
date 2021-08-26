@@ -7,15 +7,15 @@ import (
 	"strconv"
 )
 
+const (
+	MembershipVectorSize = 32
+	DefaultAlpha         = 2
+)
+
 type MembershipVector struct {
 	Alpha int
 	Val   [MembershipVectorSize]int
 }
-
-const (
-	MembershipVectorSize = 32
-	//DefaultAlpha         = 2
-)
 
 func NewMembershipVector(alpha int) *MembershipVector {
 	var v [MembershipVectorSize]int

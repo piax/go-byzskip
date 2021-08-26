@@ -37,7 +37,12 @@ func (ee *EventExecutor) RunForever() {
 		ee.time = sev.Time()
 		if !sev.IsCanceled() {
 			n := sev.Receiver()
-			sev.Run(context.TODO(), n)
+			if sev.IsRequest() {
+				resp := sev.ProcessRequest(context.TODO(), n)
+				n.Send(context.TODO(), resp, false)
+			} else {
+				sev.Run(context.TODO(), n)
+			}
 		}
 		if ee.finishTime <= ee.time {
 			ee.running = false

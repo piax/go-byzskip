@@ -66,6 +66,7 @@ func TestSorted(t *testing.T) {
 	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
 	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
 	rslt := rt.GetCloserCandidates()
+	ast.Equal(t, ayame.SliceString(rslt), "[2,8,3,7,5]", "expected [2,8,3,7,5]")
 	fmt.Println(ayame.SliceString(rslt))
 	rslt = rt.GetCommonNeighbors(ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0}))
 	fmt.Println(ayame.SliceString(rslt))
