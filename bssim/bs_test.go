@@ -17,14 +17,23 @@ func TestP2P(t *testing.T) {
 	peers[0], _ = bs.NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
-	for i := 1; i < numberOfPeers; i++ {
+	for i := 1; i < numberOfPeers/2; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
 		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
-	time.Sleep(time.Duration(20) * time.Second)
+	time.Sleep(time.Duration(10) * time.Second)
+	for i := numberOfPeers / 2; i < numberOfPeers; i++ {
+		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
+		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		go func(pos int) {
+			peers[pos].Join(context.Background(), locator)
+		}(i)
+	}
+	time.Sleep(time.Duration(10) * time.Second)
+
 	for i := 1; i < numberOfPeers; i++ {
 		fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
 	}

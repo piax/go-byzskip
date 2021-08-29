@@ -14,17 +14,17 @@ type BSDelNodeEvent struct {
 	ayame.AbstractSchedEvent
 }
 
-func NewBSDelNodeEvent(sender *BSNode, requestId string, targetKey ayame.Key) *BSDelNodeEvent {
+func NewBSDelNodeEvent(author *BSNode, requestId string, targetKey ayame.Key) *BSDelNodeEvent {
 	ev := &BSDelNodeEvent{
 		TargetKey:          targetKey,
 		MessageId:          requestId,
-		AbstractSchedEvent: *ayame.NewSchedEvent()}
+		AbstractSchedEvent: *ayame.NewSchedEvent(author, nil, nil)}
 	return ev
 }
 
 func (ue *BSDelNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(ue.MessageId, pb.MessageType_DEL_NODE, ue.TargetKey, nil, false)
+	ret := sender.NewMessage(ue.MessageId, pb.MessageType_DEL_NODE, nil, nil, nil, ue.TargetKey, nil)
 	return ret
 }
 

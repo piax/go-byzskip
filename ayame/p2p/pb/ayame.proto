@@ -116,10 +116,13 @@ message MessageData {
     // Used to return peers closer to a key in FIND_NODE
     repeated Peer closerPeers = 13;
     // Used to include candidate peers in FIND_NODE
-    // used to include path in UNICAST
     repeated Peer candidatePeers = 14;
+
+    // used to include path in UNICAST
+    repeated Peer path = 15;
+
     // the record used to deliver in this message
-    Record record = 15;
+    Record record = 16;
 }
 
 message Message {

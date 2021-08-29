@@ -56,7 +56,7 @@ func NewUnicastEvent(receiver ayame.Node, targetKey int) *UnicastEvent {
 		destinations:            []*SGNode{},
 		numberOfMessages:        0,
 		finishTime:              0,
-		AbstractSchedEvent:      *ayame.NewSchedEvent()}
+		AbstractSchedEvent:      *ayame.NewSchedEvent(nil, nil, nil)}
 	ev.root = ev
 	ev.SetReceiver(receiver)
 	return ev

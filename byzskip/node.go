@@ -26,14 +26,14 @@ import (
 )
 
 type JoinStats struct {
-	closers    []*BSNode // the current closer nodes
+	closest    []*BSNode // the current closest nodes
 	candidates []*BSNode // the candidate nodes
 	queried    []*BSNode // store the queried remote nodes
 	failed     []*BSNode // store the queried (but failed) remote nodes
 }
 
 func (s *JoinStats) String() string {
-	return fmt.Sprintf("closers=%s, candidates=%s, queried=%s, failed=%s", ayame.SliceString(s.closers), ayame.SliceString(s.candidates), ayame.SliceString(s.queried), ayame.SliceString(s.failed))
+	return fmt.Sprintf("closers=%s, candidates=%s, queried=%s, failed=%s", ayame.SliceString(s.closest), ayame.SliceString(s.candidates), ayame.SliceString(s.queried), ayame.SliceString(s.failed))
 }
 
 type FindNodeResponse struct {
@@ -287,7 +287,7 @@ func NextId() string {
 
 func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 	ret := []*BSNode{}
-	for _, c := range stat.closers {
+	for _, c := range stat.closest {
 		if len(ret) == count {
 			return ret
 		}
@@ -301,6 +301,7 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		}
 		ret = AppendNodeIfMissing(ret, c)
 		ret = UnincludedNodes(ret, stat.queried)
+		ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
 	}
 	// not enough number
 	return ret
@@ -320,7 +321,7 @@ func (n *BSNode) Join(ctx context.Context, addr string) {
 func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 	joinCtx, cancel := context.WithTimeout(ctx, time.Duration(JOIN_TIMEOUT)*time.Second) // all request should be ended within
 
-	n.stats = &JoinStats{closers: []*BSNode{introducer},
+	n.stats = &JoinStats{closest: []*BSNode{introducer},
 		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 
 	defer cancel()
@@ -331,7 +332,7 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 		cs := n.pickCandidates(n.stats, FIND_NODE_PARALLELISM)
 		if len(cs) == 1 && cs[0].IsIntroducer() { // remove the special node
 			//n.statsMutex.Lock()
-			n.stats.closers = []*BSNode{}
+			n.stats.closest = []*BSNode{}
 			//n.statsMutex.Unlock()
 		}
 		for _, c := range cs {
@@ -355,7 +356,10 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 					// XXX TODO: should we try several times?
 					n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
 					n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
-					// XXX delete response.sender from the routing table if already exists.
+					// delete response.sender from the routing table if already exists.
+					n.rtMutex.Lock()
+					n.RoutingTable.Delete(response.sender.Key())
+					n.rtMutex.Unlock()
 					continue L
 				}
 				if response.level == 0 {
@@ -371,7 +375,7 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 					n.rtMutex.Unlock()
 				}
 				// XXX should append if close
-				n.stats.closers = AppendNodesIfMissing(n.stats.closers, response.closers)
+				n.stats.closest = AppendNodesIfMissing(n.stats.closest, response.closers)
 				n.rtMutex.RLock()
 				n.stats.candidates = n.GetList(false, true)
 				n.rtMutex.RUnlock()
@@ -432,9 +436,10 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 func (n *BSNode) allQueried() bool {
 	ret := false
 	//n.statsMutex.RLock()
-	exceptMe := UnincludedNodes(n.stats.closers, []*BSNode{n})
-	ret = AllContained(exceptMe, n.stats.queried) &&
-		AllContained(n.stats.candidates, n.stats.queried)
+	closestExceptMe := UnincludedNodes(n.stats.closest, []*BSNode{n})
+	candidatesExceptMe := UnincludedNodes(n.stats.candidates, []*BSNode{n})
+	ret = AllContained(closestExceptMe, n.stats.queried) &&
+		AllContained(candidatesExceptMe, n.stats.queried)
 	//n.statsMutex.RUnlock()
 	return ret
 }
@@ -471,7 +476,11 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 			case response := <-lookupCh: // FindNode finished
 				if response.isFailure { // timed out
 					queried = AppendNodeIfMissing(queried, response.sender)
-					// XXX delete response.sender from the routing table if already exists.
+					n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+					// delete response.sender from the routing table if already exists.
+					n.rtMutex.Lock()
+					n.RoutingTable.Delete(response.sender.Key())
+					n.rtMutex.Unlock()
 					continue L
 				}
 				if response.level == 0 {
@@ -507,7 +516,7 @@ func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
 	mid := NextId()
 	for _, c := range closers {
 		localc := c
-		ev := NewBSUnicastEvent(n, mid, level, key, payload)
+		ev := NewBSUnicastEvent(n, nil, nil, mid, level, key, payload)
 		n.sendUnicastEvent(ctx, ch, localc, ev)
 	}
 L:
@@ -655,7 +664,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 		n.rtMutex.Lock()
 		n.RoutingTable.Add(ue.Sender().(*BSNode))
 		n.rtMutex.Unlock()
-		ev := NewBSFindNodeResEvent(ue, closers, level, candidates)
+		ev := NewBSFindNodeResEvent(n, ue, closers, level, candidates)
 		ev.SetSender(n)
 		return ev
 	}
@@ -666,7 +675,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 	ayame.Log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
 	if ayame.SecureKeyMV {
 		if !sendToSelf && !msg.IsVerified() {
-			return fmt.Errorf("failed to verify message %s, throw it all away", msg.MessageId)
+			return fmt.Errorf("%s: failed to verify message %s, throw it all away", n, msg.MessageId)
 		}
 	}
 

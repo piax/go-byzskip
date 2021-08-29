@@ -10,7 +10,7 @@ import (
 )
 
 func newTestEv(i int, t int64) ayame.Event {
-	ev := ayame.NewSchedEvent()
+	ev := ayame.NewSchedEvent(nil, nil, nil)
 	ev.SetTime(t)
 	ev.SetSender(ayame.NewLocalNode(ayame.IntKey(i), nil))
 	ev.SetReceiver(ayame.NewLocalNode(ayame.IntKey(0), nil))

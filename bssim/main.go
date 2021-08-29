@@ -276,7 +276,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					}
 				}
 			}
-			msg := bs.NewBSUnicastEvent(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
+			msg := bs.NewBSUnicastEventNoAuthor(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 				localn.Send(context.TODO(), msg, true) // the second argument (sign) is ommited in simulation
 				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {

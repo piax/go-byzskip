@@ -131,16 +131,12 @@ func ConvertFindNodeRequest(req *pb.FindNodeRequest) *FindNodeRequest {
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
+	author, _ := ConvertPeer(self, mes.Data.Author)
+	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
-		ev = &BSUnicastEvent{
-			TargetKey:          p2p.NewKey(mes.Data.Key),
-			MessageId:          mes.Data.Id,
-			level:              level,
-			Channel:            make(chan bool),
-			Path:               PathEntries(ConvertPeers(self, mes.Data.CandidatePeers)),
-			AbstractSchedEvent: *ayame.NewSchedEvent(),
-			Payload:            mes.Data.Record.Value}
+		ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record.Value)
+		ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		p, _ := ConvertPeer(self, mes.Sender)
 		ev.SetSender(p)
 		ev.SetVerified(valid) // verification conscious
@@ -149,7 +145,6 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		if mes.Data.Req != nil {
 			req = ConvertFindNodeRequest(mes.Data.Req)
 		}
-
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,
 			req:                req, //ConvertFindNodeRequest(mes.Data.Req),
@@ -157,7 +152,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			candidates:         ConvertPeers(self, mes.Data.CandidatePeers),
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
 			level:              level,
-			AbstractSchedEvent: *ayame.NewSchedEvent()}
+			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))

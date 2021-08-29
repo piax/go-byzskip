@@ -74,26 +74,22 @@ type BSFindNodeEvent struct {
 
 func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
-		isResponse: false,
-		req:        &FindNodeRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
-		//		TargetKey:          targetKey,
-		//		TargetMV:           targetMV,
+		isResponse:         false,
+		req:                &FindNodeRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
 		MessageId:          requestId,
-		AbstractSchedEvent: *ayame.NewSchedEvent()}
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.SetRequest(true)
 	return ev
 }
 
-func NewBSFindNodeResEvent(request *BSFindNodeEvent, closers []*BSNode, level int, candidates []*BSNode) *BSFindNodeEvent {
+func NewBSFindNodeResEvent(sender *BSNode, request *BSFindNodeEvent, closers []*BSNode, level int, candidates []*BSNode) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
-		isResponse: true,
-		//TargetKey:          request.Sender().Key(), // no meaning, just fill
-		//TargetMV:           request.Sender().MV(),  // no meaning, just fill
+		isResponse:         true,
 		MessageId:          request.MessageId,
 		closers:            closers,
 		candidates:         candidates,
 		level:              level,
-		AbstractSchedEvent: *ayame.NewSchedEvent()}
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	return ev
 }
 
@@ -103,7 +99,7 @@ func (ue *BSFindNodeEvent) String() string {
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, nil, nil, false)
+	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, nil, nil, nil, nil, nil)
 	if ue.req != nil {
 		ret.Data.Req = ue.req.Encode()
 	}

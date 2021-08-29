@@ -48,7 +48,7 @@ func PathEntries(nodes []*BSNode) []PathEntry {
 	return ret
 }
 
-func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
+func NewBSUnicastEventNoAuthor(sender *BSNode, messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
 		MessageId:                  messageId,
@@ -64,10 +64,34 @@ func NewBSUnicastEvent(sender *BSNode, messageId string, level int, target ayame
 		numberOfMessages:           0,
 		NumberOfDuplicatedMessages: 0,
 		finishTime:                 0,
-		AbstractSchedEvent:         *ayame.NewSchedEvent()}
+		AbstractSchedEvent:         *ayame.NewSchedEvent(nil, nil, nil)}
 	ev.Root = ev
-	ev.SetSender(sender)   // XXX weird
+	ev.SetSender(sender)
 	ev.SetReceiver(sender) // XXX weird
+	return ev
+}
+
+func NewBSUnicastEvent(author *BSNode, authorSign []byte, authorPubKey []byte,
+	messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
+	ev := &BSUnicastEvent{
+		TargetKey:                  target,
+		MessageId:                  messageId,
+		Path:                       []PathEntry{{Node: author, Level: ayame.MembershipVectorSize}},
+		Payload:                    payload,
+		level:                      level,
+		hop:                        0,
+		Children:                   []*BSUnicastEvent{},
+		ExpectedNumberOfResults:    K,
+		Results:                    []*BSNode{},
+		Paths:                      []([]PathEntry){},
+		Channel:                    make(chan bool),
+		numberOfMessages:           0,
+		NumberOfDuplicatedMessages: 0,
+		finishTime:                 0,
+		AbstractSchedEvent:         *ayame.NewSchedEvent(author, authorSign, authorPubKey)}
+	ev.Root = ev
+	ev.SetSender(author)
+	ev.SetReceiver(author) // XXX weird
 	return ev
 }
 
@@ -105,7 +129,7 @@ func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 }
 
 func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicastEvent {
-	var sub BSUnicastEvent = *ue
+	var sub BSUnicastEvent = *ue // author, authorSign, authorPublicKey, payload are copied
 	sub.Path = append([]PathEntry{}, ue.Path...)
 	sub.SetReceiver(nextHop)
 	sub.SetSender(ue.Receiver())
@@ -114,7 +138,6 @@ func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicas
 	sub.level = level
 	sub.Children = []*BSUnicastEvent{}
 	ue.Children = append(ue.Children, &sub)
-	sub.Payload = ue.Payload
 	return &sub
 }
 
@@ -127,12 +150,14 @@ func (ue *BSUnicastEvent) String() string {
 func (ue *BSUnicastEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId,
-		pb.MessageType_UNICAST, ue.TargetKey, nil, true)
-	var cpeers []*pb.Peer
+		pb.MessageType_UNICAST, ue.Author(), ue.AuthorSign(), ue.AuthorPubKey(),
+		ue.TargetKey, nil)
+
+	var peers []*pb.Peer
 	for _, pe := range ue.Path {
-		cpeers = append(cpeers, pe.Node.Encode())
+		peers = append(peers, pe.Node.Encode())
 	}
-	ret.Data.CandidatePeers = cpeers
+	ret.Data.Path = peers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)
 	ret.Data.Record = &pb.Record{Value: ue.Payload}
 	return ret

@@ -8,6 +8,9 @@ import (
 )
 
 type Event interface {
+	Author() Node
+	AuthorSign() []byte
+	AuthorPubKey() []byte
 	Sender() Node
 	SetSender(Node)
 	Receiver() Node
@@ -24,12 +27,27 @@ type Event interface {
 }
 
 type AbstractEvent struct {
-	sender     Node
-	receiver   Node
-	sendTime   int64
-	vTime      int64
-	isVerified bool
-	isRequest  bool
+	author       Node // the origin (creator) of this event.
+	authorSign   []byte
+	authorPubKey []byte
+	sender       Node
+	receiver     Node
+	sendTime     int64
+	vTime        int64
+	isVerified   bool
+	isRequest    bool
+}
+
+func (ev *AbstractEvent) Author() Node {
+	return ev.author
+}
+
+func (ev *AbstractEvent) AuthorSign() []byte {
+	return ev.authorSign
+}
+
+func (ev *AbstractEvent) AuthorPubKey() []byte {
+	return ev.authorPubKey
 }
 
 func (ev *AbstractEvent) Sender() Node {
@@ -80,7 +98,11 @@ func (ev *AbstractEvent) IsRequest() bool {
 	return ev.isRequest
 }
 
-func NewEvent() *AbstractEvent {
+func NewEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractEvent {
+	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
+}
+
+func NewEventNoAuthor() *AbstractEvent {
 	return &AbstractEvent{sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
 }
 
@@ -112,16 +134,12 @@ type AsyncJobEvent struct {
 //return ev
 //}
 
-func NewSchedEvent() *AbstractSchedEvent {
-	return &AbstractSchedEvent{AbstractEvent: *NewEvent(), job: nil, isCanceled: false}
+func NewSchedEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractSchedEvent {
+	return &AbstractSchedEvent{AbstractEvent: *NewEvent(author, authorSign, authorPubKey), job: nil, isCanceled: false}
 }
 
 func NewSchedEventWithJob(job func()) *AbstractSchedEvent {
-	return &AbstractSchedEvent{AbstractEvent: *NewEvent(), job: job, isCanceled: false}
-}
-
-func NewAsyncJobEvent(job func(chan bool)) *AsyncJobEvent {
-	return &AsyncJobEvent{AbstractSchedEvent: *NewSchedEvent(), asyncJob: job}
+	return &AbstractSchedEvent{AbstractEvent: *NewEventNoAuthor(), job: job, isCanceled: false}
 }
 
 func (aj *AsyncJobEvent) Run(node Node) {

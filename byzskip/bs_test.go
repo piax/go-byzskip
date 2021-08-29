@@ -128,7 +128,7 @@ func setupNodes(num int, useQuic bool) []*BSNode {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
-	time.Sleep(time.Duration(10) * time.Second)
+	//time.Sleep(time.Duration(10) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
