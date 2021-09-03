@@ -44,6 +44,7 @@ const (
 	J_RECUR
 	J_ITER
 	J_ITER_P
+	J_ITER_EV
 )
 
 const (
@@ -226,10 +227,28 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
 		}
+	case J_ITER_EV:
+		first := nodes[0:bs.K]
+		last := nodes[bs.K:]
+		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		nodes := append(first, last...)
+		err := JoinAllByIterative(nodes)
+		if err != nil {
+			fmt.Printf("join failed:%s\n", err)
+		}
 	}
 	if bak {
 		FailureType = F_COLLAB_AFTER
 	}
+	ncount := 0
+	fcount := 0
+	for _, n := range NormalList {
+		c, f := CountTableEntries(n)
+		ncount += c
+		fcount += f
+	}
+	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
+
 	return nodes
 }
 
@@ -249,6 +268,55 @@ func isFaultySet(nodes []*bs.BSNode) bool {
 	}
 	// all faulty nodes!
 	return true
+}
+
+func JoinAllByIterative(nodes []*bs.BSNode) error {
+	index := 0 // introducer index
+	sumMsgs := 0
+	count := 0
+	prev := 0
+	ayame.SecureKeyMV = false // no authentication
+	for i, n := range nodes {
+		if index != i {
+			localn := n
+			locali := i
+
+			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
+
+				if localn.IsFailure {
+					ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
+					JoinedAdversaryList = append(JoinedAdversaryList, localn)
+					for _, p := range JoinedAdversaryList {
+						if !p.Equals(localn) {
+							ptable, pok := p.RoutingTable.(*AdversaryRoutingTable)
+							if pok {
+								ptable.AddAdversarial(localn)
+								ntable, nok := localn.RoutingTable.(*AdversaryRoutingTable)
+								if nok {
+									ntable.AddAdversarial(p)
+								}
+							}
+						}
+					}
+				}
+
+				localn.JoinAsync(context.TODO(), nodes[index])
+				// need to wait until function end or channel waiting status
+				count++
+				percent := 100 * count / len(nodes)
+				if percent/10 != prev {
+					fmt.Printf("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+				}
+				prev = percent / 10
+			}), int64(locali*1000))
+		}
+	}
+	ayame.GlobalEventExecutor.Sim(int64(len(nodes)*2000), true)
+	ayame.GlobalEventExecutor.AwaitFinish()
+	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
+	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
+	return nil
 }
 
 func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
@@ -308,15 +376,6 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
 
-	ncount := 0
-	fcount := 0
-	for _, n := range NormalList {
-		c, f := CountTableEntries(n)
-		ncount += c
-		fcount += f
-	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
-
 	return nil
 }
 
@@ -366,6 +425,7 @@ func FastJoinAllByLookup(nodes []*bs.BSNode) error {
 	sumCandidates := 0
 	for i, n := range nodes {
 		if n.IsFailure {
+			ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
 			for _, p := range JoinedAdversaryList {
 				if !p.Equals(n) {
@@ -402,15 +462,6 @@ func FastJoinAllByLookup(nodes []*bs.BSNode) error {
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
 	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
-
-	ncount := 0
-	fcount := 0
-	for _, n := range NormalList {
-		c, f := CountTableEntries(n)
-		ncount += c
-		fcount += f
-	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
 
 	return nil
 }
@@ -466,12 +517,12 @@ func main() {
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	joinType = flag.String("joinType", "iter-ev", "join type {cheat|recur|iter|iter-p|iter-pp}")
 	keyIssuerType = flag.String("issuerType", "asis", "issuer type (type-param) type={shuffle|random|asis}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
-	useTableIndex = flag.Bool("index", false, "use table index to get candidates")
+	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
 	tableLimitMargin = flag.Int("margin", 0, "num of additional candidates beyond table limit")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
@@ -508,6 +559,8 @@ func main() {
 		JoinType = J_CHEAT
 	case "recur":
 		JoinType = J_RECUR
+	case "iter-ev":
+		JoinType = J_ITER_EV
 	case "iter":
 		JoinType = J_ITER
 	case "iter-p":

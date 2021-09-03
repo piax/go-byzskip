@@ -11,6 +11,30 @@ import (
 	ast "github.com/stretchr/testify/assert"
 )
 
+func TestSim(t *testing.T) {
+	numberOfPeers := 32
+	peers := make([]*bs.BSNode, numberOfPeers)
+	for i := 0; i < numberOfPeers; i++ {
+		peers[i] = bs.NewSimNode(ayame.IntKey(i), ayame.NewMembershipVector(2))
+	}
+
+	err := JoinAllByIterative(peers)
+	if err != nil {
+		fmt.Printf("join failed:%s\n", err)
+	}
+
+	localPeers := make([]*bs.BSNode, numberOfPeers)
+	for i := 0; i < numberOfPeers; i++ {
+		localPeers[i] = bs.NewBSNode(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewBSRoutingTable, false)
+	}
+	FastJoinAllByCheat(localPeers)
+	for i := 1; i < numberOfPeers; i++ {
+		//fmt.Printf("cheat key=%s\n%s\n", localPeers[i].Key(), localPeers[i].RoutingTable)
+		ast.Equal(t, bs.RoutingTableEquals(peers[i].RoutingTable, localPeers[i].RoutingTable), true, fmt.Sprintf("routing table real=%s and cheat=%s equals", peers[i].RoutingTable, localPeers[i].RoutingTable))
+	}
+
+}
+
 func TestP2P(t *testing.T) {
 	numberOfPeers := 100
 	peers := make([]*bs.BSNode, numberOfPeers)
@@ -35,7 +59,7 @@ func TestP2P(t *testing.T) {
 	time.Sleep(time.Duration(10) * time.Second)
 
 	for i := 1; i < numberOfPeers; i++ {
-		fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
+		//fmt.Printf("key=%s\n%s\n", peers[i].Key(), peers[i].RoutingTable)
 	}
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)

@@ -120,8 +120,8 @@ func ConvertTableIndexList(idxs []*pb.TableIndex) []*TableIndex {
 	return ret
 }
 
-func ConvertFindNodeRequest(req *pb.FindNodeRequest) *FindNodeRequest {
-	return &FindNodeRequest{
+func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
+	return &NeighborRequest{
 		Key:               p2p.NewKey(req.Key),
 		MV:                ayame.NewMembershipVectorFromBinary(req.MV),
 		NeighborListIndex: ConvertTableIndexList(req.NeighborListIndex),
@@ -141,7 +141,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetSender(p)
 		ev.SetVerified(valid) // verification conscious
 	case pb.MessageType_FIND_NODE:
-		var req *FindNodeRequest = nil
+		var req *NeighborRequest = nil
 		if mes.Data.Req != nil {
 			req = ConvertFindNodeRequest(mes.Data.Req)
 		}

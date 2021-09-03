@@ -44,8 +44,8 @@ func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVecto
 }
 
 // get neighbor candidates that belongs to the same ring and satisfies index
-func (table *AdversaryRoutingTable) Neighbors(req *bs.FindNodeRequest) []bs.KeyMV {
-	if FailureType == F_COLLAB_AFTER {
+func (table *AdversaryRoutingTable) Neighbors(req *bs.NeighborRequest) []bs.KeyMV {
+	if FailureType == F_NONE {
 		return table.normal.Neighbors(req)
 	} else {
 		// stronger attacker
@@ -54,7 +54,7 @@ func (table *AdversaryRoutingTable) Neighbors(req *bs.FindNodeRequest) []bs.KeyM
 }
 
 func (table *AdversaryRoutingTable) GetTableIndex() []*bs.TableIndex {
-	if FailureType == F_COLLAB_AFTER {
+	if FailureType == F_NONE {
 		return table.normal.GetTableIndex()
 	} else {
 		return table.adversarial.GetTableIndex()
@@ -76,7 +76,7 @@ func (table *AdversaryRoutingTable) AddAdversarial(c bs.KeyMV) {
 }
 
 func (table *AdversaryRoutingTable) GetNeighborLists() []*bs.NeighborList {
-	if FailureType == F_COLLAB_AFTER {
+	if FailureType == F_NONE {
 		return table.normal.GetNeighborLists()
 	} else {
 		return table.adversarial.GetNeighborLists()

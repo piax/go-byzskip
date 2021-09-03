@@ -11,16 +11,7 @@ import (
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
-type FindNodeRequest struct {
-	// requester's key
-	Key ayame.Key
-	// requester's Membership Vector. can be nil.
-	MV                *ayame.MembershipVector
-	ClosestIndex      *TableIndex
-	NeighborListIndex []*TableIndex
-}
-
-func (req *FindNodeRequest) Encode() *pb.FindNodeRequest {
+func (req *NeighborRequest) Encode() *pb.FindNodeRequest {
 	var idxs []*pb.TableIndex
 	for _, idx := range req.NeighborListIndex {
 		idxs = append(idxs, idx.Encode())
@@ -59,10 +50,8 @@ func (idx *TableIndex) Encode() *pb.TableIndex {
 
 type BSFindNodeEvent struct {
 	isResponse bool
-	req        *FindNodeRequest
-	//	TargetKey  ayame.Key
-	//	TargetMV   *ayame.MembershipVector
-	MessageId string
+	req        *NeighborRequest
+	MessageId  string
 	// level in response
 	level int
 	// closest nodes in response
@@ -75,7 +64,7 @@ type BSFindNodeEvent struct {
 func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
 		isResponse:         false,
-		req:                &FindNodeRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
+		req:                &NeighborRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
 		MessageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.SetRequest(true)
@@ -126,6 +115,10 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 func (ue *BSFindNodeEvent) Run(ctx context.Context, node ayame.Node) {
 	n := node.(*BSNode)
 	n.handleFindNode(ctx, ue)
+}
+
+func (ue *BSFindNodeEvent) IsResponse() bool {
+	return ue.isResponse
 }
 
 func (ue *BSFindNodeEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {

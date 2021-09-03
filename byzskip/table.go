@@ -71,13 +71,22 @@ type NeighborList struct {
 	level     int
 }
 
+type NeighborRequest struct {
+	// requester's key
+	Key ayame.Key
+	// requester's Membership Vector. can be nil.
+	MV                *ayame.MembershipVector
+	ClosestIndex      *TableIndex
+	NeighborListIndex []*TableIndex
+}
+
 type RoutingTable interface {
 	// access entries
 
 	// Returns k closest and its level
 	KClosest(key ayame.Key) ([]KeyMV, int)
 	// Returns requested neighbor entry list
-	Neighbors(req *FindNodeRequest) []KeyMV
+	Neighbors(req *NeighborRequest) []KeyMV
 	// Returns all disjoint neighbor entry list.
 	// If includeSelf is true, returns a list which include owner entry.
 	// If sorted is true, returns a sorted list in order of closeness.
@@ -126,10 +135,10 @@ func NodesEquals(a, b []KeyMV) bool {
 func RoutingTableEquals(t1 RoutingTable, t2 RoutingTable) bool {
 	for i := 0; i < len(t1.GetNeighborLists()); i++ {
 		// terminate
-		if len(t1.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t1.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
+		if i != 0 && len(t1.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t1.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
 			return true
 		}
-		if len(t2.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t2.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
+		if i != 0 && len(t2.GetNeighborLists()[i].Neighbors[LEFT]) == 0 && len(t2.GetNeighborLists()[i].Neighbors[RIGHT]) == 0 {
 			return true
 		}
 		if !NodesEquals(t1.GetNeighborLists()[i].Neighbors[LEFT], t2.GetNeighborLists()[i].Neighbors[LEFT]) {
@@ -169,8 +178,8 @@ func (table *SkipRoutingTable) KClosest(key ayame.Key) ([]KeyMV, int) {
 	return ret, level
 }
 
-func (table *SkipRoutingTable) GetFindNodeRequest(k int) *FindNodeRequest {
-	return &FindNodeRequest{
+func (table *SkipRoutingTable) GetFindNodeRequest(k int) *NeighborRequest {
+	return &NeighborRequest{
 		Key:               table.km.Key(),
 		MV:                table.km.MV(),
 		NeighborListIndex: table.GetTableIndex(),
@@ -244,7 +253,7 @@ func (table *SkipRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []Key
 	return ret
 }
 
-func (req *FindNodeRequest) findIndexWithLevel(level int) *TableIndex {
+func (req *NeighborRequest) findIndexWithLevel(level int) *TableIndex {
 	for _, ti := range req.NeighborListIndex {
 		if ti.Level == level {
 			return ti
@@ -253,7 +262,7 @@ func (req *FindNodeRequest) findIndexWithLevel(level int) *TableIndex {
 	return nil
 }
 
-func (rts *NeighborList) concatenateWithIndex(req *FindNodeRequest, includeSelf bool) []KeyMV {
+func (rts *NeighborList) concatenateWithIndex(req *NeighborRequest, includeSelf bool) []KeyMV {
 	ret := []KeyMV{}
 	idx := req.findIndexWithLevel(rts.level)
 	for _, n := range rts.Neighbors[LEFT] {
@@ -282,7 +291,7 @@ func (rts *NeighborList) concatenateWithIndex(req *FindNodeRequest, includeSelf 
 	return ret
 }
 
-func (table *SkipRoutingTable) Neighbors(req *FindNodeRequest) []KeyMV {
+func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(req.MV)
 	ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)

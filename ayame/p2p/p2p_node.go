@@ -216,16 +216,15 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 				mes.Data.SenderAppData = ""          // ensure empty
 				mes.Data.Path = nil                  // backup
 				mes.Data.Timestamp = 0               // ignored
-				ayame.Log.Debugf("%s: AUTHOR %s, sign msg=%v", n, n.Id(), mes.Data)
+				//ayame.Log.Debugf("%s: AUTHOR %s, sign msg=%v", n, n.Id(), mes.Data)
 				mes.Data.AuthorSign, _ = n.signProtoMessage(mes.Data)
-				ayame.Log.Debugf("AUTHOR %s signed: %v", n, mes.Data.AuthorSign)
+				//ayame.Log.Debugf("AUTHOR %s signed: %v", n, mes.Data.AuthorSign)
 				mes.Data.SenderAppData = senderData // restore
 				mes.Data.Path = path                // restore
 				mes.Data.Timestamp = ts
 			}
 		} else { // not author
-			ayame.Log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
-			//ayame.Log.Debugf("NOT AUTHOR. NO SIGN author=%s", mes.Data.Author.Id)
+			//ayame.Log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
 		}
 		if ayame.SecureKeyMV {
 			mes.SenderSign, _ = n.signProtoMessage(mes)
@@ -280,7 +279,7 @@ func (n *P2PNode) authenticateMessage(message *p2p.Message, s network.Stream) bo
 	data.Path = nil
 
 	// marshall data without the signature to protobufs3 binary format
-	ayame.Log.Debugf("%s: verifing author message=%v", n, data)
+	//ayame.Log.Debugf("%s: verifing author message=%v", n, data)
 	bin, err := proto.Marshal(data)
 	if err != nil {
 		ayame.Log.Error(err, "failed to marshal pb message")
@@ -379,7 +378,7 @@ func (n *P2PNode) verifyData(data []byte, signature []byte, peerId peer.ID, pubK
 
 	// verify that message author node id matches the provided node public key
 	if idFromKey != peerId {
-		ayame.Log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
+		//ayame.Log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
 		return false
 	}
 

@@ -53,9 +53,12 @@ func (n *LocalNode) Close() {
 }
 
 func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) {
-	ev.SetSender(an)
+	//ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 }
+
+//type yieldCh chan struct{}
+//var YieldCh yieldCh
 
 func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	ev.SetSender(an)

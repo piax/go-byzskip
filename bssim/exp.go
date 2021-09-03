@@ -29,12 +29,12 @@ func expUnicastRecursive(trials int) {
 		dst := NormalList[rand.Intn(len(NormalList))]
 		msg := bs.NewBSUnicastEventNoAuthor(src, NextId(), ayame.MembershipVectorSize, dst.Key(), []byte("hello")) // starts with the max level.
 		msgs = append(msgs, msg)
-		ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
+		ayame.Log.Debugf("nodes=%d, id=%s,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
 		ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
 		//nodes[src].SendEvent(msg)
 		// time out after 200ms
 		ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-			ayame.Log.Debugf("id=%d,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
+			ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
 			msg.Root.Channel <- true
 		}), int64(i*1000)+100)
 	}
@@ -76,10 +76,10 @@ func expUnicastEachRecursive() {
 			dst := NormalList[rand.Intn(len(NormalList))]
 			msg := bs.NewBSUnicastEventNoAuthor(src, NextId(), ayame.MembershipVectorSize, dst.Key(), []byte("hello")) // starts with the max level.
 			msgs = append(msgs, msg)
-			ayame.Log.Debugf("nodes=%d, id=%d,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
+			ayame.Log.Debugf("nodes=%d, id=%s,src=%s, dst=%s\n", len(NormalList), msg.MessageId, src, dst)
 			ayame.GlobalEventExecutor.RegisterEvent(msg, int64(count*1000))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				ayame.Log.Debugf("id=%d,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
+				ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
 				msg.Root.Channel <- true
 			}), int64(count*1000)+100)
 		}

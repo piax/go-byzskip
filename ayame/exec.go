@@ -29,7 +29,9 @@ func (ee *EventExecutor) Reset() {
 
 func (ee *EventExecutor) RunForever() {
 	ee.running = true
-	for ee.scheduled.Len() > 0 && ee.running {
+	len := ee.scheduled.Len()
+
+	for len > 0 && ee.running {
 		sev := heap.Pop(&ee.scheduled).(SchedEvent)
 		if sev.Receiver() != nil { // not a timeout event
 			ee.EventCount++
@@ -39,7 +41,9 @@ func (ee *EventExecutor) RunForever() {
 			n := sev.Receiver()
 			if sev.IsRequest() {
 				resp := sev.ProcessRequest(context.TODO(), n)
-				n.Send(context.TODO(), resp, false)
+				resp.SetSender(n)
+				resp.SetReceiver(sev.Sender())
+				ee.RegisterEvent(resp, NETWORK_LATENCY)
 			} else {
 				sev.Run(context.TODO(), n)
 			}
@@ -47,6 +51,7 @@ func (ee *EventExecutor) RunForever() {
 		if ee.finishTime <= ee.time {
 			ee.running = false
 		}
+		len = ee.scheduled.Len()
 	}
 	ee.finishCh <- true
 }
@@ -54,7 +59,6 @@ func (ee *EventExecutor) RunForever() {
 func (ee *EventExecutor) RegisterEvent(ev SchedEvent, latency int64) error {
 	ev.SetSendTime(ee.time)
 	ev.SetTime(ee.time + latency)
-	//ee.scheduled.Push(ev)
 	heap.Push(&ee.scheduled, ev)
 	return nil
 }

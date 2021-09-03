@@ -45,7 +45,7 @@ func (table *StopRoutingTable) AddNeighborList(s *bs.NeighborList) {
 	// do nothing.
 }
 
-func (table *StopRoutingTable) Neighbors(req *bs.FindNodeRequest) []bs.KeyMV {
+func (table *StopRoutingTable) Neighbors(req *bs.NeighborRequest) []bs.KeyMV {
 	return []bs.KeyMV{}
 }
 

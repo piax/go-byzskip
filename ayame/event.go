@@ -24,6 +24,7 @@ type Event interface {
 	IsVerified() bool
 	SetRequest(bool)
 	IsRequest() bool
+	IsResponse() bool
 }
 
 type AbstractEvent struct {
@@ -98,6 +99,10 @@ func (ev *AbstractEvent) IsRequest() bool {
 	return ev.isRequest
 }
 
+func (ev *AbstractEvent) IsResponse() bool {
+	return false
+}
+
 func NewEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractEvent {
 	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
 }
@@ -150,6 +155,7 @@ func (aj *AsyncJobEvent) Run(node Node) {
 
 func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
 	se.Job()()
+	//n.Yield(ctx)
 }
 
 func (se *AbstractSchedEvent) ProcessRequest(ctx context.Context, n Node) SchedEvent {
