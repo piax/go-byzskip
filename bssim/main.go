@@ -223,7 +223,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		last := nodes[bs.K:]
 		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
 		nodes := append(first, last...)
-		err := FastJoinAllByLookup(nodes)
+		err := FastJoinAllByInteractive(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
 		}
@@ -272,10 +272,11 @@ func isFaultySet(nodes []*bs.BSNode) bool {
 
 func JoinAllByIterative(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
-	sumMsgs := 0
 	count := 0
 	prev := 0
 	ayame.SecureKeyMV = false // no authentication
+	bs.USE_TABLE_INDEX = *useTableIndex
+	bs.ResponseCount = 0
 	for i, n := range nodes {
 		if index != i {
 			localn := n
@@ -284,7 +285,6 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 
 				if localn.IsFailure {
-					ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
 					JoinedAdversaryList = append(JoinedAdversaryList, localn)
 					for _, p := range JoinedAdversaryList {
 						if !p.Equals(localn) {
@@ -314,8 +314,8 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 	ayame.GlobalEventExecutor.Sim(int64(len(nodes)*2000), true)
 	ayame.GlobalEventExecutor.AwaitFinish()
 	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
-	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
+	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(bs.ResponseCount)/float64(count))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
 	return nil
 }
 
@@ -415,7 +415,7 @@ func CountTableEntries(node *bs.BSNode) (int, int) {
 	return len(lst), fcount
 }
 
-func FastJoinAllByLookup(nodes []*bs.BSNode) error {
+func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
 	sumMsgs := 0
 	sumLMsgs := 0

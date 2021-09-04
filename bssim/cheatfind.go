@@ -255,6 +255,7 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 			} else {
 				curNeighbors, curLevel, curCandidates = FastFindNode(next, target)
 			}
+			respCount += len(curNeighbors)
 			respCount += len(curCandidates)
 			ayame.Log.Debugf("queried %d, neighbors for %d = %s @ level %d, candidates=%s\n", next.Key(), target.Key(), ayame.SliceString(curNeighbors), curLevel, ayame.SliceString(curCandidates))
 			//ayame.Log.Debugf("queried %d, candidates for %d = %s\n", next.Key(), target.Key(), ayame.SliceString(curCandidates))

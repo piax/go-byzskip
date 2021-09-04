@@ -325,6 +325,8 @@ func (n *BSNode) Join(ctx context.Context, addr string) {
 	n.JoinWithNode(ctx, introducer)
 }
 
+var ResponseCount int // for sim
+
 func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 	joinCtx, cancel := context.WithTimeout(ctx, time.Duration(JOIN_TIMEOUT)*time.Second) // all request should be ended within
 
@@ -718,9 +720,11 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 		if proc.ch != nil { // sync
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.ch <- &FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
-			ayame.Log.Debugf("find node notified from=%v\n", ue.Sender().(*BSNode))
 		} else { // async
 			n.processResponse(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+			ResponseCount += (len(ue.closers) + len(ue.candidates))
+			ayame.Log.Debugf("%d", ResponseCount)
+
 			if !n.allQueried() {
 				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
 				n.sendNextParalellRequest(ctx, 1)
