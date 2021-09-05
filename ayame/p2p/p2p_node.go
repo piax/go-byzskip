@@ -48,7 +48,7 @@ const (
 	sendMessageProto = "/msg/0.0.0"
 )
 
-var USE_QUIC = true
+var USE_QUIC = true // if false, TCP.
 
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
@@ -132,9 +132,9 @@ func (n *P2PNode) Encode() *p2p.Peer {
 	}
 }
 
-func (n *P2PNode) Close() {
-	n.Host.Close()
+func (n *P2PNode) Close() error {
 	ayame.Log.Debugf("%s's host is closed\n", n.Key())
+	return n.Host.Close()
 }
 
 func (n *P2PNode) SetChild(c ayame.Node) {

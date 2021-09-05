@@ -33,6 +33,10 @@ func (table *StopRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []
 	return []bs.KeyMV{}
 }
 
+func (table *StopRoutingTable) HasSufficientNeighbors() bool {
+	return true
+}
+
 func (table *StopRoutingTable) Add(c bs.KeyMV) {
 	// do nothing.
 }

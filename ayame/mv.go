@@ -53,12 +53,12 @@ func NewMembershipVectorFromBinary(bin []byte) *MembershipVector {
 }
 
 func (mv *MembershipVector) CommonPrefixLength(another *MembershipVector) int {
-	for i := 0; i < MembershipVectorSize; i++ {
+	for i := 0; i < len(mv.Val); i++ {
 		if mv.Val[i] != another.Val[i] {
 			return i
 		}
 	}
-	return MembershipVectorSize
+	return len(mv.Val)
 }
 
 // returns the byte representation.

@@ -52,6 +52,9 @@ func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVecto
 	authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*BSNode, error) {
 	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage, validator)
+	if err != nil {
+		return nil, err
+	}
 	p2pNode.Cert = authorizer(p2pNode.Id(), key, mv)
 
 	//p2pNode, err := p2p.NewNodeWithAuth(context.TODO(), locator, key, mv, ConvertMessage, authorizer)
@@ -105,9 +108,17 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 }
 
 func ConvertTableIndex(idx *pb.TableIndex) *TableIndex {
+	var minKey ayame.Key = nil
+	if idx.Min != nil {
+		minKey = p2p.NewKey(idx.Min)
+	}
+	var maxKey ayame.Key = nil
+	if idx.Max != nil {
+		maxKey = p2p.NewKey(idx.Max)
+	}
 	return &TableIndex{
-		Min:   p2p.NewKey(idx.Min),
-		Max:   p2p.NewKey(idx.Max),
+		Min:   minKey,
+		Max:   maxKey,
 		Level: int(idx.Level),
 	}
 }

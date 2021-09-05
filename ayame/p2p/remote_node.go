@@ -55,8 +55,13 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 	}
 }
 
-func (n *RemoteNode) Close() {
+func (n *RemoteNode) Close() error {
 	// Nothing to do
+	return nil
+}
+
+func (n *RemoteNode) Addrs() []ma.Multiaddr {
+	return n.addrs
 }
 
 func Addresses(addrs [][]byte) []ma.Multiaddr {

@@ -72,6 +72,27 @@ func TestSorted(t *testing.T) {
 	fmt.Println(ayame.SliceString(rslt))
 }
 
+func TestSufficient(t *testing.T) {
+	InitK(2)
+	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)})
+	kms := []*IntKeyMV{}
+	for i := 2; i < 100; i++ {
+		km := &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)}
+		kms = append(kms, km)
+		rt.Add(km)
+	}
+	fmt.Println(rt)
+	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
+	rt.Delete(ayame.IntKey(2))
+	fmt.Println(rt)
+	ast.Equal(t, rt.HasSufficientNeighbors(), false, "expected to have not sufficient neighbors")
+	for _, a := range kms[1:] {
+		rt.Add(a)
+	}
+	fmt.Println(rt)
+	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
+}
+
 func TestTicker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1)*time.Second)
 	go func() {
@@ -101,7 +122,7 @@ func addr(port int, quic bool) string {
 	}
 }
 
-func setupNodes(num int, useQuic bool) []*BSNode {
+func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
 	InitK(4)
 	numberOfPeers := num
@@ -109,7 +130,9 @@ func setupNodes(num int, useQuic bool) []*BSNode {
 	for i := 0; i < numberOfPeers; i++ {
 		keys = append(keys, i)
 	}
-	rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+	if shuffle {
+		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+	}
 	authFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
 		bin := auth.Authorize(id, key, mv)
 		return bin
@@ -128,7 +151,7 @@ func setupNodes(num int, useQuic bool) []*BSNode {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
-	time.Sleep(time.Duration(10) * time.Second)
+	//time.Sleep(time.Duration(10) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
@@ -143,13 +166,24 @@ func setupNodes(num int, useQuic bool) []*BSNode {
 }
 
 func TestJoin(t *testing.T) {
-	numberOfPeers := 100
-	setupNodes(numberOfPeers, true)
+	numberOfPeers := 32
+	setupNodes(numberOfPeers, true, true)
+}
+
+func TestFix(t *testing.T) { // 30 sec long test
+	numberOfPeers := 32
+	periodicBootstrapInterval = 20 * time.Second
+	peers := setupNodes(numberOfPeers, false, true)
+	time.Sleep(10 * time.Second)
+	peers[2].Close()
+	peers[20].Close()
+	time.Sleep(30 * time.Second)
+	ast.Equal(t, false, ContainsKey(ayame.IntKey(2), ksToNs(peers[1].RoutingTable.AllNeighbors(false, true))), "should not contain deleted key 2")
 }
 
 func TestLookup(t *testing.T) {
 	numberOfPeers := 100
-	peers := setupNodes(numberOfPeers, true)
+	peers := setupNodes(numberOfPeers, true, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].parent.(*p2p.P2PNode).InCount = 0
@@ -174,7 +208,7 @@ func TestLookup(t *testing.T) {
 
 func TestUnicast(t *testing.T) {
 	numberOfPeers := 32
-	peers := setupNodes(numberOfPeers, true)
+	peers := setupNodes(numberOfPeers, true, true)
 	ayame.Log.Debugf("------- UNICAST STARTS ---------")
 
 	lock := sync.Mutex{}
@@ -226,7 +260,7 @@ func TestUnicast(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	numberOfPeers := 16
-	peers := setupNodes(numberOfPeers, true)
+	peers := setupNodes(numberOfPeers, true, true)
 	ayame.Log.Debugf("------- Closing nodes ---------")
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
@@ -260,5 +294,5 @@ func Example() {
 func TestTCP(t *testing.T) {
 	numberOfPeers := 100
 	p2p.USE_QUIC = false
-	setupNodes(numberOfPeers, false)
+	setupNodes(numberOfPeers, true, false)
 }

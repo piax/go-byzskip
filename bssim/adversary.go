@@ -42,6 +42,10 @@ func (table *AdversaryRoutingTable) AllNeighbors(includeSelf bool, sorted bool) 
 	return table.normal.AllNeighbors(includeSelf, sorted)
 }
 
+func (table *AdversaryRoutingTable) HasSufficientNeighbors() bool {
+	return true
+}
+
 // get all disjoint entries
 func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []bs.KeyMV {
 	if FailureType == F_COLLAB_AFTER {

@@ -78,21 +78,21 @@ type FloatKey float64
 
 func (t FloatKey) Less(elem interface{}) bool {
 	if v, ok := elem.(FloatKey); ok {
-		return int(t) < int(v)
+		return float64(t) < float64(v)
 	}
 	return false
 }
 
 func (t FloatKey) Equals(elem interface{}) bool {
 	if v, ok := elem.(FloatKey); ok {
-		return int(t) == int(v)
+		return float64(t) == float64(v)
 	}
 	return false
 }
 
 func (t FloatKey) LessOrEquals(elem interface{}) bool {
 	if v, ok := elem.(FloatKey); ok {
-		return int(t) <= int(v)
+		return float64(t) <= float64(v)
 	}
 	return false
 }
@@ -114,4 +114,42 @@ func NewFloatKeyFromBytes(arg []byte) Key {
 	bits := binary.LittleEndian.Uint64(arg)
 	float := math.Float64frombits(bits)
 	return FloatKey(float)
+}
+
+type StringKey string
+
+func (t StringKey) Less(elem interface{}) bool {
+	if v, ok := elem.(StringKey); ok {
+		return t < v
+	}
+	return false
+}
+
+func (t StringKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(StringKey); ok {
+		return t == v
+	}
+	return false
+}
+
+func (t StringKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(StringKey); ok {
+		return t <= v
+	}
+	return false
+}
+
+func (t StringKey) String() string {
+	return string(t)
+}
+
+func (t StringKey) Encode() *p2p.Key {
+	bytes := []byte(t)
+	return &p2p.Key{
+		Type: p2p.KeyType_STRING,
+		Body: bytes}
+}
+
+func NewStringKeyFromBytes(arg []byte) Key {
+	return StringKey(string(arg))
 }

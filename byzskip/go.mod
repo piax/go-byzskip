@@ -7,6 +7,7 @@ replace github.com/piax/go-ayame/ayame => ../ayame
 replace github.com/piax/go-ayame/authority => ../authority
 
 require (
+	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/libp2p/go-libp2p v0.14.5-0.20210804000418-989fba5d3203 // indirect
 	github.com/libp2p/go-libp2p-core v0.9.0
 	github.com/libp2p/go-libp2p-noise v0.2.2 // indirect

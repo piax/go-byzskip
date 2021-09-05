@@ -26,7 +26,7 @@ func ksToNs(lst []bs.KeyMV) []*bs.BSNode {
 
 // called by remote
 func FastFindKey(node *bs.BSNode, key ayame.Key) ([]*bs.BSNode, int) {
-	nb, lv := node.RoutingTable.KClosest(key)
+	nb, lv := node.RoutingTable.KClosestWithKey(key)
 	return ksToNs(nb), lv
 }
 
@@ -42,7 +42,7 @@ func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.
 func FastFindNodeWithRequest(node *bs.BSNode, target *bs.BSNode, req *bs.NeighborRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
 	can := node.RoutingTable.Neighbors(req)
 	//nb, lv := node.GetClosestNodes(req.Key)
-	nb, lv := node.RoutingTable.KClosestWithIndex(req)
+	nb, lv := node.RoutingTable.KClosest(req)
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
 	node.RoutingTable.Add(target)
 	//ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n updated:\n %s\n", node, target.key, ayame.SliceString(nb), lv,

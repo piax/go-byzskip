@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
@@ -11,10 +12,11 @@ type Node interface {
 	Key() Key
 	MV() *MembershipVector
 	String() string
+	Addrs() []ma.Multiaddr
 	Id() peer.ID // ID as an Endpoint
 	Send(ctx context.Context, ev SchedEvent, sign bool)
 	Encode() *pb.Peer
-	Close()
+	Close() error
 }
 
 var SecureKeyMV bool = true
@@ -48,8 +50,13 @@ func (n *LocalNode) Encode() *pb.Peer {
 	return nil // empty result
 }
 
-func (n *LocalNode) Close() {
+func (n *LocalNode) Addrs() []ma.Multiaddr {
+	return nil // empty result
+}
+
+func (n *LocalNode) Close() error {
 	// nothing to do
+	return nil
 }
 
 func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) {

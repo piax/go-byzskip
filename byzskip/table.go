@@ -94,6 +94,8 @@ type RoutingTable interface {
 	// If sorted is true, returns a sorted list in order of closeness.
 	AllNeighbors(includeSelf bool, sorted bool) []KeyMV
 
+	HasSufficientNeighbors() bool
+
 	// Deprecated: should use KClosest with request including key
 	KClosestWithKey(key ayame.Key) ([]KeyMV, int)
 	// Deprecated: should use Neighbors with request including mv
@@ -247,7 +249,7 @@ func (table *SkipRoutingTable) GetTableIndex() []*TableIndex {
 			last := len(singleLevel.Neighbors[RIGHT]) - 1
 			max = singleLevel.Neighbors[RIGHT][last].Key()
 		}
-		if min != nil || max != nil {
+		if min != nil && max != nil { // both must be specified
 			ret = append(ret, &TableIndex{Min: min, Max: max, Level: singleLevel.level})
 		}
 	}
@@ -842,12 +844,8 @@ func lessThanExists(lst []int, x int) bool {
 
 // Returns negative value if all
 func (rts *NeighborList) satisfactionIndex(d int) int {
-	//	if len(rts.Neighbors[d]) > 6 {
-	//		ayame.Log.Debugf("%d\n", len(rts.Neighbors[d]))
-	//	}
 	lst := rts.Neighbors[d]
 	counts := make([]int, ALPHA)
-	//nextDigit := rts.owner.mv.Val[rts.level]
 	for i, n := range lst {
 		digit := n.MV().Val[rts.level]
 		counts[digit]++
@@ -860,6 +858,29 @@ func (rts *NeighborList) satisfactionIndex(d int) int {
 
 func (rts *NeighborList) hasSufficientNodes(d int) bool {
 	return rts.satisfactionIndex(d) > 0
+}
+
+const (
+	MIN_RT_THRESHOLD = 10
+)
+
+func (table *SkipRoutingTable) HasSufficientNeighbors() bool {
+	if table.Size() < MIN_RT_THRESHOLD {
+		return false
+	}
+	for _, nl := range table.NeighborLists {
+		if !nl.hasDuplicatesInLeftsAndRights() {
+			if !nl.hasSufficientNodes(RIGHT) {
+				return false
+			}
+			if !nl.hasSufficientNodes(LEFT) {
+				return false
+			}
+		} else { // first occurance
+			return true
+		}
+	}
+	return true
 }
 
 func (table *SkipRoutingTable) ExtendRoutingTable(level int) {

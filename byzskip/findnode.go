@@ -43,9 +43,20 @@ type TableIndex struct {
 }
 
 func (idx *TableIndex) Encode() *pb.TableIndex {
+	var encodeMin *pb.Key = nil
+	min := idx.Min
+	if min != nil { // if not sufficient in LEFT, max becomes nil
+		encodeMin = idx.Min.Encode()
+	}
+	var encodeMax *pb.Key = nil
+	max := idx.Max
+	if max != nil { // if not sufficient in RIGHT, max becomes nil
+		encodeMax = idx.Max.Encode()
+	}
+
 	return &pb.TableIndex{
-		Min:   idx.Min.Encode(),
-		Max:   idx.Max.Encode(),
+		Min:   encodeMin,
+		Max:   encodeMax,
 		Level: int32(idx.Level),
 	}
 }

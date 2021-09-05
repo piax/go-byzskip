@@ -19,7 +19,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jbenet/goprocess"
+	goprocessctx "github.com/jbenet/goprocess/context"
 	"github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-ayame/ayame"
 	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 	"github.com/thoas/go-funk"
@@ -71,6 +74,9 @@ type BSNode struct {
 	seenMutex       sync.RWMutex                               // for r/w QuerySeen
 	unicastHandler  func(*BSNode, *BSUnicastEvent, bool, bool) // received event, already seen, next already on the path
 	messageReceiver func(*BSNode, *BSUnicastEvent)             // a function when received a message
+
+	proc               goprocess.Process
+	DisableFixLowPeers bool
 }
 
 func (n *BSNode) Key() ayame.Key {
@@ -79,6 +85,10 @@ func (n *BSNode) Key() ayame.Key {
 
 func (node *BSNode) Id() peer.ID { // Endpoint
 	return node.parent.Id()
+}
+
+func (node *BSNode) Addrs() []ma.Multiaddr { // Endpoint
+	return node.parent.Addrs()
 }
 
 func (node *BSNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
@@ -108,10 +118,12 @@ func (n *BSNode) Encode() *pb.Peer {
 	return n.parent.Encode()
 }
 
-func (n *BSNode) Close() {
+func (n *BSNode) Close() error {
 	n.NotifyDeletion(context.Background())
 	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
 	n.parent.Close()
+	// process close
+	return n.proc.Close()
 }
 
 type BSRoutingTable struct {
@@ -145,10 +157,12 @@ func NewBSNode(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bo
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
 		parent: parent,
 		// stats is not generated at this time
-		QuerySeen: make(map[string]int),
-		Procs:     make(map[string]*FindNodeProc),
-		IsFailure: isFailure}
+		QuerySeen:          make(map[string]int),
+		Procs:              make(map[string]*FindNodeProc),
+		IsFailure:          isFailure,
+		DisableFixLowPeers: false}
 	ret.RoutingTable = rtMaker(ret)
+
 	return ret
 }
 
@@ -320,14 +334,8 @@ func (n *BSNode) Join(ctx context.Context, addr string) {
 
 var ResponseCount int // for sim
 
-func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
+func (n *BSNode) RefreshRTWait(ctx context.Context) {
 	joinCtx, cancel := context.WithTimeout(ctx, time.Duration(JOIN_TIMEOUT)*time.Second) // all request should be ended within
-
-	n.stats = &JoinStats{
-		runningQueries: 0,
-		closest:        []*BSNode{introducer},
-		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
-
 	defer cancel()
 
 	findCh := make(chan *FindNodeResponse, 1)
@@ -362,6 +370,20 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
 		//XXX if needed
 		//time.Sleep(time.Duration(FIND_NODE_INTERVAL) * time.Second)
 		ayame.Log.Debugf("%s: join stats=%s", n.Key(), n.stats)
+	}
+}
+
+func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) {
+
+	n.stats = &JoinStats{
+		runningQueries: 0,
+		closest:        []*BSNode{introducer},
+		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
+	n.RefreshRTWait(ctx)
+
+	n.proc = goprocessctx.WithContext(ctx)
+	if !n.DisableFixLowPeers {
+		n.proc.Go(n.fixLowPeersRoutine)
 	}
 }
 
@@ -745,7 +767,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 		if USE_TABLE_INDEX {
 			candidates = ksToNs(n.RoutingTable.Neighbors(ue.req))
 			//closers, level = n.GetClosestNodes(ue.req.Key)
-			clst, lvl := n.RoutingTable.KClosestWithIndex(ue.req) // GetClosestNodes(ue.req.Key)
+			clst, lvl := n.RoutingTable.KClosest(ue.req) // GetClosestNodes(ue.req.Key)
 			closest = ksToNs(clst)
 			level = lvl
 		} else {
