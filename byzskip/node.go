@@ -272,7 +272,7 @@ const (
 	LOOKUP_TIMEOUT        = 30
 	DELNODE_TIMEOUT       = 30
 	FIND_NODE_TIMEOUT     = 10
-	FIND_NODE_PARALLELISM = 4
+	FIND_NODE_PARALLELISM = 5
 	FIND_NODE_INTERVAL    = 1
 	UNICAST_SEND_TIMEOUT  = 1
 	DELNODE_SEND_TIMEOUT  = 300 // millisecond
@@ -446,7 +446,6 @@ func (n *BSNode) processResponse(response *FindNodeResponse) {
 	for _, c := range response.candidates {
 		n.rtMutex.Lock()
 		n.RoutingTable.Add(c)
-		ayame.Log.Debugf("%s: added candidate %s", n, response.sender)
 		n.rtMutex.Unlock()
 	}
 	// XXX should append if close
@@ -742,27 +741,30 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent) ayame.SchedEvent {
 	ue := ev.(*BSFindNodeEvent)
 	//kmv := ue.Sender().(*BSNode)
-	var closers, candidates []*BSNode
+	var closest, candidates []*BSNode
 	var level int
 	if ue.req.MV == nil {
 		n.rtMutex.RLock()
-		closers, level = n.GetClosestNodes(ue.req.Key)
+		closest, level = n.GetClosestNodes(ue.req.Key)
 		n.rtMutex.RUnlock()
 	} else {
 		n.rtMutex.RLock()
 		if USE_TABLE_INDEX {
 			candidates = ksToNs(n.RoutingTable.Neighbors(ue.req))
-			closers, level = n.GetClosestNodes(ue.req.Key)
+			//closers, level = n.GetClosestNodes(ue.req.Key)
+			clst, lvl := n.RoutingTable.KClosestWithIndex(ue.req) // GetClosestNodes(ue.req.Key)
+			closest = ksToNs(clst)
+			level = lvl
 		} else {
-			closers, level, candidates = n.GetNeighborsAndCandidates(ue.req.Key, ue.req.MV)
+			closest, level, candidates = n.GetNeighborsAndCandidates(ue.req.Key, ue.req.MV)
 		}
 		n.rtMutex.RUnlock()
 	}
-	ayame.Log.Debugf("returns closers=%s, level=%d, candidates=%s\n", ayame.SliceString(closers), level, ayame.SliceString(candidates))
+	ayame.Log.Debugf("returns closest=%s, level=%d, candidates=%s\n", ayame.SliceString(closest), level, ayame.SliceString(candidates))
 	n.rtMutex.Lock()
 	n.RoutingTable.Add(ue.Sender().(*BSNode))
 	n.rtMutex.Unlock()
-	res := NewBSFindNodeResEvent(n, ue, closers, level, candidates)
+	res := NewBSFindNodeResEvent(n, ue, closest, level, candidates)
 	res.SetSender(n)
 	return res
 }

@@ -124,6 +124,7 @@ func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
 	return &NeighborRequest{
 		Key:               p2p.NewKey(req.Key),
 		MV:                ayame.NewMembershipVectorFromBinary(req.MV),
+		ClosestIndex:      ConvertTableIndex(req.ClosestIndex),
 		NeighborListIndex: ConvertTableIndexList(req.NeighborListIndex),
 	}
 }

@@ -82,7 +82,8 @@ message TableIndex {
 message FindNodeRequest {
     Key key = 1;
     bytes MV = 2;
-    repeated TableIndex neighborListIndex = 3;
+    TableIndex closestIndex = 3;
+    repeated TableIndex neighborListIndex = 4;
 }
 
 // designed to be used in all protocols

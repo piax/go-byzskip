@@ -31,7 +31,6 @@ var keyIssuerType *string
 var uniRoutingType *string
 var experiment *string
 var useTableIndex *bool
-var tableLimitMargin *int
 var seed *int64
 var verbose *bool
 
@@ -156,8 +155,12 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 	for i := 0; i < numberOfNodes; i++ {
 		var n *bs.BSNode
 		mv := ayame.NewMembershipVector(bs.ALPHA)
-		//key := keyIssuer.GetKey(ayame.FloatKey(float64(i)))
-		key := ayame.IntKey(i)
+		var key ayame.Key
+		if *keyIssuerType != "none" {
+			key = keyIssuer.GetKey(ayame.FloatKey(float64(i)))
+		} else {
+			key = ayame.IntKey(i)
+		}
 		switch FailureType {
 		case F_CALC:
 			fallthrough
@@ -232,6 +235,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		last := nodes[bs.K:]
 		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
 		nodes := append(first, last...)
+		bs.USE_TABLE_INDEX = *useTableIndex
 		err := JoinAllByIterative(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
@@ -275,7 +279,6 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 	count := 0
 	prev := 0
 	ayame.SecureKeyMV = false // no authentication
-	bs.USE_TABLE_INDEX = *useTableIndex
 	bs.ResponseCount = 0
 	for i, n := range nodes {
 		if index != i {
@@ -492,19 +495,22 @@ func minHops(lst [][]bs.PathEntry, dstKey ayame.Key) (float64, bool) {
 	return 0, false
 }
 
+/*
 func meanOfPathLength(lst [][]bs.PathEntry) (float64, error) {
 	return stats.Mean(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
-}
+}*/
 
 func maxPathLength(lst [][]bs.PathEntry) (float64, error) {
 	return stats.Max(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
 }
 
+/*
 func minPathLength(lst [][]bs.PathEntry) (float64, error) {
 	return stats.Min(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
-}
+}*/
 
 var paramsString string
+
 var keyIssuer key_issuer.KeyIssuer
 
 // joinType cheat|recur|iter|iter-p
@@ -512,20 +518,19 @@ var keyIssuer key_issuer.KeyIssuer
 
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
-	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	kValue = flag.Int("k", 2, "the redundancy parameter")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
 	joinType = flag.String("joinType", "iter-ev", "join type {cheat|recur|iter|iter-p|iter-pp}")
-	keyIssuerType = flag.String("issuerType", "asis", "issuer type (type-param) type={shuffle|random|asis}")
+	keyIssuerType = flag.String("issuerType", "none", "issuer type (type-param) type={shuffle|random|asis|none}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
-	tableLimitMargin = flag.Int("margin", 0, "num of additional candidates beyond table limit")
-	seed = flag.Int64("seed", 3, "give a random seed")
-	verbose = flag.Bool("v", false, "verbose output")
+	seed = flag.Int64("seed", 2, "give a random seed")
+	verbose = flag.Bool("v", true, "verbose output")
 
 	flag.Parse()
 	ayame.SecureKeyMV = false // skip authentication

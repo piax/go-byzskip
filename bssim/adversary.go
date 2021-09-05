@@ -27,6 +27,15 @@ func (table *AdversaryRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
 	}
 }
 
+// get k neighbors and its level
+func (table *AdversaryRoutingTable) KClosestWithIndex(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
+	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
+		return table.normal.KClosestWithIndex(req)
+	} else {
+		return table.adversarial.KClosestWithIndex(req)
+	}
+}
+
 // get all disjoint entries
 func (table *AdversaryRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
 	// Use normal neighbors to advertise itself(adversarial) to the normal network.
@@ -58,6 +67,14 @@ func (table *AdversaryRoutingTable) GetTableIndex() []*bs.TableIndex {
 		return table.normal.GetTableIndex()
 	} else {
 		return table.adversarial.GetTableIndex()
+	}
+}
+
+func (table *AdversaryRoutingTable) GetClosestIndex() *bs.TableIndex {
+	if FailureType == F_NONE {
+		return table.normal.GetClosestIndex()
+	} else {
+		return table.adversarial.GetClosestIndex()
 	}
 }
 

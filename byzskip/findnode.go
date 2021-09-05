@@ -20,6 +20,7 @@ func (req *NeighborRequest) Encode() *pb.FindNodeRequest {
 		ret := &pb.FindNodeRequest{
 			Key:               req.Key.Encode(),
 			MV:                req.MV.Encode(),
+			ClosestIndex:      req.ClosestIndex.Encode(),
 			NeighborListIndex: idxs,
 		}
 		return ret
@@ -27,6 +28,7 @@ func (req *NeighborRequest) Encode() *pb.FindNodeRequest {
 		ret := &pb.FindNodeRequest{
 			Key:               req.Key.Encode(),
 			MV:                nil,
+			ClosestIndex:      nil,
 			NeighborListIndex: nil,
 		}
 		return ret
@@ -63,8 +65,10 @@ type BSFindNodeEvent struct {
 
 func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key, targetMV *ayame.MembershipVector) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
-		isResponse:         false,
-		req:                &NeighborRequest{Key: targetKey, MV: targetMV, NeighborListIndex: sender.RoutingTable.GetTableIndex()},
+		isResponse: false,
+		req: &NeighborRequest{Key: targetKey, MV: targetMV,
+			ClosestIndex:      sender.RoutingTable.GetClosestIndex(),
+			NeighborListIndex: sender.RoutingTable.GetTableIndex()},
 		MessageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.SetRequest(true)

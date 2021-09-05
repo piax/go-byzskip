@@ -85,6 +85,10 @@ type RoutingTable interface {
 
 	// Returns k closest and its level
 	KClosest(key ayame.Key) ([]KeyMV, int)
+
+	// Returns k closest and its level
+	KClosestWithIndex(req *NeighborRequest) ([]KeyMV, int)
+
 	// Returns requested neighbor entry list
 	Neighbors(req *NeighborRequest) []KeyMV
 	// Returns all disjoint neighbor entry list.
@@ -96,6 +100,7 @@ type RoutingTable interface {
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	GetTableIndex() []*TableIndex
+	GetClosestIndex() *TableIndex
 
 	Add(c KeyMV)
 	Delete(c ayame.Key)
@@ -178,13 +183,55 @@ func (table *SkipRoutingTable) KClosest(key ayame.Key) ([]KeyMV, int) {
 	return ret, level
 }
 
+func (table *SkipRoutingTable) KClosestWithIndex(req *NeighborRequest) ([]KeyMV, int) {
+	var ret []KeyMV
+	var level int
+	var clst []KeyMV
+	// find the lowest level
+	for i, singleLevel := range table.NeighborLists {
+		kn, exists := singleLevel.PickupKNodes(req.Key)
+		if exists {
+			clst = kn
+			level = i
+			break
+		}
+	}
+	// filter only if the level is 0
+	if level == 0 {
+		for _, n := range clst {
+			if req.ClosestIndex == nil || isOrderedSimple(req.ClosestIndex.Min, n.Key(), req.Key) ||
+				isOrderedSimple(req.Key, n.Key(), req.ClosestIndex.Max) {
+				ret = append(ret, n)
+			}
+		}
+		ret = excludeNeighborsInRequest(table.km, ret, req)
+		return ret, 0
+	}
+	return clst, level
+}
+
 func (table *SkipRoutingTable) GetFindNodeRequest(k int) *NeighborRequest {
 	return &NeighborRequest{
 		Key:               table.km.Key(),
 		MV:                table.km.MV(),
+		ClosestIndex:      table.GetClosestIndex(),
 		NeighborListIndex: table.GetTableIndex(),
 	}
+}
 
+func (table *SkipRoutingTable) GetClosestIndex() *TableIndex {
+	// XXX should be optimized because the level must be 0
+	clst, lvl := table.KClosest(table.km.Key())
+	if len(clst) == 0 {
+		return nil
+	} else {
+		if lvl == 0 {
+			return &TableIndex{Level: lvl, Min: clst[0].Key(), Max: clst[len(clst)-1].Key()}
+		} else {
+			return nil
+		}
+
+	}
 }
 
 func (table *SkipRoutingTable) GetTableIndex() []*TableIndex {
@@ -205,6 +252,39 @@ func (table *SkipRoutingTable) GetTableIndex() []*TableIndex {
 		}
 	}
 	return ret
+}
+
+func excludeNodes(nodes []KeyMV, queried []ayame.Key) []KeyMV {
+	ret := []KeyMV{}
+	for _, n := range nodes {
+		found := false
+		for _, m := range queried {
+			if n.Key().Equals(m) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ret = append(ret, n)
+		}
+	}
+	return ret
+}
+
+func excludeNeighborsInRequest(self KeyMV, lst []KeyMV, req *NeighborRequest) []KeyMV {
+	ir := []ayame.Key{self.Key()}
+	ir = append(ir, req.Key)
+	if req.ClosestIndex != nil {
+		ir = append(ir, req.ClosestIndex.Min)
+		ir = append(ir, req.ClosestIndex.Max)
+	}
+	for _, idx := range req.NeighborListIndex {
+		if idx != nil {
+			ir = append(ir, idx.Min)
+			ir = append(ir, idx.Max)
+		}
+	}
+	return excludeNodes(lst, ir)
 }
 
 func appendKeyMVIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
@@ -304,6 +384,7 @@ func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 		}
 		//fmt.Printf("level %d, table=%d, key=%d, common=%d, can=%s\n", l, table.km.Key(), kmv.Key(), commonLen, ayame.SliceString(ret))
 	}
+	ret = excludeNeighborsInRequest(table.km, ret, req)
 	return ret
 }
 

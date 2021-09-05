@@ -124,11 +124,11 @@ func setupNodes(num int, useQuic bool) []*BSNode {
 	for i := 1; i < numberOfPeers; i++ {
 		addr := addr(9000+i, useQuic)
 		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), authFunc, validateFunc)
-		func(pos int) {
+		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
-	//time.Sleep(time.Duration(10) * time.Second)
+	time.Sleep(time.Duration(10) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {

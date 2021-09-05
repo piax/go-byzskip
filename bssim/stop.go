@@ -20,6 +20,10 @@ func (table *StopRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
+func (table *StopRoutingTable) KClosestWithIndex(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
+	return []bs.KeyMV{}, 0
+}
+
 // get all disjoint entries
 func (table *StopRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
 	return []bs.KeyMV{}
@@ -51,6 +55,10 @@ func (table *StopRoutingTable) Neighbors(req *bs.NeighborRequest) []bs.KeyMV {
 
 func (table *StopRoutingTable) GetTableIndex() []*bs.TableIndex {
 	return []*bs.TableIndex{}
+}
+
+func (table *StopRoutingTable) GetClosestIndex() *bs.TableIndex {
+	return &bs.TableIndex{}
 }
 
 func (table *StopRoutingTable) String() string {

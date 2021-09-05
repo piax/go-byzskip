@@ -41,12 +41,13 @@ func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.
 
 func FastFindNodeWithRequest(node *bs.BSNode, target *bs.BSNode, req *bs.NeighborRequest) ([]*bs.BSNode, int, []*bs.BSNode) {
 	can := node.RoutingTable.Neighbors(req)
-	nb, lv := node.GetClosestNodes(req.Key)
+	//nb, lv := node.GetClosestNodes(req.Key)
+	nb, lv := node.RoutingTable.KClosestWithIndex(req)
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
 	node.RoutingTable.Add(target)
 	//ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n updated:\n %s\n", node, target.key, ayame.SliceString(nb), lv,
 	//	node.routingTable.String())
-	return nb, lv, ksToNs(can)
+	return ksToNs(nb), lv, ksToNs(can)
 }
 
 const (
