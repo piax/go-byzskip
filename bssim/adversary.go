@@ -19,20 +19,20 @@ func NewAdversaryRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 }
 
 // get k neighbors and its level
-func (table *AdversaryRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
+func (table *AdversaryRoutingTable) KClosestWithKey(k ayame.Key) ([]bs.KeyMV, int) {
 	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
-		return table.normal.KClosest(k)
+		return table.normal.KClosestWithKey(k)
 	} else {
-		return table.adversarial.KClosest(k)
+		return table.adversarial.KClosestWithKey(k)
 	}
 }
 
 // get k neighbors and its level
-func (table *AdversaryRoutingTable) KClosestWithIndex(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
+func (table *AdversaryRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
 	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
-		return table.normal.KClosestWithIndex(req)
+		return table.normal.KClosest(req)
 	} else {
-		return table.adversarial.KClosestWithIndex(req)
+		return table.adversarial.KClosest(req)
 	}
 }
 

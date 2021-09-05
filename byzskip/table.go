@@ -75,8 +75,10 @@ type NeighborRequest struct {
 	// requester's key
 	Key ayame.Key
 	// requester's Membership Vector. can be nil.
-	MV                *ayame.MembershipVector
-	ClosestIndex      *TableIndex
+	MV *ayame.MembershipVector
+	// table index for requester's closest
+	ClosestIndex *TableIndex
+	// table index for requester's neighbors
 	NeighborListIndex []*TableIndex
 }
 
@@ -84,11 +86,7 @@ type RoutingTable interface {
 	// access entries
 
 	// Returns k closest and its level
-	KClosest(key ayame.Key) ([]KeyMV, int)
-
-	// Returns k closest and its level
-	KClosestWithIndex(req *NeighborRequest) ([]KeyMV, int)
-
+	KClosest(req *NeighborRequest) ([]KeyMV, int)
 	// Returns requested neighbor entry list
 	Neighbors(req *NeighborRequest) []KeyMV
 	// Returns all disjoint neighbor entry list.
@@ -96,7 +94,9 @@ type RoutingTable interface {
 	// If sorted is true, returns a sorted list in order of closeness.
 	AllNeighbors(includeSelf bool, sorted bool) []KeyMV
 
-	// Deprecated: nodes with common prefix
+	// Deprecated: should use KClosest with request including key
+	KClosestWithKey(key ayame.Key) ([]KeyMV, int)
+	// Deprecated: should use Neighbors with request including mv
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	GetTableIndex() []*TableIndex
@@ -168,7 +168,7 @@ func (table *SkipRoutingTable) AddNeighborList(s *NeighborList) {
 	table.NeighborLists = append(table.NeighborLists, s)
 }
 
-func (table *SkipRoutingTable) KClosest(key ayame.Key) ([]KeyMV, int) {
+func (table *SkipRoutingTable) KClosestWithKey(key ayame.Key) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	// find the lowest level
@@ -183,7 +183,7 @@ func (table *SkipRoutingTable) KClosest(key ayame.Key) ([]KeyMV, int) {
 	return ret, level
 }
 
-func (table *SkipRoutingTable) KClosestWithIndex(req *NeighborRequest) ([]KeyMV, int) {
+func (table *SkipRoutingTable) KClosest(req *NeighborRequest) ([]KeyMV, int) {
 	var ret []KeyMV
 	var level int
 	var clst []KeyMV
@@ -221,7 +221,7 @@ func (table *SkipRoutingTable) GetFindNodeRequest(k int) *NeighborRequest {
 
 func (table *SkipRoutingTable) GetClosestIndex() *TableIndex {
 	// XXX should be optimized because the level must be 0
-	clst, lvl := table.KClosest(table.km.Key())
+	clst, lvl := table.KClosestWithKey(table.km.Key())
 	if len(clst) == 0 {
 		return nil
 	} else {

@@ -132,16 +132,9 @@ func ksToNs(lst []KeyMV) []*BSNode {
 	return ret
 }
 
-func (node *BSNode) GetNeighborsAndCandidatesWithIndex(key ayame.Key, mv *ayame.MembershipVector, idx *TableIndex) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.KClosest(key)
-	//can := node.routingTable.GetAll()
-	can := node.RoutingTable.GetCommonNeighbors(mv)
-	return ksToNs(ret), level, ksToNs(can)
-}
-
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
 func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.MembershipVector) ([]*BSNode, int, []*BSNode) {
-	ret, level := node.RoutingTable.KClosest(key)
+	ret, level := node.RoutingTable.KClosestWithKey(key)
 	//can := node.routingTable.GetAll()
 	can := node.RoutingTable.GetCommonNeighbors(mv)
 	return ksToNs(ret), level, ksToNs(can)
@@ -160,7 +153,7 @@ func NewBSNode(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bo
 }
 
 func (node *BSNode) GetClosestNodes(key ayame.Key) ([]*BSNode, int) {
-	nb, lv := node.RoutingTable.KClosest(key)
+	nb, lv := node.RoutingTable.KClosestWithKey(key)
 	return ksToNs(nb), lv
 }
 

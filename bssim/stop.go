@@ -16,11 +16,11 @@ func NewStopRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
 	return &StopRoutingTable{} //, nodes: make(map[int]*BSNode)}
 }
 
-func (table *StopRoutingTable) KClosest(k ayame.Key) ([]bs.KeyMV, int) {
+func (table *StopRoutingTable) KClosestWithKey(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
-func (table *StopRoutingTable) KClosestWithIndex(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
+func (table *StopRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
