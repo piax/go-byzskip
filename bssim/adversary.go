@@ -15,44 +15,80 @@ type AdversaryRoutingTable struct {
 }
 
 func NewAdversaryRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
-	return &AdversaryRoutingTable{normal: NewBSRoutingTable(keyMV), adversarial: NewBSRoutingTable(keyMV)} //, nodes: make(map[int]*BSNode)}
+	return &AdversaryRoutingTable{normal: bs.NewBSRoutingTable(keyMV), adversarial: bs.NewBSRoutingTable(keyMV)} //, nodes: make(map[int]*BSNode)}
 }
 
 // get k neighbors and its level
-func (table *AdversaryRoutingTable) GetNeighbors(k ayame.Key) ([]bs.KeyMV, int) {
-	if FailureType == F_NONE {
-		return table.normal.GetNeighbors(k)
+func (table *AdversaryRoutingTable) KClosestWithKey(k ayame.Key) ([]bs.KeyMV, int) {
+	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
+		return table.normal.KClosestWithKey(k)
 	} else {
-		return table.adversarial.GetNeighbors(k)
+		return table.adversarial.KClosestWithKey(k)
+	}
+}
+
+// get k neighbors and its level
+func (table *AdversaryRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
+	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
+		return table.normal.KClosest(req)
+	} else {
+		return table.adversarial.KClosest(req)
 	}
 }
 
 // get all disjoint entries
-func (table *AdversaryRoutingTable) GetAll() []bs.KeyMV {
-	if FailureType == F_NONE {
-		return table.normal.GetAll()
-	} else {
-		return table.adversarial.GetAll()
-	}
+func (table *AdversaryRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
+	// Use normal neighbors to advertise itself(adversarial) to the normal network.
+	return table.normal.AllNeighbors(includeSelf, sorted)
+}
+
+func (table *AdversaryRoutingTable) HasSufficientNeighbors() bool {
+	return true
 }
 
 // get all disjoint entries
-func (table *AdversaryRoutingTable) GetCommonNeighbors(kmv bs.KeyMV) []bs.KeyMV {
-	if FailureType == F_NONE {
-		return table.normal.GetCommonNeighbors(kmv)
+func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []bs.KeyMV {
+	if FailureType == F_COLLAB_AFTER {
+		return table.normal.GetCommonNeighbors(mv)
 	} else {
-		return table.adversarial.GetCommonNeighbors(kmv)
+		// stronger attacker
+		return table.adversarial.GetCommonNeighbors(mv)
 	}
 }
 
-func (table *AdversaryRoutingTable) GetCloserCandidates() []bs.KeyMV {
-	// should be confused?
-	return table.normal.GetAll()
+// get neighbor candidates that belongs to the same ring and satisfies index
+func (table *AdversaryRoutingTable) Neighbors(req *bs.NeighborRequest) []bs.KeyMV {
+	if FailureType == F_NONE {
+		return table.normal.Neighbors(req)
+	} else {
+		// stronger attacker
+		return table.adversarial.Neighbors(req)
+	}
+}
+
+func (table *AdversaryRoutingTable) GetTableIndex() []*bs.TableIndex {
+	if FailureType == F_NONE {
+		return table.normal.GetTableIndex()
+	} else {
+		return table.adversarial.GetTableIndex()
+	}
+}
+
+func (table *AdversaryRoutingTable) GetClosestIndex() *bs.TableIndex {
+	if FailureType == F_NONE {
+		return table.normal.GetClosestIndex()
+	} else {
+		return table.adversarial.GetClosestIndex()
+	}
 }
 
 // called as a normal behavior
 func (table *AdversaryRoutingTable) Add(c bs.KeyMV) {
 	table.normal.Add(c)
+}
+
+func (table *AdversaryRoutingTable) Delete(key ayame.Key) {
+	table.normal.Delete(key)
 }
 
 // called by adversarial community

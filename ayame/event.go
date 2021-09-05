@@ -1,23 +1,54 @@
 package ayame
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
+)
 
 type Event interface {
+	Author() Node
+	AuthorSign() []byte
+	AuthorPubKey() []byte
 	Sender() Node
 	SetSender(Node)
 	Receiver() Node
-	//SetReceiver(Node)
+	SetReceiver(Node)
 	SendTime() int64
 	SetSendTime(int64)
 	Time() int64
 	SetTime(int64)
+	Encode() *p2p.Message
+	SetVerified(bool)
+	IsVerified() bool
+	SetRequest(bool)
+	IsRequest() bool
+	IsResponse() bool
 }
 
 type AbstractEvent struct {
-	sender   Node
-	receiver Node
-	sendTime int64
-	vTime    int64
+	author       Node // the origin (creator) of this event.
+	authorSign   []byte
+	authorPubKey []byte
+	sender       Node
+	receiver     Node
+	sendTime     int64
+	vTime        int64
+	isVerified   bool
+	isRequest    bool
+}
+
+func (ev *AbstractEvent) Author() Node {
+	return ev.author
+}
+
+func (ev *AbstractEvent) AuthorSign() []byte {
+	return ev.authorSign
+}
+
+func (ev *AbstractEvent) AuthorPubKey() []byte {
+	return ev.authorPubKey
 }
 
 func (ev *AbstractEvent) Sender() Node {
@@ -52,16 +83,39 @@ func (ev *AbstractEvent) SetTime(t int64) {
 	ev.vTime = t
 }
 
-func NewEvent() *AbstractEvent {
-	return &AbstractEvent{sender: nil, receiver: nil, sendTime: -1, vTime: -1}
+func (ev *AbstractEvent) SetVerified(v bool) {
+	ev.isVerified = v
+}
+
+func (ev *AbstractEvent) IsVerified() bool {
+	return ev.isVerified
+}
+
+func (ev *AbstractEvent) SetRequest(v bool) {
+	ev.isRequest = v
+}
+
+func (ev *AbstractEvent) IsRequest() bool {
+	return ev.isRequest
+}
+
+func (ev *AbstractEvent) IsResponse() bool {
+	return false
+}
+
+func NewEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractEvent {
+	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
+}
+
+func NewEventNoAuthor() *AbstractEvent {
+	return &AbstractEvent{sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
 }
 
 type SchedEvent interface {
-	//SetJob(job func(se SchedEvent, node Node))
-	//Job() func(se SchedEvent, node Node)
 	SetJob(job func())
 	Job() func()
-	Run(node Node)
+	Run(ctx context.Context, node Node)
+	ProcessRequest(ctx context.Context, node Node) SchedEvent
 	SetCanceled(c bool)
 	IsCanceled() bool
 	Event
@@ -85,16 +139,12 @@ type AsyncJobEvent struct {
 //return ev
 //}
 
-func NewSchedEvent() *AbstractSchedEvent {
-	return &AbstractSchedEvent{AbstractEvent: *NewEvent(), job: nil, isCanceled: false}
+func NewSchedEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractSchedEvent {
+	return &AbstractSchedEvent{AbstractEvent: *NewEvent(author, authorSign, authorPubKey), job: nil, isCanceled: false}
 }
 
 func NewSchedEventWithJob(job func()) *AbstractSchedEvent {
-	return &AbstractSchedEvent{AbstractEvent: *NewEvent(), job: job, isCanceled: false}
-}
-
-func NewAsyncJobEvent(job func(chan bool)) *AsyncJobEvent {
-	return &AsyncJobEvent{AbstractSchedEvent: *NewSchedEvent(), asyncJob: job}
+	return &AbstractSchedEvent{AbstractEvent: *NewEventNoAuthor(), job: job, isCanceled: false}
 }
 
 func (aj *AsyncJobEvent) Run(node Node) {
@@ -103,9 +153,14 @@ func (aj *AsyncJobEvent) Run(node Node) {
 	<-ch // wait for the job
 }
 
-func (se *AbstractSchedEvent) Run(node Node) {
-	//se.Job()(se, node)
+func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
 	se.Job()()
+	//n.Yield(ctx)
+}
+
+func (se *AbstractSchedEvent) ProcessRequest(ctx context.Context, n Node) SchedEvent {
+	//se.Job()(se, node)
+	return nil
 }
 
 func (se *AbstractSchedEvent) IsCanceled() bool {
@@ -131,5 +186,9 @@ func (se *AbstractSchedEvent) Cancel() {
 }
 
 func (ev *AbstractSchedEvent) String() string {
-	return fmt.Sprintf("%d:%s->%s", ev.vTime, ev.sender.Id(), ev.receiver.Id())
+	return fmt.Sprintf("%d:%s->%s", ev.vTime, ev.sender, ev.receiver)
+}
+
+func (ev *AbstractSchedEvent) Encode() *p2p.Message {
+	return nil
 }

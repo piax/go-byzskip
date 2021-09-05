@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -55,7 +56,7 @@ func NewUnicastEvent(receiver ayame.Node, targetKey int) *UnicastEvent {
 		destinations:            []*SGNode{},
 		numberOfMessages:        0,
 		finishTime:              0,
-		AbstractSchedEvent:      *ayame.NewSchedEvent()}
+		AbstractSchedEvent:      *ayame.NewSchedEvent(nil, nil, nil)}
 	ev.root = ev
 	ev.SetReceiver(receiver)
 	return ev
@@ -77,7 +78,7 @@ func (ue *UnicastEvent) createSubMessage(nextHop *SGNode, level int) *UnicastEve
 	return &sub
 }
 
-func (ue *UnicastEvent) Run(node ayame.Node) {
+func (ue *UnicastEvent) Run(ctx context.Context, node ayame.Node) {
 	//	fmt.Print(node.Id())
 	node.(*SGNode).handleUnicast(ue)
 }
@@ -172,7 +173,7 @@ func (sg *SGNode) handleUnicast(sev ayame.SchedEvent) error {
 		return nil
 	}
 	ev := msg.createSubMessage(nextNode, level)
-	sg.SendEvent(ev)
+	sg.Send(context.TODO(), ev, true) // the second argument is ommited
 	return nil
 }
 
@@ -216,7 +217,7 @@ func sortCircular(base int, nodes []*SGNode) {
 }
 
 func NewSGNode(key int, mv *ayame.MembershipVector) *SGNode {
-	return &SGNode{key: key, mv: mv, LocalNode: ayame.GetLocalNode(strconv.Itoa(key))}
+	return &SGNode{key: key, mv: mv, LocalNode: *ayame.NewLocalNode(ayame.IntKey(key), mv)}
 }
 
 func (rts *RoutingTableSingleLevel) Add(d int, u *SGNode) {

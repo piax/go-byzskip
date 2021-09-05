@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -29,18 +30,20 @@ var unicastType *string
 var keyIssuerType *string
 var uniRoutingType *string
 var experiment *string
+var useTableIndex *bool
 var seed *int64
 var verbose *bool
 
-//var AdversaryList = []*BSNode{}
-var JoinedAdversaryList = []*BSNode{}
-var NormalList = []*BSNode{}
+//var AdversaryList = []*bs.BSNode{}
+var JoinedAdversaryList = []*bs.BSNode{}
+var NormalList = []*bs.BSNode{}
 
 const (
 	J_CHEAT int = iota
 	J_RECUR
 	J_ITER
 	J_ITER_P
+	J_ITER_EV
 )
 
 const (
@@ -75,7 +78,7 @@ const (
 
 //var DummyNodes []*MIRONode
 /*
-func correctEntryRatio(nodes []*BSNode) float64 {
+func correctEntryRatio(nodes []*bs.BSNode) float64 {
 	sumContained := 0
 	sum := 0
 	for i := 0; i < *numberOfNodes; i++ {
@@ -99,11 +102,11 @@ func newKeyIssuer(typeString string) key_issuer.KeyIssuer {
 	return ret
 }
 
-func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, count int) float64 {
-	src := msg.Sender().(*BSNode)
-	var dst *BSNode
-	for _, dstNode := range msg.root.destinations {
-		if dstNode.key == msg.targetKey {
+func ComputeProbabilityMonteCarlo(msg *bs.BSUnicastEvent, failureRatio float64, count int) float64 {
+	src := msg.Sender().(*bs.BSNode)
+	var dst *bs.BSNode
+	for _, dstNode := range msg.Root.Destinations {
+		if dstNode.Key().Equals(msg.TargetKey) {
 			dst = dstNode
 			break
 		}
@@ -115,11 +118,11 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 	//}
 
 	graph := make(Graph)
-	for _, pes := range msg.root.paths {
+	for _, pes := range msg.Root.Paths {
 		//fmt.Printf("path: %s\n", ayame.SliceString(pes))
-		var prev *BSNode = nil
+		var prev *bs.BSNode = nil
 		for _, pe := range pes {
-			this := pe.node.(*BSNode)
+			this := pe.Node.(*bs.BSNode)
 			graph.Register(this)
 			if prev != nil && prev != this {
 				graph.AddChild(prev, this)
@@ -131,7 +134,7 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 	for i := 0; i < count; i++ {
 		graphCopy := make(Graph)
 		for key, value := range graph {
-			if key != src.key.String() && key != dst.key.String() && rand.Float64() < failureRatio {
+			if key != src.Key().String() && key != dst.Key().String() && rand.Float64() < failureRatio {
 				graphCopy[key] = nil // failure
 			} else {
 				graphCopy[key] = value
@@ -147,17 +150,22 @@ func ComputeProbabilityMonteCarlo(msg *BSUnicastEvent, failureRatio float64, cou
 	return float64(failures) / float64(count)
 }
 
-func ConstructOverlay(numberOfNodes int) []*BSNode {
-	nodes := make([]*BSNode, 0, numberOfNodes)
+func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
+	nodes := make([]*bs.BSNode, 0, numberOfNodes)
 	for i := 0; i < numberOfNodes; i++ {
-		var n *BSNode
+		var n *bs.BSNode
 		mv := ayame.NewMembershipVector(bs.ALPHA)
-		key := keyIssuer.GetKey(ayame.FloatKey(float64(i)))
+		var key ayame.Key
+		if *keyIssuerType != "none" {
+			key = keyIssuer.GetKey(ayame.FloatKey(float64(i)))
+		} else {
+			key = ayame.IntKey(i)
+		}
 		switch FailureType {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = NewBSNode(key, mv, NewBSRoutingTable, false)
+			n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -165,9 +173,9 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(key, mv, NewStopRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewStopRoutingTable, f)
 			} else {
-				n = NewBSNode(key, mv, NewBSRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -179,12 +187,13 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 				f = false
 			}
 			if f {
-				n = NewBSNode(key, mv, NewAdversaryRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, f)
 			} else {
-				n = NewBSNode(key, mv, NewBSRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
+		n.SetUnicastHandler(simUnicastHandler)
 		nodes = append(nodes, n)
 	}
 
@@ -217,7 +226,17 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 		last := nodes[bs.K:]
 		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
 		nodes := append(first, last...)
-		err := FastJoinAllByLookup(nodes)
+		err := FastJoinAllByInteractive(nodes)
+		if err != nil {
+			fmt.Printf("join failed:%s\n", err)
+		}
+	case J_ITER_EV:
+		first := nodes[0:bs.K]
+		last := nodes[bs.K:]
+		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		nodes := append(first, last...)
+		bs.USE_TABLE_INDEX = *useTableIndex
+		err := JoinAllByIterative(nodes)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
 		}
@@ -225,6 +244,15 @@ func ConstructOverlay(numberOfNodes int) []*BSNode {
 	if bak {
 		FailureType = F_COLLAB_AFTER
 	}
+	ncount := 0
+	fcount := 0
+	for _, n := range NormalList {
+		c, f := CountTableEntries(n)
+		ncount += c
+		fcount += f
+	}
+	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
+
 	return nodes
 }
 
@@ -233,12 +261,12 @@ func meanOfInt(lst []int) float64 {
 	return v
 }
 
-func isFaultySet(nodes []*BSNode) bool {
+func isFaultySet(nodes []*bs.BSNode) bool {
 	if len(nodes) == 0 {
 		return false
 	}
 	for _, n := range nodes {
-		if !n.isFailure {
+		if !n.IsFailure {
 			return false
 		}
 	}
@@ -246,7 +274,55 @@ func isFaultySet(nodes []*BSNode) bool {
 	return true
 }
 
-func FastJoinAllByRecursive(nodes []*BSNode) error {
+func JoinAllByIterative(nodes []*bs.BSNode) error {
+	index := 0 // introducer index
+	count := 0
+	prev := 0
+	ayame.SecureKeyMV = false // no authentication
+	bs.ResponseCount = 0
+	for i, n := range nodes {
+		if index != i {
+			localn := n
+			locali := i
+
+			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
+
+				if localn.IsFailure {
+					JoinedAdversaryList = append(JoinedAdversaryList, localn)
+					for _, p := range JoinedAdversaryList {
+						if !p.Equals(localn) {
+							ptable, pok := p.RoutingTable.(*AdversaryRoutingTable)
+							if pok {
+								ptable.AddAdversarial(localn)
+								ntable, nok := localn.RoutingTable.(*AdversaryRoutingTable)
+								if nok {
+									ntable.AddAdversarial(p)
+								}
+							}
+						}
+					}
+				}
+
+				localn.JoinAsync(context.TODO(), nodes[index])
+				// need to wait until function end or channel waiting status
+				count++
+				percent := 100 * count / len(nodes)
+				if percent/10 != prev {
+					fmt.Printf("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+				}
+				prev = percent / 10
+			}), int64(locali*1000))
+		}
+	}
+	ayame.GlobalEventExecutor.Sim(int64(len(nodes)*2000), true)
+	ayame.GlobalEventExecutor.AwaitFinish()
+	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
+	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(bs.ResponseCount)/float64(count))
+	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
+	return nil
+}
+
+func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
 	sumMsgs := 0
 	count := 0
@@ -256,14 +332,14 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 		if index != i {
 			localn := n
 			locali := i
-			if localn.isFailure {
+			if localn.IsFailure {
 				JoinedAdversaryList = append(JoinedAdversaryList, localn)
 				for _, p := range JoinedAdversaryList {
 					if !p.Equals(localn) {
-						ptable, pok := p.routingTable.(*AdversaryRoutingTable)
+						ptable, pok := p.RoutingTable.(*AdversaryRoutingTable)
 						if pok {
 							ptable.AddAdversarial(localn)
-							ntable, nok := localn.routingTable.(*AdversaryRoutingTable)
+							ntable, nok := localn.RoutingTable.(*AdversaryRoutingTable)
 							if nok {
 								ntable.AddAdversarial(p)
 							}
@@ -271,17 +347,18 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 					}
 				}
 			}
-			msg := NewBSUnicastEvent(nodes[index], ayame.MembershipVectorSize, localn.key)
+			msg := bs.NewBSUnicastEventNoAuthor(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				localn.Send(msg)
-				localn.Sched(ayame.NewSchedEventWithJob(func() {
+				localn.Send(context.TODO(), msg, true) // the second argument (sign) is ommited in simulation
+				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 
-					sumMsgs += len(msg.results) // number of reply messages
+					sumMsgs += len(msg.Results) // number of reply messages
 
 					//
-					localn.routingTable.Add(nodes[index])
+					localn.RoutingTable.Add(nodes[index])
 
-					umsgs, hijacked := FastUpdateNeighbors(localn, nodes[index], msg.results, []*BSNode{})
+					// XXX candidate list length
+					umsgs, hijacked, _ := FastUpdateNeighbors(localn, msg.Results, []*bs.BSNode{})
 					sumMsgs += umsgs
 					if hijacked {
 						allFaultyCount++
@@ -302,37 +379,37 @@ func FastJoinAllByRecursive(nodes []*BSNode) error {
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
 
-	ncount := 0
-	fcount := 0
-	for _, n := range NormalList {
-		c, f := CountTableEntries(n)
-		ncount += c
-		fcount += f
-	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
-
 	return nil
 }
 
-func CountTableEntries(node *BSNode) (int, int) {
-	lst := []*BSNode{}
-	table := node.routingTable
+func appendIfMissingWithCheck(lst []*bs.BSNode, node *bs.BSNode) ([]*bs.BSNode, bool) {
+	for _, ele := range lst {
+		if ele.Equals(node) {
+			return lst, true
+		}
+	}
+	return append(lst, node), false
+}
+
+func CountTableEntries(node *bs.BSNode) (int, int) {
+	lst := []*bs.BSNode{}
+	table := node.RoutingTable
 	fcount := 0
 	for _, levelTable := range table.GetNeighborLists() {
 		for _, node := range levelTable.Neighbors[bs.LEFT] {
 			exists := false
-			n := node.(*BSNode)
+			n := node.(*bs.BSNode)
 			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
-				if n.isFailure {
+				if n.IsFailure {
 					fcount++
 				}
 			}
 		}
 		for _, node := range levelTable.Neighbors[bs.RIGHT] {
 			exists := false
-			n := node.(*BSNode)
+			n := node.(*bs.BSNode)
 			if lst, exists = appendIfMissingWithCheck(lst, n); !exists {
-				if n.isFailure {
+				if n.IsFailure {
 					fcount++
 				}
 			}
@@ -341,22 +418,24 @@ func CountTableEntries(node *BSNode) (int, int) {
 	return len(lst), fcount
 }
 
-func FastJoinAllByLookup(nodes []*BSNode) error {
+func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
 	sumMsgs := 0
 	sumLMsgs := 0
 	count := 0
 	prev := 0
 	faultyCount := 0
+	sumCandidates := 0
 	for i, n := range nodes {
-		if n.isFailure {
+		if n.IsFailure {
+			ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
 			for _, p := range JoinedAdversaryList {
 				if !p.Equals(n) {
-					ptable, pok := p.routingTable.(*AdversaryRoutingTable)
+					ptable, pok := p.RoutingTable.(*AdversaryRoutingTable)
 					if pok {
 						ptable.AddAdversarial(n)
-						ntable, nok := n.routingTable.(*AdversaryRoutingTable)
+						ntable, nok := n.RoutingTable.(*AdversaryRoutingTable)
 						if nok {
 							ntable.AddAdversarial(p)
 						}
@@ -366,13 +445,14 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 		}
 		if index != i {
 			ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
-			rets, _, msgs, _, lmsgs, faulty := FastNodeLookup(n, nodes[index])
+			rets, _, msgs, _, lmsgs, faulty, candidateLen := FastNodeLookup(n, nodes[index])
 			if faulty {
 				faultyCount++
 			}
-			ayame.Log.Debugf("%d: rets %s\n", n.key, ayame.SliceString(rets))
+			ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
+			sumCandidates += candidateLen
 		}
 
 		count++
@@ -384,41 +464,29 @@ func FastJoinAllByLookup(nodes []*BSNode) error {
 	}
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
-
-	ncount := 0
-	fcount := 0
-	for _, n := range NormalList {
-		c, f := CountTableEntries(n)
-		ncount += c
-		fcount += f
-	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
+	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
 
 	return nil
 }
 
-func (pe PathEntry) String() string {
-	return pe.node.Id()
-}
-
-func hops(lst []PathEntry, dstKey ayame.Key) (float64, bool) {
+func hops(lst []bs.PathEntry, dstKey ayame.Key) (float64, bool) {
 	ret := float64(0)
-	prev := lst[0].node.(*BSNode)
+	prev := lst[0].Node.(*bs.BSNode)
 	found := false
 	for i, pe := range lst {
-		if dstKey.Equals(pe.node.(*BSNode).Key()) {
+		if dstKey.Equals(pe.Node.(*bs.BSNode).Key()) {
 			found = true
 		}
-		if i != 0 && !prev.Equals(pe.node.(*BSNode)) {
+		if i != 0 && !prev.Equals(pe.Node.(*bs.BSNode)) {
 			ret++
 		}
-		prev = pe.node.(*BSNode)
+		prev = pe.Node.(*bs.BSNode)
 	}
 	///ayame.Log.Debugf("%s, %f\n", lst, ret)
 	return ret, found
 }
 
-func minHops(lst [][]PathEntry, dstKey ayame.Key) (float64, bool) {
+func minHops(lst [][]bs.PathEntry, dstKey ayame.Key) (float64, bool) {
 	for _, path := range lst {
 		if ret, ok := hops(path, dstKey); ok {
 			return ret, true
@@ -427,41 +495,45 @@ func minHops(lst [][]PathEntry, dstKey ayame.Key) (float64, bool) {
 	return 0, false
 }
 
-func meanOfPathLength(lst [][]PathEntry) (float64, error) {
-	return stats.Mean(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
+/*
+func meanOfPathLength(lst [][]bs.PathEntry) (float64, error) {
+	return stats.Mean(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
+}*/
+
+func maxPathLength(lst [][]bs.PathEntry) (float64, error) {
+	return stats.Max(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
 }
 
-func maxPathLength(lst [][]PathEntry) (float64, error) {
-	return stats.Max(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
-}
-
-func minPathLength(lst [][]PathEntry) (float64, error) {
-	return stats.Min(funk.Map(lst, func(x []PathEntry) float64 { return float64(len(x)) }).([]float64))
-}
+/*
+func minPathLength(lst [][]bs.PathEntry) (float64, error) {
+	return stats.Min(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
+}*/
 
 var paramsString string
+
 var keyIssuer key_issuer.KeyIssuer
 
 // joinType cheat|recur|iter|iter-p
 // unicastType i|r
 
 func main() {
-	alpha = flag.Int("alpha", 3, "the alphabet size of the membership vector")
-	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
+	kValue = flag.Int("k", 2, "the redundancy parameter")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp}")
-	keyIssuerType = flag.String("issuerType", "shuffle-100", "issuer type (type-param) type={shuffle|random|asis}")
+	joinType = flag.String("joinType", "iter-ev", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	keyIssuerType = flag.String("issuerType", "none", "issuer type (type-param) type={shuffle|random|asis|none}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "single", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
+	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
-	seed = flag.Int64("seed", 3, "give a random seed")
-	verbose = flag.Bool("v", false, "verbose output")
+	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
+	seed = flag.Int64("seed", 2, "give a random seed")
+	verbose = flag.Bool("v", true, "verbose output")
 
 	flag.Parse()
-
+	ayame.SecureKeyMV = false // skip authentication
 	bs.InitK(*kValue)
 
 	bs.ALPHA = *alpha
@@ -492,6 +564,8 @@ func main() {
 		JoinType = J_CHEAT
 	case "recur":
 		JoinType = J_RECUR
+	case "iter-ev":
+		JoinType = J_ITER_EV
 	case "iter":
 		JoinType = J_ITER
 	case "iter-p":
@@ -510,13 +584,13 @@ func main() {
 
 	switch *uniRoutingType {
 	case "single":
-		RoutingType = SINGLE
+		bs.RoutingType = bs.SINGLE
 	case "prune":
-		RoutingType = PRUNE
+		bs.RoutingType = bs.PRUNE
 	case "prune-opt1":
-		RoutingType = PRUNE_OPT1
+		bs.RoutingType = bs.PRUNE_OPT1
 	case "prune-opt2":
-		RoutingType = PRUNE_OPT2
+		bs.RoutingType = bs.PRUNE_OPT2
 	}
 
 	trials := *numberOfNodes
@@ -545,12 +619,13 @@ func main() {
 	if *verbose {
 		for _, n := range nodes {
 			mark := ""
-			if n.isFailure {
+			if n.IsFailure {
 				mark += "*"
 			}
-			fmt.Printf("%skey=%d [%s]\n%s", mark, n.key, n.mv.String(), n.routingTableString())
+			fmt.Printf("%skey=%d [%s]\n%s", mark, n.Key(), n.MV().String(), n.RoutingTable)
 		}
 	}
+
 	path_lengths := []float64{}
 	nums_msgs := []int{}
 	match_lengths := []float64{}
@@ -568,7 +643,7 @@ func main() {
 			src := NormalList[rand.Intn(len(NormalList))]
 			dst := NormalList[rand.Intn(len(NormalList))]
 			//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
-			founds, hops, msgs, hops_to_match, failure := FastLookup(dst.key, src)
+			founds, hops, msgs, hops_to_match, failure := FastLookup(dst.Key(), src)
 			path_lengths = append(path_lengths, float64(hops))
 			nums_msgs = append(nums_msgs, msgs)
 			if !failure {
@@ -591,7 +666,7 @@ func main() {
 	table_sizes := []int{}
 	for _, node := range NormalList {
 		//ayame.Log.Infof("%v\n", node.Id())
-		table_sizes = append(table_sizes, node.routingTable.Size())
+		table_sizes = append(table_sizes, node.RoutingTable.Size())
 	}
 
 	ayame.Log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))

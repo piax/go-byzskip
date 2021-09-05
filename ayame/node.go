@@ -1,116 +1,73 @@
 package ayame
 
 import (
-	"fmt"
-	"strconv"
+	"context"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
+	pb "github.com/piax/go-ayame/ayame/p2p/pb"
 )
 
-type NodeMap map[string]LocalNode
-
-var LocalNodes = make(NodeMap)
-
-type Key interface {
-	// Less reports whether the element is less than b
-	Less(elem interface{}) bool
-	// Equals reports whether the element equals to b
-	Equals(elem interface{}) bool
-	// Suger.
-	LessOrEquals(elem interface{}) bool
-	String() string
-}
-
-// Integer Key
-type IntKey int
-
-func (t IntKey) Less(elem interface{}) bool {
-	if v, ok := elem.(IntKey); ok {
-		return int(t) < int(v)
-	}
-	return false
-}
-
-func (t IntKey) Equals(elem interface{}) bool {
-	if v, ok := elem.(IntKey); ok {
-		return int(t) == int(v)
-	}
-	return false
-}
-
-func (t IntKey) LessOrEquals(elem interface{}) bool {
-	if v, ok := elem.(IntKey); ok {
-		return int(t) <= int(v)
-	}
-	return false
-}
-
-func (t IntKey) String() string {
-	return strconv.Itoa(int(t))
-}
-
-type FloatKey float64
-
-func (t FloatKey) Less(elem interface{}) bool {
-	if v, ok := elem.(FloatKey); ok {
-		return int(t) < int(v)
-	}
-	return false
-}
-
-func (t FloatKey) Equals(elem interface{}) bool {
-	if v, ok := elem.(FloatKey); ok {
-		return int(t) == int(v)
-	}
-	return false
-}
-
-func (t FloatKey) LessOrEquals(elem interface{}) bool {
-	if v, ok := elem.(FloatKey); ok {
-		return int(t) <= int(v)
-	}
-	return false
-}
-
-func (t FloatKey) String() string {
-	return fmt.Sprintf("%f", float64(t))
-}
-
 type Node interface {
-	Id() string
-	Locator() (string, error) // Endpoint
+	Key() Key
+	MV() *MembershipVector
+	String() string
+	Addrs() []ma.Multiaddr
+	Id() peer.ID // ID as an Endpoint
+	Send(ctx context.Context, ev SchedEvent, sign bool)
+	Encode() *pb.Peer
+	Close() error
 }
+
+var SecureKeyMV bool = true
 
 type LocalNode struct {
-	pid string
-	Node
+	key Key
+	mv  *MembershipVector
 }
 
-func (an *LocalNode) Send(ev SchedEvent) {
-	ev.SetSender(an)
+func NewLocalNode(key Key, mv *MembershipVector) *LocalNode {
+	return &LocalNode{key: key, mv: mv}
+}
+
+func (n *LocalNode) Key() Key {
+	return n.key
+}
+
+func (n *LocalNode) MV() *MembershipVector {
+	return n.mv
+}
+
+func (n *LocalNode) String() string {
+	return n.key.String()
+}
+
+func (n *LocalNode) Id() peer.ID {
+	return "" // empty identifier
+}
+
+func (n *LocalNode) Encode() *pb.Peer {
+	return nil // empty result
+}
+
+func (n *LocalNode) Addrs() []ma.Multiaddr {
+	return nil // empty result
+}
+
+func (n *LocalNode) Close() error {
+	// nothing to do
+	return nil
+}
+
+func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) {
+	//ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 }
+
+//type yieldCh chan struct{}
+//var YieldCh yieldCh
 
 func (an *LocalNode) Sched(ev SchedEvent, time int64) {
 	ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, time)
-}
-
-func NewLocalNode(key Key) LocalNode {
-	return LocalNode{pid: key.String()}
-}
-
-func (n LocalNode) Id() string {
-	return n.pid
-}
-
-func (n LocalNode) Locator() (string, error) {
-	return "", fmt.Errorf("no locator in local node")
-}
-
-func GetLocalNode(id string) LocalNode {
-	var n, isThere = LocalNodes[id]
-	if !isThere {
-		n = LocalNode{pid: id}
-		LocalNodes[id] = n
-	}
-	return n
 }

@@ -43,7 +43,7 @@ func NewKADUnicastEvent(receiver *KADNode, target kbucket.ID) *KADUnicastEvent {
 		numberOfMessages:           0,
 		numberOfDuplicatedMessages: 0,
 		finishTime:                 0,
-		AbstractSchedEvent:         *ayame.NewSchedEvent()}
+		AbstractSchedEvent:         *ayame.NewSchedEvent(receiver, nil, nil)}
 	ev.root = ev
 	ev.SetSender(receiver)
 	ev.SetReceiver(receiver)
