@@ -14,7 +14,7 @@ type Node interface {
 	String() string
 	Addrs() []ma.Multiaddr
 	Id() peer.ID // ID as an Endpoint
-	Send(ctx context.Context, ev SchedEvent, sign bool)
+	Send(ctx context.Context, ev SchedEvent, sign bool) error
 	Encode() *pb.Peer
 	Close() error
 }
@@ -59,9 +59,10 @@ func (n *LocalNode) Close() error {
 	return nil
 }
 
-func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) {
+func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) error {
 	//ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
+	return nil
 }
 
 //type yieldCh chan struct{}

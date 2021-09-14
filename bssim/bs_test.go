@@ -38,12 +38,12 @@ func TestSim(t *testing.T) {
 func TestP2P(t *testing.T) {
 	numberOfPeers := 100
 	peers := make([]*bs.BSNode, numberOfPeers)
-	peers[0], _ = bs.NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
+	peers[0], _ = bs.NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2), nil)
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers/2; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
@@ -51,7 +51,7 @@ func TestP2P(t *testing.T) {
 	time.Sleep(time.Duration(10) * time.Second)
 	for i := numberOfPeers / 2; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/multiformats/go-multiaddr"
@@ -51,7 +52,7 @@ func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
 func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector,
 	authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*BSNode, error) {
-	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage, validator)
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, nil, ConvertMessage, validator)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +68,8 @@ func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVecto
 	return ret, nil
 }
 
-func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector) (*BSNode, error) {
-	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, ConvertMessage, nil)
+func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector, priv crypto.PrivKey) (*BSNode, error) {
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, priv, ConvertMessage, nil)
 	if err != nil {
 		ayame.Log.Errorf("%s\n", err)
 		return nil, err

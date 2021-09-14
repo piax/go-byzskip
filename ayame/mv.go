@@ -8,8 +8,7 @@ import (
 )
 
 const MembershipVectorSize = 32
-
-//const DefaultAlpha = 2
+const DefaultAlpha = 2
 
 type MembershipVector struct {
 	Alpha int

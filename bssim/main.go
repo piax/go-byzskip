@@ -518,8 +518,8 @@ var keyIssuer key_issuer.KeyIssuer
 
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
-	kValue = flag.Int("k", 2, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
+	kValue = flag.Int("k", 4, "the redundancy parameter")
+	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
 	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
 	failureRatio = flag.Float64("f", 0.3, "failure ratio")
@@ -529,8 +529,8 @@ func main() {
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
-	seed = flag.Int64("seed", 2, "give a random seed")
-	verbose = flag.Bool("v", true, "verbose output")
+	seed = flag.Int64("seed", 3, "give a random seed")
+	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
 	ayame.SecureKeyMV = false // skip authentication

@@ -28,7 +28,7 @@ func (n *BSNode) fixLowPeersRoutine(proc goprocess.Process) {
 }
 
 func (n *BSNode) fixLowPeers() {
-	if n.RoutingTable.HasSufficientNeighbors() {
+	if len(n.stats.failed) == 0 && n.RoutingTable.HasSufficientNeighbors() {
 		ayame.Log.Debugf("%s: has sufficient neighbors", n)
 		return
 	}

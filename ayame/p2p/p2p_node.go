@@ -51,6 +51,7 @@ const (
 var USE_QUIC = true // if false, TCP.
 
 func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.MembershipVector,
+	priv crypto.PrivKey,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*P2PNode, error) {
 
@@ -60,10 +61,12 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		return nil, err
 	}
 	// public key is omitted because libp2p extracts pubkey from priv.GetPublic()
-	priv, _, err := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
-	if err != nil {
-		ayame.Log.Errorf("%s\n", err)
-		return nil, err
+	if priv == nil {
+		priv, _, err = crypto.GenerateKeyPair(crypto.Secp256k1, 256)
+		if err != nil {
+			ayame.Log.Errorf("%s\n", err)
+			return nil, err
+		}
 	}
 	var host host.Host
 	if USE_QUIC { // XXX future work: option constructor.
@@ -234,7 +237,7 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 }
 
 // Node API
-func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
+func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) error {
 	ayame.Log.Infof("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 
 	id := ev.Receiver().Id()
@@ -242,13 +245,14 @@ func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) {
 	s, err := n.NewStream(ctx, id, sendMessageProto)
 	if err != nil {
 		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
-		return
+		return err
 	}
 	defer s.Close()
 	n.sendMsgToStream(ctx, s, n.sign(ev, sign))
 	if ev.IsRequest() {
 		n.onReceiveMessage(s)
 	}
+	return nil
 }
 
 // Authenticate incoming p2p message
@@ -328,7 +332,7 @@ func (n *P2PNode) authenticateMessage(message *p2p.Message, s network.Stream) bo
 			return false
 		}
 	} else {
-		ayame.Log.Errorf("no sender sign in message %s", message.Data.Id)
+		ayame.Log.Infof("no sender sign in message %s", message.Data.Id)
 		return false
 	}
 

@@ -105,6 +105,8 @@ type RoutingTable interface {
 	GetClosestIndex() *TableIndex
 
 	Add(c KeyMV)
+	Del(c KeyMV)
+
 	Delete(c ayame.Key)
 
 	// neighbor list API
@@ -446,6 +448,15 @@ func delNode(kms []KeyMV, key ayame.Key) ([]KeyMV, bool) {
 	return kms, false
 }
 
+func delKeyMV(kms []KeyMV, km KeyMV) ([]KeyMV, bool) {
+	for i := range kms {
+		if kms[i].Equals(km) {
+			return append(kms[:i], kms[i+1:]...), true
+		}
+	}
+	return kms, false
+}
+
 // Delete entries which have specified key
 func (table *SkipRoutingTable) Delete(key ayame.Key) {
 	if table.km.Key().Equals(key) {
@@ -457,6 +468,23 @@ func (table *SkipRoutingTable) Delete(key ayame.Key) {
 			levelTable.Neighbors[LEFT] = deleted
 		}
 		deleted, modified = delNode(levelTable.Neighbors[RIGHT], key)
+		if modified {
+			levelTable.Neighbors[RIGHT] = deleted
+		}
+	}
+}
+
+func (table *SkipRoutingTable) Del(km KeyMV) {
+	if table.km.Equals(km) {
+		return // cannot delete self
+	}
+	for _, levelTable := range table.NeighborLists {
+		deleted, modified := delKeyMV(levelTable.Neighbors[LEFT], km)
+		if modified {
+			
+			levelTable.Neighbors[LEFT] = deleted
+		}
+		deleted, modified = delKeyMV(levelTable.Neighbors[RIGHT], km)
 		if modified {
 			levelTable.Neighbors[RIGHT] = deleted
 		}

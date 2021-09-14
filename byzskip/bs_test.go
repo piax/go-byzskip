@@ -72,6 +72,23 @@ func TestSorted(t *testing.T) {
 	fmt.Println(ayame.SliceString(rslt))
 }
 
+func TestNeighbors(t *testing.T) {
+	InitK(2)
+	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
+	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})
+	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})})
+	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})})
+	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
+	rt.Add(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
+	rslt := rt.Neighbors(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
+	fmt.Println(ayame.SliceString(rslt))
+	kcls, lv := rt.KClosest(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
+	fmt.Println(ayame.SliceString(kcls))
+	fmt.Println(lv)
+}
+
 func TestSufficient(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)})
@@ -89,6 +106,15 @@ func TestSufficient(t *testing.T) {
 	for _, a := range kms[1:] {
 		rt.Add(a)
 	}
+	fmt.Println(rt)
+	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
+}
+
+func TestSufficient2(t *testing.T) {
+	InitK(2)
+	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(0), Mvdata: ayame.NewMembershipVector(2)})
+	km := &IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)}
+	rt.Add(km)
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
 }
@@ -275,12 +301,12 @@ func Example() {
 	InitK(4)
 	ayame.SecureKeyMV = false
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2))
+	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2), nil)
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
 		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2))
+		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
 		peers[i].Join(context.Background(), locator)
 		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
 			fmt.Printf("%d: received '%s'\n", node.Key(), string(ev.Payload))
