@@ -31,6 +31,7 @@ var keyIssuerType *string
 var uniRoutingType *string
 var experiment *string
 var useTableIndex *bool
+var modifyRoutingTableDirectly *bool
 var seed *int64
 var verbose *bool
 
@@ -355,7 +356,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					sumMsgs += len(msg.Results) // number of reply messages
 
 					//
-					localn.RoutingTable.Add(nodes[index])
+					localn.RoutingTable.Add(nodes[index], true)
 
 					// XXX candidate list length
 					umsgs, hijacked, _ := FastUpdateNeighbors(localn, msg.Results, []*bs.BSNode{})
@@ -529,6 +530,7 @@ func main() {
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
 	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
+	modifyRoutingTableDirectly = flag.Bool("modRT", false, "modify routing table directly")
 	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
@@ -592,6 +594,8 @@ func main() {
 	case "prune-opt2":
 		bs.RoutingType = bs.PRUNE_OPT2
 	}
+
+	bs.MODIFY_ROUTING_TABLE_BY_RESPONSE = *modifyRoutingTableDirectly
 
 	trials := *numberOfNodes
 	if *numberOfTrials > 0 {

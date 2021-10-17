@@ -24,6 +24,10 @@ func (table *StopRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, in
 	return []bs.KeyMV{}, 0
 }
 
+func (table *StopRoutingTable) PossiblyBeAdded(km bs.KeyMV) bool {
+	return false
+}
+
 // get all disjoint entries
 func (table *StopRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []bs.KeyMV {
 	return []bs.KeyMV{}
@@ -37,7 +41,7 @@ func (table *StopRoutingTable) HasSufficientNeighbors() bool {
 	return true
 }
 
-func (table *StopRoutingTable) Add(c bs.KeyMV) {
+func (table *StopRoutingTable) Add(c bs.KeyMV, truncate bool) {
 	// do nothing.
 }
 

@@ -83,8 +83,8 @@ func (table *AdversaryRoutingTable) GetClosestIndex() *bs.TableIndex {
 }
 
 // called as a normal behavior
-func (table *AdversaryRoutingTable) Add(c bs.KeyMV) {
-	table.normal.Add(c)
+func (table *AdversaryRoutingTable) Add(c bs.KeyMV, truncate bool) {
+	table.normal.Add(c, truncate)
 }
 
 func (table *AdversaryRoutingTable) Delete(key ayame.Key) {
@@ -95,9 +95,13 @@ func (table *AdversaryRoutingTable) Del(km bs.KeyMV) {
 	table.normal.Del(km)
 }
 
+func (table *AdversaryRoutingTable) PossiblyBeAdded(km bs.KeyMV) bool {
+	return table.normal.PossiblyBeAdded(km)
+}
+
 // called by adversarial community
 func (table *AdversaryRoutingTable) AddAdversarial(c bs.KeyMV) {
-	table.adversarial.Add(c)
+	table.adversarial.Add(c, true)
 }
 
 func (table *AdversaryRoutingTable) GetNeighborLists() []*bs.NeighborList {

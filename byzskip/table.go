@@ -104,7 +104,8 @@ type RoutingTable interface {
 	GetTableIndex() []*TableIndex
 	GetClosestIndex() *TableIndex
 
-	Add(c KeyMV)
+	PossiblyBeAdded(c KeyMV) bool
+	Add(c KeyMV, truncate bool)
 	Del(c KeyMV)
 
 	Delete(c ayame.Key)
@@ -214,15 +215,6 @@ func (table *SkipRoutingTable) KClosest(req *NeighborRequest) ([]KeyMV, int) {
 	return clst, level
 }
 
-func (table *SkipRoutingTable) GetFindNodeRequest(k int) *NeighborRequest {
-	return &NeighborRequest{
-		Key:               table.km.Key(),
-		MV:                table.km.MV(),
-		ClosestIndex:      table.GetClosestIndex(),
-		NeighborListIndex: table.GetTableIndex(),
-	}
-}
-
 func (table *SkipRoutingTable) GetClosestIndex() *TableIndex {
 	// XXX should be optimized because the level must be 0
 	clst, lvl := table.KClosestWithKey(table.km.Key())
@@ -256,6 +248,36 @@ func (table *SkipRoutingTable) GetTableIndex() []*TableIndex {
 		}
 	}
 	return ret
+}
+
+func (table *SkipRoutingTable) mayContain(level int, d int, km KeyMV) bool {
+	table.ensureHeight(level)
+	singleLevel := table.NeighborLists[level]
+	if !singleLevel.hasSufficientNodes(d) {
+		return true
+	} else {
+		last := len(singleLevel.Neighbors[d]) - 1
+		lastKey := singleLevel.Neighbors[d][last].Key()
+		if d == RIGHT && isOrderedSimple(table.km.Key(), km.Key(), lastKey) ||
+			d == LEFT && isOrderedSimple(lastKey, km.Key(), table.km.Key()) {
+			return true
+		}
+	}
+	return false
+}
+
+func (table *SkipRoutingTable) possiblyBeUsed(d int, km KeyMV) bool {
+	commonPrefixLen := table.km.MV().CommonPrefixLength(km.MV())
+	for i := 0; i < commonPrefixLen+1; i++ {
+		if table.mayContain(i, d, km) {
+			return true
+		}
+	}
+	return false
+}
+
+func (table *SkipRoutingTable) PossiblyBeAdded(km KeyMV) bool {
+	return table.possiblyBeUsed(LEFT, km) || table.possiblyBeUsed(RIGHT, km)
 }
 
 func excludeNodes(nodes []KeyMV, queried []ayame.Key) []KeyMV {
@@ -416,7 +438,7 @@ func (table *SkipRoutingTable) ensureHeight(level int) {
 	}
 }
 
-func (table *SkipRoutingTable) Add(c KeyMV) {
+func (table *SkipRoutingTable) Add(c KeyMV, truncate bool) {
 	if table.km.Equals(c) {
 		return // cannot add self
 	}
@@ -426,8 +448,8 @@ func (table *SkipRoutingTable) Add(c KeyMV) {
 	// add to levels from 0 to common prefix level.
 	for i := 0; i < commonLen+1; i++ {
 		// trimmed if needed
-		table.NeighborLists[i].Add(RIGHT, c)
-		table.NeighborLists[i].Add(LEFT, c)
+		table.NeighborLists[i].Add(RIGHT, c, truncate)
+		table.NeighborLists[i].Add(LEFT, c, truncate)
 	}
 	// trim the height
 	/* XXX
@@ -481,7 +503,7 @@ func (table *SkipRoutingTable) Del(km KeyMV) {
 	for _, levelTable := range table.NeighborLists {
 		deleted, modified := delKeyMV(levelTable.Neighbors[LEFT], km)
 		if modified {
-			
+
 			levelTable.Neighbors[LEFT] = deleted
 		}
 		deleted, modified = delKeyMV(levelTable.Neighbors[RIGHT], km)
@@ -746,7 +768,7 @@ func SortCircularAppend(base ayame.Key, list []KeyMV, elem KeyMV) []KeyMV {
 	return ret
 }
 
-func (rts *NeighborList) Add(d int, u KeyMV) {
+func (rts *NeighborList) Add(d int, u KeyMV, truncate bool) {
 	for _, a := range rts.Neighbors[d] {
 		if a.Equals(u) {
 			return
@@ -761,9 +783,11 @@ func (rts *NeighborList) Add(d int, u KeyMV) {
 	if d == LEFT {
 		reverseSlice(rts.Neighbors[d])
 	}
-	i := rts.satisfactionIndex(d)
-	if i > 0 {
-		rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
+	if truncate {
+		i := rts.satisfactionIndex(d)
+		if i > 0 {
+			rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
+		}
 	}
 }
 
@@ -922,8 +946,8 @@ func (table *SkipRoutingTable) ExtendRoutingTable(level int) {
 			for _, n := range append(table.NeighborLists[maxLevel].Neighbors[RIGHT],
 				table.NeighborLists[maxLevel].Neighbors[LEFT]...) {
 				if n.MV().CommonPrefixLength(table.km.MV()) >= newLevel {
-					s.Add(RIGHT, n)
-					s.Add(LEFT, n)
+					s.Add(RIGHT, n, true)
+					s.Add(LEFT, n, true)
 				}
 			}
 		}

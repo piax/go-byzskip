@@ -18,8 +18,8 @@ import (
 
 func TestTableDeletion(t *testing.T) {
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVector(2)})
-	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVector(2)})
-	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVector(2)})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVector(2)}, true)
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVector(2)}, true)
 
 	rt.Delete(ayame.IntKey(2))
 	rt.Delete(ayame.IntKey(3))
@@ -58,13 +58,13 @@ func TestSortCircular(t *testing.T) {
 func TestSorted(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
-	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
-	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
-	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})
-	rt.Add(&IntKeyMV{key: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})})
-	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})})
-	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
-	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
 	rslt := rt.GetCloserCandidates()
 	ast.Equal(t, ayame.SliceString(rslt), "[2,8,3,7,5]", "expected [2,8,3,7,5]")
 	fmt.Println(ayame.SliceString(rslt))
@@ -72,16 +72,30 @@ func TestSorted(t *testing.T) {
 	fmt.Println(ayame.SliceString(rslt))
 }
 
+func TestSortByCloseness(t *testing.T) {
+	rt := []*BSNode{}
+	rt = append(rt, &BSNode{key: ayame.IntKey(1), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(3), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(11), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(2), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(9), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(7), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+	rt = append(rt, &BSNode{key: ayame.IntKey(4), mv: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
+
+	rslt := sortByCloseness(ayame.IntKey(5), rt)
+	ast.Equal(t, ayame.SliceString(rslt), "[7,4,9,3,11,2]")
+}
+
 func TestNeighbors(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
-	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})})
-	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})})
-	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})})
-	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})})
-	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})})
-	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})})
-	rt.Add(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})})
+	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})}, true)
+	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})}, true)
+	rt.Add(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
 	rslt := rt.Neighbors(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
 	fmt.Println(ayame.SliceString(rslt))
 	kcls, lv := rt.KClosest(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
@@ -96,7 +110,7 @@ func TestSufficient(t *testing.T) {
 	for i := 2; i < 100; i++ {
 		km := &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)}
 		kms = append(kms, km)
-		rt.Add(km)
+		rt.Add(km, true)
 	}
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
@@ -104,7 +118,7 @@ func TestSufficient(t *testing.T) {
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), false, "expected to have not sufficient neighbors")
 	for _, a := range kms[1:] {
-		rt.Add(a)
+		rt.Add(a, true)
 	}
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
@@ -114,7 +128,7 @@ func TestSufficient2(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(0), Mvdata: ayame.NewMembershipVector(2)})
 	km := &IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)}
-	rt.Add(km)
+	rt.Add(km, true)
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
 }
@@ -177,7 +191,7 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
-	//time.Sleep(time.Duration(10) * time.Second)
+	time.Sleep(time.Duration(5) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
@@ -208,7 +222,7 @@ func TestFix(t *testing.T) { // 30 sec long test
 }
 
 func TestLookup(t *testing.T) {
-	numberOfPeers := 100
+	numberOfPeers := 32
 	peers := setupNodes(numberOfPeers, true, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET

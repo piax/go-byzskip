@@ -133,6 +133,14 @@ func ConvertTableIndexList(idxs []*pb.TableIndex) []*TableIndex {
 }
 
 func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
+	if req.ClosestIndex == nil { // Lookup
+		return &NeighborRequest{
+			Key:               p2p.NewKey(req.Key),
+			MV:                ayame.NewMembershipVectorFromBinary(req.MV),
+			ClosestIndex:      nil,
+			NeighborListIndex: nil,
+		}
+	}
 	return &NeighborRequest{
 		Key:               p2p.NewKey(req.Key),
 		MV:                ayame.NewMembershipVectorFromBinary(req.MV),

@@ -36,8 +36,8 @@ func extendRoutingTable(m *bs.BSNode, level int) {
 			for _, n := range append(m.RoutingTable.GetNeighborLists()[maxLevel].Neighbors[bs.RIGHT],
 				m.RoutingTable.GetNeighborLists()[maxLevel].Neighbors[bs.LEFT]...) {
 				if n.MV().CommonPrefixLength(m.MV()) >= newLevel {
-					s.Add(bs.RIGHT, n)
-					s.Add(bs.LEFT, n)
+					s.Add(bs.RIGHT, n, true)
+					s.Add(bs.LEFT, n, true)
 				}
 			}
 		}

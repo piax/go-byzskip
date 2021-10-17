@@ -64,7 +64,7 @@ func NewBSUnicastEventNoAuthor(sender *BSNode, messageId string, level int, targ
 		numberOfMessages:           0,
 		NumberOfDuplicatedMessages: 0,
 		finishTime:                 0,
-		AbstractSchedEvent:         *ayame.NewSchedEvent(nil, nil, nil)}
+		AbstractSchedEvent:         *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.Root = ev
 	ev.SetSender(sender)
 	ev.SetReceiver(sender) // XXX weird
@@ -110,6 +110,10 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 
 func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
+	if !strings.HasPrefix(ev.MessageId, ev.Author().String()+".") { // check if adversary generated mimic message id.
+		ayame.Log.Infof("*** Adversary DoS attack for %s at %d\n", ev.MessageId, myNode.String())
+		return false
+	}
 	myNode.seenMutex.RLock()
 	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
 	myNode.seenMutex.RUnlock()

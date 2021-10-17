@@ -310,18 +310,22 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		ret = AppendNodeIfMissing(ret, c)
-		ret = UnincludedNodes(ret, stat.queried)
-		ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
+			ret = AppendNodeIfMissing(ret, c)
+			ret = UnincludedNodes(ret, stat.queried)
+			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+		}
 	}
 	///}
 	for _, c := range stat.candidates {
 		if len(ret) == count {
 			return ret
 		}
-		ret = AppendNodeIfMissing(ret, c)
-		ret = UnincludedNodes(ret, stat.queried)
-		ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
+			ret = AppendNodeIfMissing(ret, c)
+			ret = UnincludedNodes(ret, stat.queried)
+			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+		}
 	}
 	// not enough number
 	return ret
@@ -470,6 +474,122 @@ func isFaultySet(nodes []*BSNode) bool {
 	return true
 }
 
+func sortByCloseness(key ayame.Key, nodes []*BSNode) []*BSNode {
+	if len(nodes) == 0 {
+		return nodes
+	}
+	ks := nsToKs(nodes)
+	SortC(key, ks)
+	ret := []*BSNode{}
+
+	for i, j := 0, len(ks)-1; i < j; i, j = i+1, j-1 {
+		ret = append(ret, ks[i].(*BSNode))
+		ret = append(ret, ks[j].(*BSNode))
+	}
+	return ret
+}
+
+func (n *BSNode) GetNeighborRequest() *NeighborRequest {
+	return &NeighborRequest{
+		Key:               n.Key(),
+		MV:                n.MV(),
+		ClosestIndex:      n.RoutingTable.GetClosestIndex(),
+		NeighborListIndex: n.RoutingTable.GetTableIndex(),
+	}
+}
+
+func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
+	if response.isFailure { // timed out
+		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+		n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+		// delete response.sender from the routing table if already exists.
+		n.rtMutex.Lock()
+		//n.RoutingTable.Delete(response.sender.Key())
+		n.RoutingTable.Del(response.sender)
+		n.rtMutex.Unlock()
+		return nil
+	}
+	if response.level == 0 {
+		ayame.Log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
+		initialNodes := append(n.stats.candidates, n.stats.closest...)
+		if !n.IsFailure && isFaultySet(initialNodes) {
+			ayame.Log.Infof("initial nodes hijacked: %s\n", initialNodes)
+		}
+		for _, m := range response.closest {
+			if m.Key().Equals(n.Key()) {
+				return fmt.Errorf("%s: Key already in use", n.Key())
+			}
+		}
+	}
+	n.rtMutex.Lock()
+	n.RoutingTable.Add(response.sender, true) // XXX lock
+	ayame.Log.Debugf("%s: added response sender %s", n, response.sender)
+	n.rtMutex.Unlock()
+	/*
+		for _, c := range response.candidates {
+			n.rtMutex.Lock()
+			n.stats.candidateTable.Add(c, true)
+			n.rtMutex.Unlock()
+		}
+		if EXCLUDE_CLOSEST_IN_NEIGHBORS {
+			for _, c := range response.closest {
+				n.rtMutex.Lock()
+				n.stats.candidateTable.Add(c, true)
+				n.rtMutex.Unlock()
+			}
+		}
+	*/
+	n.stats.closest = AppendNodesIfMissing(n.stats.closest, response.closest)
+
+	n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, response.candidates)
+	if EXCLUDE_CLOSEST_IN_NEIGHBORS {
+		n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, response.closest)
+	}
+	/*
+		for _, c := range response.candidates {
+			if n.RoutingTable.PossiblyBeAdded(c) {
+				ayame.Log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+				n.stats.candidates = AppendNodeIfMissing(n.stats.candidates, c)
+			} else {
+				ayame.Log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+			}
+		}
+		if EXCLUDE_CLOSEST_IN_NEIGHBORS {
+			for _, c := range response.closest {
+				if n.RoutingTable.PossiblyBeAdded(c) {
+					ayame.Log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+					n.stats.candidates = AppendNodeIfMissing(n.stats.candidates, c)
+				} else {
+					ayame.Log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+				}
+			}
+		}*/
+	/*	n.rtMutex.RLock()
+		req := n.GetNeighborRequest()
+		n.rtMutex.RUnlock()
+		n.stats.candidates = ksToNs(excludeNeighborsInRequest(n, n.stats.candidateTable.AllNeighbors(false, true), req))*/
+	//n.stats.candidates = ksToNs(n.stats.candidateTable.AllNeighbors(false, true)) //AppendNodesIfMissing(n.stats.candidates, ksToNs(n.stats.candidateTable.AllNeighbors(false, true)))
+	//ksToNs(n.stats.candidateTable.AllNeighbors(false, true))
+	//n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, ksToNs(n.stats.candidateTable.AllNeighbors(false, true)))
+
+	n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+
+	ayame.Log.Debugf("%s: received closest=%s, level=%d, candidates=%s,  candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
+		ayame.SliceString(response.candidates),
+		ayame.SliceString(n.stats.candidates))
+	n.procsMutex.Lock()
+	delete(n.Procs, response.id)
+	n.procsMutex.Unlock()
+
+	if response.level == 0 { // just for debug
+		ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", n.Key(),
+			ayame.SliceString(UnincludedNodes(n.stats.candidates, n.stats.queried)),
+			ayame.SliceString(n.stats.queried))
+	}
+
+	return nil
+}
+
 func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	if response.isFailure { // timed out
 		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
@@ -491,23 +611,22 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 			if m.Key().Equals(n.Key()) {
 				return fmt.Errorf("%s: Key already in use", n.Key())
 			}
-			fmt.Printf("%s: initial: %s", n.Key(), m.Key())
 		}
 	}
 	n.rtMutex.Lock()
-	n.RoutingTable.Add(response.sender) // XXX lock
+	n.RoutingTable.Add(response.sender, true) // XXX lock
 	ayame.Log.Debugf("%s: added response sender %s", n, response.sender)
 	n.rtMutex.Unlock()
 
 	for _, c := range response.candidates {
 		n.rtMutex.Lock()
-		n.RoutingTable.Add(c)
+		n.RoutingTable.Add(c, true)
 		n.rtMutex.Unlock()
 	}
 	if EXCLUDE_CLOSEST_IN_NEIGHBORS {
 		for _, c := range response.closest {
 			n.rtMutex.Lock()
-			n.RoutingTable.Add(c)
+			n.RoutingTable.Add(c, true)
 			n.rtMutex.Unlock()
 		}
 	}
@@ -789,9 +908,12 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.ch <- &FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
 		} else { // async
-			n.processResponse(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+			if MODIFY_ROUTING_TABLE_BY_RESPONSE {
+				n.processResponse(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+			} else {
+				n.processResponseIndirect(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+			}
 			ResponseCount += (len(ue.closers) + len(ue.candidates))
-			ayame.Log.Debugf("%d", ResponseCount)
 
 			if !n.allQueried() {
 				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
@@ -807,7 +929,9 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 
 }
 
-var EXCLUDE_CLOSEST_IN_NEIGHBORS bool = false
+var MODIFY_ROUTING_TABLE_BY_RESPONSE bool = true
+
+var EXCLUDE_CLOSEST_IN_NEIGHBORS bool = true
 
 func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent) ayame.SchedEvent {
 	ue := ev.(*BSFindNodeEvent)
@@ -836,7 +960,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 	}
 	ayame.Log.Debugf("returns closest=%s, level=%d, candidates=%s\n", ayame.SliceString(closest), level, ayame.SliceString(candidates))
 	n.rtMutex.Lock()
-	n.RoutingTable.Add(ue.Sender().(*BSNode))
+	n.RoutingTable.Add(ue.Sender().(*BSNode), true)
 	n.rtMutex.Unlock()
 	res := NewBSFindNodeResEvent(n, ue, closest, level, candidates)
 	res.SetSender(n)
