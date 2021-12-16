@@ -15,7 +15,7 @@ type AdversaryRoutingTable struct {
 }
 
 func NewAdversaryRoutingTable(keyMV bs.KeyMV) bs.RoutingTable {
-	return &AdversaryRoutingTable{normal: bs.NewBSRoutingTable(keyMV), adversarial: bs.NewBSRoutingTable(keyMV)} //, nodes: make(map[int]*BSNode)}
+	return &AdversaryRoutingTable{normal: bs.NewSkipRoutingTable(keyMV), adversarial: bs.NewSkipRoutingTable(keyMV)} //, nodes: make(map[int]*BSNode)}
 }
 
 // get k neighbors and its level

@@ -124,7 +124,7 @@ type SkipRoutingTable struct {
 	NeighborLists []*NeighborList // level 0 to top
 }
 
-func NewSkipRoutingTable(km KeyMV) *SkipRoutingTable {
+func NewSkipRoutingTable(km KeyMV) RoutingTable {
 	rt := &SkipRoutingTable{km: km, NeighborLists: []*NeighborList{}}
 	rt.ensureHeight(1) // level 0
 	return rt

@@ -166,7 +166,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, false)
+			n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -176,7 +176,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 			if f {
 				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewStopRoutingTable, f)
 			} else {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -190,7 +190,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 			if f {
 				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, f)
 			} else {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewBSRoutingTable, f)
+				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -348,7 +348,8 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					}
 				}
 			}
-			msg := bs.NewBSUnicastEventNoAuthor(nodes[index], NextId(), ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
+			mid := strconv.Itoa(index) + "." + NextId()
+			msg := bs.NewBSUnicastEventNoAuthor(nodes[index], mid, ayame.MembershipVectorSize, localn.Key(), []byte("hello"))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 				localn.Send(context.TODO(), msg, true) // the second argument (sign) is ommited in simulation
 				ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
@@ -496,13 +497,40 @@ func minHops(lst [][]bs.PathEntry, dstKey ayame.Key) (float64, bool) {
 	return 0, false
 }
 
+func pureLen(lst []bs.PathEntry) int {
+	ret := 0
+	prev := lst[0].Node.(*bs.BSNode)
+	for i, pe := range lst {
+		if i != 0 && !prev.Equals(pe.Node.(*bs.BSNode)) {
+			ret++
+		}
+		prev = pe.Node.(*bs.BSNode)
+	}
+	return ret
+}
+
 /*
 func meanOfPathLength(lst [][]bs.PathEntry) (float64, error) {
 	return stats.Mean(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
 }*/
 
 func maxPathLength(lst [][]bs.PathEntry) (float64, error) {
-	return stats.Max(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(len(x)) }).([]float64))
+	return stats.Max(funk.Map(lst, func(x []bs.PathEntry) float64 { return float64(pureLen(x)) }).([]float64))
+}
+
+func msgsByPath(lst [][]bs.PathEntry) (float64, error) {
+	pathMap := make(map[string]bool)
+	for _, pes := range lst {
+		prev := pes[0].Node.(*bs.BSNode)
+		for i, pe := range pes {
+			if i != 0 && !prev.Equals(pe.Node.(*bs.BSNode)) {
+				pathMap[fmt.Sprintf("%d:%d", prev.Key(), pe.Node.Key())] = true
+			}
+			prev = pe.Node.(*bs.BSNode)
+		}
+	}
+	//fmt.Printf("purelen=%d\n", len(pathMap))
+	return float64(len(pathMap)), nil
 }
 
 /*
@@ -522,16 +550,16 @@ func main() {
 	kValue = flag.Int("k", 4, "the redundancy parameter")
 	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
-	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
-	failureRatio = flag.Float64("f", 0.3, "failure ratio")
-	joinType = flag.String("joinType", "iter-ev", "join type {cheat|recur|iter|iter-p|iter-pp}")
+	failureType = flag.String("type", "calc", "failure type {none|stop|collab|collab-after|calc}")
+	failureRatio = flag.Float64("f", 0.0, "failure ratio")
+	joinType = flag.String("joinType", "cheat", "join type {cheat|recur|iter|iter-p|iter-pp|iter-ev}")
 	keyIssuerType = flag.String("issuerType", "none", "issuer type (type-param) type={shuffle|random|asis|none}")
 	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
-	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2}")
-	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
+	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2|prune-opt3}")
+	experiment = flag.String("exp", "uni-each", "experiment type {uni|uni-each|join}")
 	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
 	modifyRoutingTableDirectly = flag.Bool("modRT", false, "modify routing table directly")
-	seed = flag.Int64("seed", 3, "give a random seed")
+	seed = flag.Int64("seed", 2, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
@@ -593,6 +621,8 @@ func main() {
 		bs.RoutingType = bs.PRUNE_OPT1
 	case "prune-opt2":
 		bs.RoutingType = bs.PRUNE_OPT2
+	case "prune-opt3":
+		bs.RoutingType = bs.PRUNE_OPT3
 	}
 
 	bs.MODIFY_ROUTING_TABLE_BY_RESPONSE = *modifyRoutingTableDirectly

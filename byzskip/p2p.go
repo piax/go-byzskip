@@ -45,7 +45,7 @@ func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
 		parent: p2p.NewIntroducerRemoteNode(self, info.ID, info.Addrs),
 		// stats is not generated at this time
 		IsFailure: false}
-	ret.RoutingTable = NewBSRoutingTable(ret)
+	ret.RoutingTable = NewSkipRoutingTable(ret)
 	return ret, nil
 }
 
@@ -63,7 +63,7 @@ func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVecto
 		ayame.Log.Errorf("%s\n", err)
 		return nil, err
 	}
-	ret := NewBSNode(p2pNode, NewBSRoutingTable, false)
+	ret := NewBSNode(p2pNode, NewSkipRoutingTable, false)
 	p2pNode.SetChild(ret)
 	return ret, nil
 }
@@ -74,7 +74,7 @@ func NewP2PNode(locator string, key ayame.Key, mv *ayame.MembershipVector, priv 
 		ayame.Log.Errorf("%s\n", err)
 		return nil, err
 	}
-	ret := NewBSNode(p2pNode, NewBSRoutingTable, false)
+	ret := NewBSNode(p2pNode, NewSkipRoutingTable, false)
 	p2pNode.SetChild(ret)
 	return ret, nil
 }
@@ -97,14 +97,14 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	if ayame.SecureKeyMV {
 		if self.Validator != nil {
 			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
-				return NewBSNode(parent, NewBSRoutingTable, false), nil
+				return NewBSNode(parent, NewSkipRoutingTable, false), nil
 			}
 		} else { // no validator case
-			return NewBSNode(parent, NewBSRoutingTable, false), nil
+			return NewBSNode(parent, NewSkipRoutingTable, false), nil
 		}
 		return nil, fmt.Errorf("invalid join certificate")
 	} else {
-		return NewBSNode(parent, NewBSRoutingTable, false), nil
+		return NewBSNode(parent, NewSkipRoutingTable, false), nil
 	}
 }
 

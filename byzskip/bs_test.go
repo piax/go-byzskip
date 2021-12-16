@@ -28,10 +28,10 @@ func TestTableDeletion(t *testing.T) {
 
 func TestTable(t *testing.T) {
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVector(2)})
-	rt.ensureHeight(3)
-	rt.ensureHeight(2)
+	rt.(*SkipRoutingTable).ensureHeight(3)
+	rt.(*SkipRoutingTable).ensureHeight(2)
 	fmt.Println(rt.String())
-	ast.Equal(t, rt.Height(), 4, "expected 4")
+	ast.Equal(t, rt.(*SkipRoutingTable).Height(), 4, "expected 4")
 }
 
 func TestLessCircular(t *testing.T) {
@@ -65,7 +65,7 @@ func TestSorted(t *testing.T) {
 	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})}, true)
 	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})}, true)
 	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
-	rslt := rt.GetCloserCandidates()
+	rslt := rt.(*SkipRoutingTable).GetCloserCandidates()
 	ast.Equal(t, ayame.SliceString(rslt), "[2,8,3,7,5]", "expected [2,8,3,7,5]")
 	fmt.Println(ayame.SliceString(rslt))
 	rslt = rt.GetCommonNeighbors(ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0}))
@@ -87,7 +87,7 @@ func TestSortByCloseness(t *testing.T) {
 }
 
 func TestNeighbors(t *testing.T) {
-	InitK(2)
+	InitK(3)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
 	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})}, true)
 	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})}, true)
@@ -98,7 +98,7 @@ func TestNeighbors(t *testing.T) {
 	rt.Add(&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
 	rslt := rt.Neighbors(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
 	fmt.Println(ayame.SliceString(rslt))
-	kcls, lv := rt.KClosest(&NeighborRequest{Key: ayame.IntKey(5), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
+	kcls, lv := rt.KClosest(&NeighborRequest{Key: ayame.IntKey(4), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
 	fmt.Println(ayame.SliceString(kcls))
 	fmt.Println(lv)
 }

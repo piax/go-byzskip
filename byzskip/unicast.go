@@ -110,8 +110,9 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 
 func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
+
 	if !strings.HasPrefix(ev.MessageId, ev.Author().String()+".") { // check if adversary generated mimic message id.
-		ayame.Log.Infof("*** Adversary DoS attack for %s at %d\n", ev.MessageId, myNode.String())
+		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Author().String(), myNode.String())
 		return false
 	}
 	myNode.seenMutex.RLock()
@@ -189,6 +190,8 @@ func (ev *BSUnicastEvent) findNextHops(myNode *BSNode) []*BSUnicastEvent {
 	case PRUNE_OPT1:
 		fallthrough
 	case PRUNE_OPT2:
+		fallthrough
+	case PRUNE_OPT3:
 		ret, _ = ev.findNextHopsPrune(myNode)
 	}
 	return ret
@@ -217,6 +220,7 @@ const (
 	PRUNE
 	PRUNE_OPT1
 	PRUNE_OPT2
+	PRUNE_OPT3
 )
 
 func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, error) {
@@ -246,13 +250,26 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 					kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
 						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel
 					}).([]*BSNode)
+					//fmt.Printf("prune-opt2: lv.%d %d->%d\n", destLevel, len(ks), len(kNodes))
+					destLevel = i
+					break
+				}
+			}
+			err = fmt.Errorf("implementation error")
+		} else if RoutingType == PRUNE_OPT3 {
+			for i := 0; i < destLevel; i++ {
+				ks, _ := myNode.RoutingTable.GetNeighborLists()[i].PickupKNodes(ev.TargetKey)
+				if len(ks) > 0 {
+					kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
+						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(ev.Author().MV()) > n.MV().CommonPrefixLength(ev.Author().MV())
+					}).([]*BSNode)
 					destLevel = i
 					break
 				}
 			}
 			err = fmt.Errorf("implementation error")
 		}
-		if len(kNodes) == 0 {
+		if len(kNodes) == 0 { // level 0
 			ks, _ := myNode.RoutingTable.GetNeighborLists()[destLevel].PickupKNodes(ev.TargetKey)
 			kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
 				return n.Equals(myNode) || myNode.MV().CommonPrefixLength(n.MV()) <= destLevel

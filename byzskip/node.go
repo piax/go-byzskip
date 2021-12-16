@@ -128,7 +128,7 @@ func (n *BSNode) Close() error {
 	return n.proc.Close()
 }
 
-type BSRoutingTable struct {
+/*type BSRoutingTable struct {
 	//	nodes map[int]*BSNode // key=>node
 	SkipRoutingTable
 }
@@ -136,7 +136,7 @@ type BSRoutingTable struct {
 func NewBSRoutingTable(keyMV KeyMV) RoutingTable {
 	t := NewSkipRoutingTable(keyMV)
 	return &BSRoutingTable{SkipRoutingTable: *t} //, nodes: make(map[int]*BSNode)}
-}
+}*/
 
 func ksToNs(lst []KeyMV) []*BSNode {
 	ret := []*BSNode{}
@@ -336,7 +336,7 @@ func (n *BSNode) IsIntroducer() bool {
 }
 
 func NewSimNode(key ayame.Key, mv *ayame.MembershipVector) *BSNode {
-	return NewBSNode(ayame.NewLocalNode(key, mv), NewBSRoutingTable, false)
+	return NewBSNode(ayame.NewLocalNode(key, mv), NewSkipRoutingTable, false)
 }
 
 // Join a node join to the network.
@@ -512,6 +512,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	if response.level == 0 {
 		ayame.Log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
 		initialNodes := append(n.stats.candidates, n.stats.closest...)
+		//ayame.Log.Infof("initial nodes size: %d\n", len(initialNodes))
 		if !n.IsFailure && isFaultySet(initialNodes) {
 			ayame.Log.Infof("initial nodes hijacked: %s\n", initialNodes)
 		}
@@ -980,7 +981,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		if n.unicastHandler != nil {
 			n.unicastHandler(n, msg, true, false)
 		}
-		ayame.Log.Debugf("called already seen handler\n")
+		ayame.Log.Debugf("called already seen handler on %s, seen=%s\n", n, msg.MessageId)
 		return nil
 	}
 	if msg.level == 0 { // level 0 means destination
