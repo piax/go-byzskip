@@ -41,7 +41,8 @@ type KeyMV interface {
 	Key() ayame.Key
 	MV() *ayame.MembershipVector
 	Equals(other KeyMV) bool
-	String() string
+	//String() string
+	fmt.Stringer
 }
 
 type IntKeyMV struct {
@@ -117,6 +118,7 @@ type RoutingTable interface {
 	// util
 	String() string
 	Size() int
+	PureSize() int
 }
 
 type SkipRoutingTable struct {
@@ -142,6 +144,19 @@ func NodesEquals(a, b []KeyMV) bool {
 	return true
 }
 
+func NodesDiffs(a, b []KeyMV) int {
+	diffs := 0
+	for i := range a {
+		if len(b) <= i {
+			diffs++
+		} else if !a[i].Key().Equals(b[i].Key()) {
+			diffs++
+		}
+
+	}
+	return diffs
+}
+
 func RoutingTableEquals(t1 RoutingTable, t2 RoutingTable) bool {
 	for i := 0; i < len(t1.GetNeighborLists()); i++ {
 		// terminate
@@ -163,6 +178,36 @@ func RoutingTableEquals(t1 RoutingTable, t2 RoutingTable) bool {
 		}
 	}
 	return true
+}
+
+// the number of entries in t1 which are not included in t2
+func RoutingTableDiffs(t1 RoutingTable, t2 RoutingTable) int {
+	lst1 := []ayame.Key{}
+	mp := make(map[ayame.Key]bool)
+	for _, levelTable := range t1.GetNeighborLists() {
+		for _, node := range levelTable.Neighbors[LEFT] {
+			lst1 = ayame.AppendIfMissing(lst1, node.Key())
+		}
+		for _, node := range levelTable.Neighbors[RIGHT] {
+			lst1 = ayame.AppendIfMissing(lst1, node.Key())
+		}
+	}
+
+	for _, levelTable := range t2.GetNeighborLists() {
+		for _, node := range levelTable.Neighbors[LEFT] {
+			mp[node.Key()] = true
+		}
+		for _, node := range levelTable.Neighbors[RIGHT] {
+			mp[node.Key()] = true
+		}
+	}
+	diffs := 0
+	for _, n := range lst1 {
+		if !mp[n] {
+			diffs++
+		}
+	}
+	return diffs
 }
 
 func (table *SkipRoutingTable) GetNeighborLists() []*NeighborList {
@@ -310,7 +355,8 @@ func excludeNeighborsInRequest(self KeyMV, lst []KeyMV, req *NeighborRequest) []
 			ir = append(ir, idx.Max)
 		}
 	}
-	return excludeNodes(lst, ir)
+	ret := excludeNodes(lst, ir)
+	return ret
 }
 
 func appendKeyMVIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
@@ -389,18 +435,18 @@ func (rts *NeighborList) concatenateWithIndex(req *NeighborRequest, includeSelf 
 			ret = append(ret, n)
 		}
 	}
-	if idx != nil {
-		ayame.Log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.Key, idx.Max, ayame.SliceString(ret))
-	} else {
-		ayame.Log.Debugf("@%d,resp=%s\n", rts.level, ayame.SliceString(ret))
-	}
+	/*	if idx != nil {
+			ayame.Log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.Key, idx.Max, ayame.SliceString(ret))
+		} else {
+			ayame.Log.Debugf("@%d,resp=%s\n", rts.level, ayame.SliceString(ret))
+		}*/
 	return ret
 }
 
 func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(req.MV)
-	ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
+	//ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
 	for l, singleLevel := range table.NeighborLists {
 		if l > commonLen { // no match
 			break
@@ -417,7 +463,7 @@ func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 func (table *SkipRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(mv)
-	ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
+	//ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
 	for l, singleLevel := range table.NeighborLists {
 		if l > commonLen { // no match
 			break
@@ -457,6 +503,12 @@ func (table *SkipRoutingTable) Add(c KeyMV, truncate bool) {
 		return !lv.hasDuplicatesInLeftsAndRights()
 	}).([]*NeighborList)
 	*/
+}
+
+func (table *SkipRoutingTable) TrimRoutingTable() {
+	table.NeighborLists = funk.Filter(table.NeighborLists, func(lv *NeighborList) bool {
+		return !lv.hasDuplicatesInLeftsAndRights()
+	}).([]*NeighborList)
 }
 
 // Delete an entry from KeyMV slice that matches the key.
@@ -529,6 +581,15 @@ func (table *SkipRoutingTable) Size() int {
 		}
 	}
 	return len(lst)
+}
+
+func (table *SkipRoutingTable) PureSize() int {
+	ret := 0
+	for _, levelTable := range table.NeighborLists {
+		ret += len(levelTable.Neighbors[LEFT])
+		ret += len(levelTable.Neighbors[RIGHT])
+	}
+	return ret
 }
 
 /*
@@ -697,7 +758,7 @@ func isOrderedInclusive(a, b, c ayame.Key) bool {
 	return false
 }
 
-func isOrdered(start ayame.Key, startInclusive bool, val ayame.Key, end ayame.Key, endInclusive bool) bool {
+func IsOrdered(start ayame.Key, startInclusive bool, val ayame.Key, end ayame.Key, endInclusive bool) bool {
 	if start.Equals(end) {
 		return (startInclusive != endInclusive) || (start.Equals(val))
 	}
@@ -785,7 +846,8 @@ func (rts *NeighborList) Add(d int, u KeyMV, truncate bool) {
 	}
 	if truncate {
 		i := rts.satisfactionIndex(d)
-		if i > 0 {
+		//		ayame.Log.Debugf("satisfaction index dir=%d %s=%d\n", d, ayame.SliceString(rts.Neighbors[d]), i)
+		if i >= 0 {
 			rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
 		}
 	}
@@ -830,7 +892,7 @@ func min(x, y int) int {
 }
 
 func closestKNodesDisjoint(target ayame.Key, nodes []KeyMV) []KeyMV {
-	sortedNodes := uniqueNodes(nodes) //append([]KeyMV{}, nodes...)
+	sortedNodes := UniqueNodes(nodes) //append([]KeyMV{}, nodes...)
 	SortC(target, sortedNodes)
 	leftLen := min(len(sortedNodes), LEFT_HALF_K)
 	rightLen := min(len(sortedNodes)-leftLen, RIGHT_HALF_K)
@@ -839,7 +901,7 @@ func closestKNodesDisjoint(target ayame.Key, nodes []KeyMV) []KeyMV {
 	return append(lefts, rights...)
 }
 
-func uniqueNodes(nodes []KeyMV) []KeyMV {
+func UniqueNodes(nodes []KeyMV) []KeyMV {
 	ret := []KeyMV{}
 	for _, n := range nodes {
 		ret = appendKeyMVIfMissing(ret, n)
@@ -877,7 +939,7 @@ func (rts *NeighborList) PickupKNodes(target ayame.Key) ([]KeyMV, bool) {
 			curNode := nodes[i].Key()
 			nextNode := nodes[i+1].Key()
 			//ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
-			if isOrdered(curNode, true, target, nextNode, false) {
+			if IsOrdered(curNode, true, target, nextNode, false) {
 				return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], true
 			}
 		}
@@ -894,18 +956,44 @@ func lessThanExists(lst []int, x int) bool {
 	return false
 }
 
+var SYMMETRIC_ROUTING_TABLE = false
+
 // Returns negative value if all
 func (rts *NeighborList) satisfactionIndex(d int) int {
 	lst := rts.Neighbors[d]
 	counts := make([]int, ALPHA)
+	nextDigit := rts.owner.MV().Val[rts.level]
 	for i, n := range lst {
 		digit := n.MV().Val[rts.level]
 		counts[digit]++
-		if !lessThanExists(counts, K-1) { // all is greater than (or equals) k - 1
+		// all is greater than (or equals) k - 1
+		//ayame.Log.Debugf("{%s} node=%s level=%d: nextDigit=%d match=%v counts[%d]=%d", rts.owner.Key(), n, rts.level, nextDigit, digit == nextDigit, nextDigit, counts[nextDigit])
+		if (SYMMETRIC_ROUTING_TABLE && !lessThanExists(counts, K-1)) || (!SYMMETRIC_ROUTING_TABLE && counts[nextDigit] >= K-1) {
 			return i
 		}
 	}
 	return -1
+}
+
+func (rts *NeighborList) hasDuplicatesInMyRing() bool {
+	nextDigit := rts.owner.MV().Val[rts.level]
+
+	rightInMyRing := []KeyMV{}
+	leftInMyRing := []KeyMV{}
+
+	for _, n := range rts.Neighbors[RIGHT] {
+		digit := n.MV().Val[rts.level]
+		if digit == nextDigit {
+			rightInMyRing = append(rightInMyRing, n)
+		}
+	}
+	for _, n := range rts.Neighbors[RIGHT] {
+		digit := n.MV().Val[rts.level]
+		if digit == nextDigit {
+			leftInMyRing = append(leftInMyRing, n)
+		}
+	}
+	return !isDisjoint(rightInMyRing, leftInMyRing)
 }
 
 func (rts *NeighborList) hasSufficientNodes(d int) bool {

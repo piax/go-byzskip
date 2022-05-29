@@ -32,6 +32,8 @@ var uniRoutingType *string
 var experiment *string
 var useTableIndex *bool
 var modifyRoutingTableDirectly *bool
+var useSymmetricRoutingTable *bool
+var compareCheat *bool
 var seed *int64
 var verbose *bool
 
@@ -214,7 +216,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		// first K nodes is preserved.
 		first := nodes[0:bs.K]
 		last := nodes[bs.K:]
-		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		if !*compareCheat {
+			rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		}
 		nodes := append(first, last...)
 		err := FastJoinAllByRecursive(nodes)
 		if err != nil {
@@ -223,18 +227,29 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 	case J_ITER:
 		fallthrough
 	case J_ITER_P:
-		first := nodes[0:bs.K]
-		last := nodes[bs.K:]
-		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
-		nodes := append(first, last...)
-		err := FastJoinAllByInteractive(nodes)
+		if !*compareCheat {
+			first := nodes[0:bs.K]
+			last := nodes[bs.K:]
+			rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+			nodes = append(first, last...)
+		}
+		secondTime := true
+		if secondTime && *compareCheat { // second time.
+			bak := FailureType
+			FailureType = F_NONE
+			FastJoinAllByCheat(nodes)
+			FailureType = bak
+		}
+		err := FastJoinAllByIterative(nodes, !secondTime)
 		if err != nil {
 			fmt.Printf("join failed:%s\n", err)
 		}
 	case J_ITER_EV:
 		first := nodes[0:bs.K]
 		last := nodes[bs.K:]
-		rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		if !*compareCheat {
+			rand.Shuffle(len(last), func(i, j int) { last[i], last[j] = last[j], last[i] })
+		}
 		nodes := append(first, last...)
 		bs.USE_TABLE_INDEX = *useTableIndex
 		err := JoinAllByIterative(nodes)
@@ -247,12 +262,15 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 	}
 	ncount := 0
 	fcount := 0
-	for _, n := range NormalList {
-		c, f := CountTableEntries(n)
-		ncount += c
-		fcount += f
+	//for _, n := range NormalList {
+	for i := 0; i < numberOfNodes; i++ {
+		if !nodes[i].IsFailure {
+			c, f := CountTableEntries(nodes[i])
+			ncount += c
+			fcount += f
+		}
 	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(ncount))
+	ayame.Log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, ncount, float64(fcount)/float64(ncount))
 
 	return nodes
 }
@@ -420,7 +438,16 @@ func CountTableEntries(node *bs.BSNode) (int, int) {
 	return len(lst), fcount
 }
 
-func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
+func findNode(key ayame.Key, from []*bs.BSNode) *bs.BSNode {
+	for _, f := range from {
+		if f.Key() == key {
+			return f
+		}
+	}
+	return nil
+}
+
+func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 	index := 0 // introducer index
 	sumMsgs := 0
 	sumLMsgs := 0
@@ -428,6 +455,11 @@ func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 	prev := 0
 	faultyCount := 0
 	sumCandidates := 0
+	sumHops := 0
+	sumReturns := 0
+	sumCounts := 0
+	sumMaxes := 0
+
 	for i, n := range nodes {
 		if n.IsFailure {
 			ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
@@ -445,9 +477,32 @@ func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 				}
 			}
 		}
-		if index != i {
-			ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
-			rets, _, msgs, _, lmsgs, faulty, candidateLen := FastNodeLookup(n, nodes[index])
+		if isFirstTime {
+			if index != i {
+				ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
+				rets, _, msgs, _, lmsgs, faulty, candidateLen, hopSum, returnSum, co, maxHops := FastRefresh(n, []*bs.BSNode{nodes[index]}) //FastNodeLookup(n, nodes[index])
+				if faulty {
+					faultyCount++
+				}
+				ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
+				sumMsgs += msgs
+				sumLMsgs += lmsgs
+				sumCandidates += candidateLen
+				sumHops += hopSum
+				sumReturns += returnSum
+				sumMaxes += maxHops
+				sumCounts += co
+			}
+		} else { // second time or later
+			lvl0 := findNode(n.Key(), nodes).LevelZeroNodes()
+			if n.IsFailure {
+				// XXX should support stop failures
+				n.RoutingTable = NewAdversaryRoutingTable(n)
+			} else {
+				n.RoutingTable = bs.NewSkipRoutingTable(n)
+			}
+			ayame.Log.Debugf("%s: start refresh with %s\n", n, lvl0)
+			rets, _, msgs, _, lmsgs, faulty, candidateLen, hopSum, returnSum, co, maxHops := FastRefresh(n, lvl0) //FastNodeLookup(n, nodes[index])
 			if faulty {
 				faultyCount++
 			}
@@ -455,6 +510,10 @@ func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
 			sumCandidates += candidateLen
+			sumHops += hopSum
+			sumReturns += returnSum
+			sumMaxes += maxHops
+			sumCounts += co
 		}
 
 		count++
@@ -467,6 +526,9 @@ func FastJoinAllByInteractive(nodes []*bs.BSNode) error {
 	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
 	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
+	ayame.Log.Infof("avg-hops: %s %f\n", paramsString, float64(sumHops)/float64(sumCounts))
+	ayame.Log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sumMaxes)/float64(count))
+	ayame.Log.Infof("avg-returns: %s %f\n", paramsString, float64(sumReturns)/float64(sumCounts))
 
 	return nil
 }
@@ -547,19 +609,21 @@ var keyIssuer key_issuer.KeyIssuer
 
 func main() {
 	alpha = flag.Int("alpha", 2, "the alphabet size of the membership vector")
-	kValue = flag.Int("k", 4, "the redundancy parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
+	kValue = flag.Int("k", 2, "the redundancy parameter")
+	numberOfNodes = flag.Int("nodes", 100, "number of nodes")
 	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
-	failureType = flag.String("type", "calc", "failure type {none|stop|collab|collab-after|calc}")
-	failureRatio = flag.Float64("f", 0.0, "failure ratio")
-	joinType = flag.String("joinType", "cheat", "join type {cheat|recur|iter|iter-p|iter-pp|iter-ev}")
+	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after|calc}")
+	failureRatio = flag.Float64("f", 0.2, "failure ratio")
+	joinType = flag.String("joinType", "iter-p", "join type {cheat|recur|iter|iter-p|iter-pp|iter-ev}")
 	keyIssuerType = flag.String("issuerType", "none", "issuer type (type-param) type={shuffle|random|asis|none}")
-	unicastType = flag.String("unicastType", "recur", "unicast type {recur|iter}")
+	unicastType = flag.String("unicastType", "iter", "unicast type {recur|iter}")
 	uniRoutingType = flag.String("uniRoutingType", "prune-opt2", "unicast routing type {single|prune|prune-opt1|prune-opt2|prune-opt3}")
-	experiment = flag.String("exp", "uni-each", "experiment type {uni|uni-each|join}")
+	experiment = flag.String("exp", "uni", "experiment type {uni|uni-each|join}")
 	useTableIndex = flag.Bool("index", true, "use table index to get candidates")
 	modifyRoutingTableDirectly = flag.Bool("modRT", false, "modify routing table directly")
-	seed = flag.Int64("seed", 2, "give a random seed")
+	useSymmetricRoutingTable = flag.Bool("symmetric", true, "use a symmetric routing table")
+	compareCheat = flag.Bool("compareCheat", true, "compare with the cheat routing table")
+	seed = flag.Int64("seed", 3, "give a random seed")
 	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
@@ -627,6 +691,8 @@ func main() {
 
 	bs.MODIFY_ROUTING_TABLE_BY_RESPONSE = *modifyRoutingTableDirectly
 
+	bs.SYMMETRIC_ROUTING_TABLE = *useSymmetricRoutingTable
+
 	trials := *numberOfNodes
 	if *numberOfTrials > 0 {
 		trials = *numberOfTrials
@@ -660,10 +726,34 @@ func main() {
 		}
 	}
 
-	path_lengths := []float64{}
-	nums_msgs := []int{}
-	match_lengths := []float64{}
-	failures := 0
+	if *compareCheat {
+		testPeers := make([]*bs.BSNode, *numberOfNodes)
+		for i := 0; i < *numberOfNodes; i++ {
+			testPeers[i] = bs.NewBSNode(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, false)
+		}
+		FastJoinAllByCheat(testPeers)
+		diffs := 0
+		count := 0
+		for i := 0; i < *numberOfNodes; i++ {
+			//fmt.Printf("cheat key=%s\n%s\n", localPeers[i].Key(), localPeers[i].RoutingTable)
+			if !nodes[i].IsFailure {
+				diff := bs.RoutingTableDiffs(testPeers[i].RoutingTable, nodes[i].RoutingTable)
+				//ayame.Log.Infof("diff: %s %d\n", nodes[i], diff)
+				diffs += diff
+				c := nodes[i].RoutingTable.Size()
+				count += c
+			}
+		}
+		ayame.Log.Infof("pollution-prevention-ratio: %s %d %d %f\n", paramsString, diffs, count, 1-float64(diffs)/float64(count))
+		return
+	}
+
+	/*
+		path_lengths := []float64{}
+		nums_msgs := []int{}
+		match_lengths := []float64{}
+		failures := 0
+	*/
 
 	if UnicastType == U_RECUR {
 		switch *experiment {
@@ -673,7 +763,14 @@ func main() {
 			expUnicastEachRecursive()
 		}
 	} else {
-		for i := 1; i <= trials; i++ {
+		switch *experiment {
+		case "uni":
+			expIterative(trials)
+		case "uni-each":
+			expEachIterative()
+		}
+
+		/*for i := 1; i <= trials; i++ {
 			src := NormalList[rand.Intn(len(NormalList))]
 			dst := NormalList[rand.Intn(len(NormalList))]
 			//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
@@ -694,7 +791,7 @@ func main() {
 		hmean, _ := stats.Mean(match_lengths)
 		ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
 		ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
+		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))*/
 	}
 
 	table_sizes := []int{}

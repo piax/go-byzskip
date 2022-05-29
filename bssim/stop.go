@@ -84,3 +84,7 @@ func (table *StopRoutingTable) String() string {
 func (table *StopRoutingTable) Size() int {
 	return 0
 }
+
+func (table *StopRoutingTable) PureSize() int {
+	return 0
+}

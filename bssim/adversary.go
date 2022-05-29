@@ -52,7 +52,8 @@ func (table *AdversaryRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVecto
 		return table.normal.GetCommonNeighbors(mv)
 	} else {
 		// stronger attacker
-		return table.adversarial.GetCommonNeighbors(mv)
+		ret := table.adversarial.GetCommonNeighbors(mv)
+		return ret
 	}
 }
 
@@ -84,7 +85,10 @@ func (table *AdversaryRoutingTable) GetClosestIndex() *bs.TableIndex {
 
 // called as a normal behavior
 func (table *AdversaryRoutingTable) Add(c bs.KeyMV, truncate bool) {
-	table.normal.Add(c, truncate)
+	if FailureType == F_NONE {
+		ayame.Log.Debugf("%s adding %s", table, c)
+		table.normal.Add(c, truncate)
+	}
 }
 
 func (table *AdversaryRoutingTable) Delete(key ayame.Key) {
@@ -122,5 +126,9 @@ func (table *AdversaryRoutingTable) String() string {
 }
 
 func (table *AdversaryRoutingTable) Size() int {
+	return -100000000000 // not used
+}
+
+func (table *AdversaryRoutingTable) PureSize() int {
 	return -100000000000 // not used
 }

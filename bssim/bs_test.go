@@ -18,10 +18,20 @@ func TestSim(t *testing.T) {
 		peers[i] = bs.NewSimNode(ayame.IntKey(i), ayame.NewMembershipVector(2))
 	}
 
-	err := JoinAllByIterative(peers)
+	//err := JoinAllByIterative(peers)
+	err := FastJoinAllByIterative(peers, true)
+
 	if err != nil {
 		fmt.Printf("join failed:%s\n", err)
 	}
+	/*
+
+		use := true
+		useTableIndex = &use
+		for _, p := range peers {
+			FastUpdateNeighbors(p, ksToNs(p.RoutingTable.AllNeighbors(false, true)), []*bs.BSNode{})
+		}
+	*/
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
@@ -32,7 +42,6 @@ func TestSim(t *testing.T) {
 		//fmt.Printf("cheat key=%s\n%s\n", localPeers[i].Key(), localPeers[i].RoutingTable)
 		ast.Equal(t, bs.RoutingTableEquals(peers[i].RoutingTable, localPeers[i].RoutingTable), true, fmt.Sprintf("routing table real=%s and cheat=%s equals", peers[i].RoutingTable, localPeers[i].RoutingTable))
 	}
-
 }
 
 func TestP2P(t *testing.T) {
@@ -86,4 +95,28 @@ func TestTableIndex(t *testing.T) {
 			fmt.Printf("index level=%d, min=%s, max=%s\n", idx.Level, idx.Min, idx.Max)
 		}
 	}
+}
+
+func TestPickAlternately(t *testing.T) {
+	lst := []*bs.BSNode{}
+	sorted := []bs.KeyMV{}
+	queried := []bs.KeyMV{}
+	keys := []int{8, 10, 11, 9, 5, 3, 4, 15, 6}
+	self := bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(7), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false)
+	for _, n := range keys {
+		lst = append(lst, bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(n), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false))
+	}
+	for _, n := range lst {
+		sorted = bs.SortCircularAppend(self.Key(), sorted, n)
+	}
+
+	fmt.Println(ayame.SliceString(sorted))
+
+	p := pickAlternately(self, sorted, copyReverseSlice(sorted), ksToNs(queried), 1)
+	for len(p) != 0 {
+		fmt.Println(p)
+		queried = append(queried, p[0])
+		p = pickAlternately(self, sorted, copyReverseSlice(sorted), ksToNs(queried), 1)
+	}
+
 }

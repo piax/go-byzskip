@@ -1,6 +1,6 @@
 module github.com/piax/go-ayame/mobile
 
-go 1.17
+go 1.18
 
 replace github.com/piax/go-ayame/byzskip => ../byzskip
 

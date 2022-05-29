@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -47,8 +48,11 @@ func NewKADRoutingTable(id peer.ID, k int) *KADRoutingTable {
 }
 
 func (rt *KADRoutingTable) Add(n *KADNode) {
+	//	if !bytes.Equal(rt.dhtId, n.routingTable.dhtId) {
 	rt.table.TryAddPeer(n.id, true, true)
+	//	}
 	rt.nodes[n.id] = n
+
 }
 
 func (rt *KADRoutingTable) Count() (int, int) {
@@ -69,7 +73,8 @@ func (rt *KADRoutingTable) getNearestNodes(dhtId kbucket.ID, k int) []*KADNode {
 	if len(nearests) < k {
 		return nearests
 	}
-	return nearests[0:k]
+	ret := nearests[0:k]
+	return ret
 }
 
 func (rt *KADRoutingTable) PickClosestUncontained(target []*KADNode, alpha int, k int) ([]*KADNode, bool) {
@@ -161,6 +166,7 @@ type KADNode struct {
 	routingTable *KADRoutingTable
 	isFailure    bool
 	ayame.LocalNode
+	fmt.Stringer
 }
 
 func RandPeerID() (peer.ID, error) {
@@ -198,8 +204,15 @@ func (n *KADNode) String() string {
 // lst is modified
 
 func (node *KADNode) FastFindNode(id kbucket.ID, source *KADNode, k int) []*KADNode {
-	node.routingTable.Add(source)
-	return node.routingTable.getNearestNodes(id, k)
+	// not myself. add to routing table.
+	if !(bytes.Equal(node.routingTable.dhtId, source.routingTable.dhtId)) {
+		node.routingTable.Add(source)
+	}
+	ret := node.routingTable.getNearestNodes(id, k)
+	if bytes.Equal(id, node.routingTable.dhtId) {
+		ret = append(ret, node)
+	}
+	return ret
 }
 
 /* XXX not yet
@@ -265,7 +278,8 @@ func FastNodeLookup(id kbucket.ID, source *KADNode, alpha int, k int) ([]*KADNod
 func FastNodeLookupNoFailure(id kbucket.ID, source *KADNode, alpha int, k int) ([]*KADNode, int, int, int, bool) {
 	queryTable := NewKADRoutingTableForQuery(id, k)
 	queryTable.Add(source)
-	source.routingTable.Add(source)
+	//XXXX add itself to source
+	//source.routingTable.Add(source)
 
 	hops := 0
 	msgs := 0
@@ -280,7 +294,7 @@ func FastNodeLookupNoFailure(id kbucket.ID, source *KADNode, alpha int, k int) (
 		if matchNode(id, curKNodes) != nil {
 			if hops_to_match < 0 {
 				ayame.Log.Debugf("matched hops=%d\n", hops)
-				hops_to_match = hops + 1 // +1 hop to actually reach to the node
+				hops_to_match = hops // actually +1 hop is needed to reach the node
 			}
 		}
 		hops++ // FIND_NODEs
@@ -311,7 +325,8 @@ func FastNodeLookupNoFailure(id kbucket.ID, source *KADNode, alpha int, k int) (
 func FastNodeLookupWithStopFailure(id kbucket.ID, source *KADNode, alpha int, k int) ([]*KADNode, int, int, int, bool) {
 	queryTable := NewKADRoutingTableForQuery(id, k)
 	queryTable.Add(source)
-	source.routingTable.Add(source)
+	// XXXX source
+	// source.routingTable.Add(source)
 
 	hops := 0
 	msgs := 0

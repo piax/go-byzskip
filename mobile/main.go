@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	// hard coded
+	// hard coded...
 	KEY        = 1
 	INTRODUCER = "/ip4/192.168.0.3/udp/9000/quic/p2p/16Uiu2HAkwsZM1xaK9iG55i8MMdgep6hsF9wuiKkYrht6yj7BL2ct"
 )

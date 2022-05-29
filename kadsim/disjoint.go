@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"math"
+	"time"
 
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
 	"github.com/piax/go-ayame/ayame"
@@ -29,7 +31,7 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 
 	if matchNode(id, dq.curKNodes) != nil {
 		if dq.hops_to_match < 0 {
-			dq.hops_to_match = dq.hops
+			dq.hops_to_match = dq.hops // actually, +1 is needed to reach the node.
 		}
 	}
 	dq.hops++
@@ -60,7 +62,9 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 		dq.msgs++ // NEIGHBORS
 		for _, found := range founds {
 			dq.queryTable.Add(found)
-			source.routingTable.Add(found)
+			if !bytes.Equal(source.routingTable.dhtId, found.routingTable.dhtId) {
+				source.routingTable.Add(found)
+			}
 		}
 		queried = append(queried, n)
 	}
@@ -91,7 +95,7 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 		contexts[i] = NewDisjointQuery(id, k, i)
 	}
 	// for source table update
-	source.routingTable.Add(source)
+	//source.routingTable.Add(source)
 
 	msgs := 0
 	success := false
@@ -142,11 +146,17 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	}
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
 	ret := qt.getNearestNodes(id, k)
+
+	// XXX
+	//if bytes.Equal(source.routingTable.dhtId, id) {
+	//	ret = append(ret, source)
+	//}
 	ayame.Log.Debugf("result=%s\n", ayame.SliceString(ret))
 
 	// initial FIND_NODE
 	maxHops += float64(ihops)
 	msgs += imsgs
 
+	source.routingTable.table.ResetCplRefreshedAtForID(id, time.Now())
 	return ret, maxHops, msgs, minHopsToMatch, !success
 }

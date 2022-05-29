@@ -1,4 +1,4 @@
-// Copyright 2021 Yuuichi Teranishi, NICT, Japan
+// Copyright 2022 Yuuichi Teranishi, NICT, Japan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 //
@@ -697,6 +697,34 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 	ayame.Log.Debugf("%s: DelNode process finished %d/%d\n", n.Key(), total, len(entries))
 }
 
+func (n *BSNode) LevelZeroNodes() []*BSNode {
+	lists := n.RoutingTable.GetNeighborLists()[0]
+	ret := lists.Neighbors[LEFT]
+	for _, n := range lists.Neighbors[RIGHT] {
+		ret = appendKeyMVIfMissing(ret, n)
+	}
+	return ksToNs(ret)
+}
+
+func (n *BSNode) TopmostLevel() int {
+	for i, lst := range n.RoutingTable.GetNeighborLists() {
+		if lst.hasDuplicatesInLeftsAndRights() {
+			return i
+		}
+	}
+	return -1
+}
+
+func (n *BSNode) FilledTopmostLevel() bool {
+	for _, lst := range n.RoutingTable.GetNeighborLists() {
+		if lst.hasSufficientNodes(LEFT) && lst.hasSufficientNodes(RIGHT) && lst.hasDuplicatesInMyRing() {
+			//fmt.Printf("%d: topmostevel is %d\n", n.Key(), lst.level)
+			return true
+		}
+	}
+	return false
+}
+
 func (n *BSNode) allQueried() bool {
 	ret := false
 	//n.statsMutex.RLock()
@@ -917,6 +945,7 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 			ResponseCount += (len(ue.closers) + len(ue.candidates))
 
 			if !n.allQueried() {
+				//if !n.filledTopmostLevel() {
 				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
 				n.sendNextParalellRequest(ctx, 1)
 			} else {

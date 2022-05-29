@@ -1,6 +1,6 @@
 module github.com/piax/go-ayame/keysim
 
-go 1.16
+go 1.18
 
 replace github.com/piax/go-ayame/ayame => ../ayame
 

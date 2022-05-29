@@ -54,7 +54,15 @@ func AppendIfMissing(slice []Key, i Key) []Key {
 	return append(slice, i)
 }
 
-func SliceString(args interface{}) string {
+func SliceString[T fmt.Stringer](args []T) string {
+	rval := make([]string, len(args))
+	for i, x := range args {
+		rval[i] = x.String()
+	}
+	return "[" + strings.Join(rval, ",") + "]"
+}
+
+func SliceStringOld(args interface{}) string {
 	r := reflect.ValueOf(args)
 	rval := make([]string, r.Len())
 	for i := 0; i < r.Len(); i++ {

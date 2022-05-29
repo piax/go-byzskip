@@ -5,6 +5,7 @@ import (
 
 	"github.com/piax/go-ayame/ayame"
 	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/thoas/go-funk"
 )
 
 func nsToKs(lst []*bs.BSNode) []bs.KeyMV {
@@ -21,7 +22,16 @@ func FastJoinAllByCheat(nodes []*bs.BSNode) error {
 	if er != nil {
 		return er
 	}
-	return fastJoinAllSub(bs.LEFT, nsToKs(nodes))
+	er = fastJoinAllSub(bs.LEFT, nsToKs(nodes))
+	if er != nil {
+		return er
+	}
+	//if !bs.SYMMETRIC_ROUTING_TABLE {
+	//for _, n := range nodes {
+	//n.RoutingTable.(*bs.SkipRoutingTable).TrimRoutingTable()
+	//}
+	//}
+	return nil
 }
 
 func extendRoutingTable(m *bs.BSNode, level int) {
@@ -100,6 +110,20 @@ func fastJoinAllSub(d int, nodes []bs.KeyMV) error {
 					q = q.RoutingTable.GetNeighborLists()[level].Neighbors[d][0].(*bs.BSNode)
 				}
 				merged := mergeBuf(buf)
+				if !bs.SYMMETRIC_ROUTING_TABLE {
+					if len(buf[p.MV().Val[level]]) > bs.K-2 {
+						last := buf[p.MV().Val[level]][bs.K-2]
+						if d == bs.RIGHT {
+							merged = funk.Filter(merged, func(x bs.KeyMV) bool {
+								return bs.IsOrdered(p.Key(), false, x.Key(), last.Key(), true)
+							}).([]bs.KeyMV)
+						} else { // LEFT
+							merged = funk.Filter(merged, func(x bs.KeyMV) bool {
+								return bs.IsOrdered(last.Key(), true, x.Key(), p.Key(), false)
+							}).([]bs.KeyMV)
+						}
+					}
+				}
 				bs.SortC(p.Key(), merged)
 				if d == bs.LEFT {
 					ayame.ReverseSlice(merged)
