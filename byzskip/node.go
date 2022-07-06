@@ -57,7 +57,7 @@ type FindNodeProc struct {
 }
 
 type BSNode struct {
-	parent ayame.Node
+	Parent ayame.Node
 	key    ayame.Key
 	mv     *ayame.MembershipVector
 	//bs.IntKeyMV
@@ -67,13 +67,14 @@ type BSNode struct {
 	IsFailure    bool
 	QuerySeen    map[string]int
 
-	Procs      map[string]*FindNodeProc
-	procsMutex sync.RWMutex // for r/w procs status
-	rtMutex    sync.RWMutex // for r/w routing table
-	//statsMutex sync.RWMutex // for r/w join status
-	seenMutex       sync.RWMutex                               // for r/w QuerySeen
-	unicastHandler  func(*BSNode, *BSUnicastEvent, bool, bool) // received event, already seen, next already on the path
-	messageReceiver func(*BSNode, *BSUnicastEvent)             // a function when received a message
+	Procs            map[string]*FindNodeProc
+	procsMutex       sync.RWMutex                               // for r/w procs status
+	rtMutex          sync.RWMutex                               // for r/w routing table
+	failureMutex     sync.RWMutex                               // for r/w failure status
+	seenMutex        sync.RWMutex                               // for r/w QuerySeen
+	unicastHandler   func(*BSNode, *BSUnicastEvent, bool, bool) // received event, already seen, next already on the path
+	messageReceiver  func(*BSNode, *BSUnicastEvent)             // a function when received a message
+	responseReceiver func(*BSNode, *BSUnicastResEvent)
 
 	proc               goprocess.Process
 	DisableFixLowPeers bool
@@ -83,20 +84,29 @@ func (n *BSNode) Key() ayame.Key {
 	return n.key
 }
 
+func (n *BSNode) SetKey(key ayame.Key) {
+	// should check running status
+	n.key = key
+}
+
 func (node *BSNode) Id() peer.ID { // Endpoint
-	return node.parent.Id()
+	return node.Parent.Id()
 }
 
 func (node *BSNode) Addrs() []ma.Multiaddr { // Endpoint
-	return node.parent.Addrs()
+	return node.Parent.Addrs()
 }
 
 func (node *BSNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) error {
-	return node.parent.Send(ctx, ev, sign)
+	return node.Parent.Send(ctx, ev, sign)
 }
 
 func (n *BSNode) MV() *ayame.MembershipVector {
 	return n.mv
+}
+
+func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
+	n.mv = mv
 }
 
 func (n *BSNode) Equals(m KeyMV) bool {
@@ -117,13 +127,13 @@ func (n *BSNode) String() string {
 }
 
 func (n *BSNode) Encode() *pb.Peer {
-	return n.parent.Encode()
+	return n.Parent.Encode()
 }
 
 func (n *BSNode) Close() error {
 	n.NotifyDeletion(context.Background())
 	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
-	n.parent.Close()
+	n.Parent.Close()
 	// process close
 	return n.proc.Close()
 }
@@ -165,7 +175,7 @@ func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.Membershi
 func NewBSNode(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bool) *BSNode {
 	ret := &BSNode{key: parent.Key(), mv: parent.MV(),
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
-		parent: parent,
+		Parent: parent,
 		// stats is not generated at this time
 		QuerySeen:          make(map[string]int),
 		Procs:              make(map[string]*FindNodeProc),
@@ -453,10 +463,7 @@ func (n *BSNode) sendNextParalellRequest(ctx context.Context, parallel int) int 
 		n.procsMutex.Lock()
 		n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: nil}
 		n.procsMutex.Unlock()
-		err := n.SendEvent(ctx, node, ev, false)
-		if err != nil {
-			n.stats.failed = append(n.stats.failed, node)
-		}
+		n.SendEventAsync(ctx, node, ev, false)
 	}
 	return reqCount
 }
@@ -501,7 +508,9 @@ func (n *BSNode) GetNeighborRequest() *NeighborRequest {
 func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	if response.isFailure { // timed out
 		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+		n.failureMutex.Lock()
 		n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+		n.failureMutex.Unlock()
 		// delete response.sender from the routing table if already exists.
 		n.rtMutex.Lock()
 		//n.RoutingTable.Delete(response.sender.Key())
@@ -594,7 +603,9 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	if response.isFailure { // timed out
 		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+		n.failureMutex.Lock()
 		n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+		n.failureMutex.Unlock()
 		// delete response.sender from the routing table if already exists.
 		n.rtMutex.Lock()
 		//n.RoutingTable.Delete(response.sender.Key())
@@ -768,7 +779,9 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 			case response := <-lookupCh: // FindNode finished
 				if response.isFailure { // timed out
 					queried = AppendNodeIfMissing(queried, response.sender)
+					n.failureMutex.Lock()
 					n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+					n.failureMutex.Unlock()
 					// delete response.sender from the routing table if already exists.
 					n.rtMutex.Lock()
 					//n.RoutingTable.Delete(response.sender.Key())
@@ -795,33 +808,44 @@ func (n *BSNode) SetMessageReceiver(receiver func(*BSNode, *BSUnicastEvent)) {
 	n.messageReceiver = receiver
 }
 
+func (n *BSNode) SetResponseReceiver(receiver func(*BSNode, *BSUnicastResEvent)) {
+	n.responseReceiver = receiver
+}
+
 func (n *BSNode) SetUnicastHandler(handler func(*BSNode, *BSUnicastEvent, bool, bool)) {
 	n.unicastHandler = handler
 }
 
+func (n *BSNode) NewMessageId() string {
+	return n.String() + "." + NextId()
+}
+
 // unicast a message with payload to a node with key
-func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, payload []byte) {
-	unicastCtx, cancel := context.WithTimeout(ctx, time.Duration(UNICAST_SEND_TIMEOUT)*time.Second) // all request should be ended within
-	defer cancel()
+// returns message ID
+func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, mid string, payload []byte) {
+	//unicastCtx, cancel := context.WithTimeout(ctx, time.Duration(UNICAST_SEND_TIMEOUT)*time.Second) // all request should be ended within
+	//defer cancel()
 	closers, level := n.GetClosestNodes(key)
 	ayame.Log.Debugf("from=%s,to=%s,first level=%d %s\n", n.Key(), key, level, ayame.SliceString(closers))
-	ch := make(chan struct{}, 1)
-	mid := n.String() + "." + NextId()
+	//ch := make(chan struct{}, 1)
+
 	for _, c := range closers {
 		localc := c
 		ev := NewBSUnicastEvent(n, nil, nil, mid, level, key, payload)
-		n.sendUnicastEvent(ctx, ch, localc, ev)
+		//n.sendUnicastEvent(ctx, ch, localc, ev)
+		n.sendUnicastEvent(ctx, nil, localc, ev)
 	}
-L:
+	/*L:
 	for i := 0; i < len(closers); i++ {
 		select {
 		case <-unicastCtx.Done(): // after UNICAST_SEND_TIMEOUT ;; perhaps during corrupted connection attempt
 			ayame.Log.Debugf("A unicast ended with %s\n", unicastCtx.Err())
 			break L
 		case <-ch:
-			ayame.Log.Debugf("A unicast sent %d/%d\n", i, len(closers))
+			ayame.Log.Debugf("A unicast sent %d/%d at %s\n", i, len(closers), time.Now().String())
 		}
 	}
+	*/
 }
 
 func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *BSNode, ev *BSDelNodeEvent) {
@@ -830,7 +854,7 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	sch := make(chan struct{}, 1)
 	go func() {
 		ayame.Log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
-		n.SendEvent(ctx, node, ev, false) // ignore errors
+		n.SendEventAsync(ctx, node, ev, false) // ignore errors
 		sch <- struct{}{}
 	}()
 	select {
@@ -842,23 +866,30 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 }
 
 func (n *BSNode) sendUnicastEvent(ctx context.Context, ch chan struct{}, node *BSNode, ev *BSUnicastEvent) {
-	go func() {
-		if node.Equals(n) {
-			n.handleUnicast(ctx, ev, true)
-		} else {
-			err := n.SendEvent(ctx, node, ev, true)
-			if err != nil {
-				n.stats.failed = append(n.stats.failed, node)
-			}
-		}
-		ch <- struct{}{}
-	}()
+	//	go func() {
+	if node.Equals(n) {
+		n.handleUnicast(ctx, ev, true)
+	} else {
+		fmt.Printf("sent event %s from=%s,to=%s %s\n", ev.MessageId, n.Key(), node.Key(), time.Now().String())
+		n.SendEventAsync(ctx, node, ev, true)
+	}
+	//if ch != nil {
+	//ch <- struct{}{}
+	//}
+	//	}()
 }
 
-func (n *BSNode) SendEvent(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) error {
-	ev.SetSender(n)
-	ev.SetReceiver(receiver)
-	return n.Send(ctx, ev, sign)
+func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
+	go func() {
+		ev.SetSender(n)
+		ev.SetReceiver(receiver)
+		err := n.Send(ctx, ev, sign)
+		if err != nil {
+			n.failureMutex.Lock()
+			n.stats.failed = append(n.stats.failed, receiver.(*BSNode))
+			n.failureMutex.Unlock()
+		}
+	}()
 }
 
 func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, key ayame.Key, requestId string) chan *FindNodeResponse {
@@ -869,7 +900,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan *FindNodeRespo
 	n.procsMutex.Lock()
 	n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.procsMutex.Unlock()
-	n.SendEvent(ctx, node, ev, false) // ignore errors (detect by timeout)
+	n.SendEventAsync(ctx, node, ev, false) // ignore errors (detect by timeout)
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
 		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
@@ -897,7 +928,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	n.procsMutex.Unlock()
 	//ayame.Log.Infof("%s: registered msgid=%s to %s\n", n, requestId, node)
 	ayame.Log.Debugf("%s: FindNode to %s started", n, node)
-	n.SendEvent(ctx, node, ev, false) // ignore errors (detect by timeout)
+	n.SendEventAsync(ctx, node, ev, false) // ignore errors (detect by timeout)
 	// wait for the next event happens
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
@@ -923,6 +954,21 @@ func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) {
 	//else {
 	//	n.SendEvent(ctx, ev.Sender(), n.handleFindNodeRequest(ctx, ev), false)
 	//}
+}
+
+func (n *BSNode) handleUnicastResponse(ctx context.Context, ev ayame.SchedEvent, sendToSelf bool) error {
+	if !sendToSelf && !ev.IsVerified() {
+		ayame.Log.Debugf("verify error. thrwon away")
+		return fmt.Errorf("%s: failed to verify a message, throw it away", n)
+	}
+	ayame.Log.Debugf("verified")
+	if ev.IsResponse() {
+		n.responseReceiver(n, ev.(*BSUnicastResEvent))
+	}
+	//else {
+	//	n.SendEvent(ctx, ev.Sender(), n.handleFindNodeRequest(ctx, ev), false)
+	//}
+	return nil
 }
 
 func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent) {
@@ -1006,7 +1052,8 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		}
 	}
 
-	if !sendToSelf && msg.CheckAlreadySeen(n) {
+	alreadySeen := msg.CheckAlreadySeen(n)
+	if !sendToSelf && alreadySeen {
 		if n.unicastHandler != nil {
 			n.unicastHandler(n, msg, true, false)
 		}
@@ -1019,7 +1066,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		if n.unicastHandler != nil {
 			n.unicastHandler(n, msg, false, false)
 		}
-		if n.messageReceiver != nil {
+		if n.messageReceiver != nil { //&& !alreadySeen {
 			n.messageReceiver(n, msg)
 		}
 	} else {
@@ -1042,13 +1089,10 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 					msg.SetAlreadySeen(n)
 					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
-					err := n.SendEvent(ctx, node, next, true)
-					if err != nil {
-						n.stats.failed = append(n.stats.failed, node)
-					}
+					fmt.Printf("sent event %s from=%s,to=%s %s\n", next.MessageId, n.Key(), node.Key(), time.Now().String())
+					n.SendEventAsync(ctx, node, next, true)
 				}
 			}
-
 		}
 	}
 	return nil

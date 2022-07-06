@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/piax/go-ayame/ayame"
 	"github.com/thoas/go-funk"
@@ -134,7 +135,7 @@ func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 }
 
 func (ue *BSUnicastEvent) createSubMessage(nextHop *BSNode, level int) *BSUnicastEvent {
-	var sub BSUnicastEvent = *ue // author, authorSign, authorPublicKey, payload are copied
+	var sub BSUnicastEvent = *ue // messageId, author, authorSign, authorPublicKey, payload are copied
 	sub.Path = append([]PathEntry{}, ue.Path...)
 	sub.SetReceiver(nextHop)
 	sub.SetSender(ue.Receiver())
@@ -153,7 +154,7 @@ func (ue *BSUnicastEvent) String() string {
 }
 
 func (ue *BSUnicastEvent) Encode() *pb.Message {
-	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId,
 		pb.MessageType_UNICAST, ue.Author(), ue.AuthorSign(), ue.AuthorPubKey(),
 		ue.TargetKey, nil)
@@ -162,6 +163,7 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	for _, pe := range ue.Path {
 		peers = append(peers, pe.Node.Encode())
 	}
+	ret.IsResponse = false
 	ret.Data.Path = peers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)
 	ret.Data.Record = &pb.Record{Value: ue.Payload}
@@ -289,4 +291,57 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 
 func (ue *BSUnicastEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
 	panic("unicast does not support request")
+}
+
+type BSUnicastResEvent struct {
+	MessageId string
+	Path      []PathEntry
+	Payload   []byte
+	Timestamp int64
+	ayame.AbstractSchedEvent
+}
+
+func NewBSUnicastResEvent(responder *BSNode, messageId string, payload []byte) *BSUnicastResEvent {
+	ev := &BSUnicastResEvent{
+		MessageId:          messageId,
+		Path:               nil,
+		Timestamp:          time.Now().UnixMicro(),
+		AbstractSchedEvent: *ayame.NewSchedEvent(responder, nil, nil)}
+	ev.SetSender(responder)
+	ev.SetReceiver(responder) // XXX weird
+	return ev
+}
+
+func (ue *BSUnicastResEvent) String() string {
+	return ue.Receiver().String() + "<" + strings.Join(funk.Map(ue.Path, func(pe PathEntry) string {
+		return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
+	}).([]string), ",") + ">"
+}
+
+func (ue *BSUnicastResEvent) Encode() *pb.Message {
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
+	ret := sender.NewMessage(ue.MessageId,
+		pb.MessageType_UNICAST, sender, nil, nil,
+		ue.Receiver().Key(), nil)
+	var peers []*pb.Peer
+	for _, pe := range ue.Path {
+		peers = append(peers, pe.Node.Encode())
+	}
+	ret.IsRequest = false
+	ret.IsResponse = true
+	ret.Data.Path = peers
+	ret.Data.SenderAppData = ""
+	ret.Data.Record = &pb.Record{Value: ue.Payload}
+	return ret
+}
+
+func (ue *BSUnicastResEvent) Run(ctx context.Context, node ayame.Node) {
+	ayame.Log.Infof("running unicast response handler.")
+	if err := node.(*BSNode).handleUnicastResponse(ctx, ue, ue.Sender().Key().Equals(node.Key())); err != nil {
+		panic(err)
+	}
+}
+
+func (ue *BSUnicastResEvent) IsResponse() bool {
+	return true
 }

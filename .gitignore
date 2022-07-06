@@ -22,3 +22,6 @@
 
 # local working files
 work/
+
+# keystore
+keystore

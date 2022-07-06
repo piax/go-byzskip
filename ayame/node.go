@@ -10,7 +10,9 @@ import (
 
 type Node interface {
 	Key() Key
+	SetKey(Key)
 	MV() *MembershipVector
+	SetMV(*MembershipVector)
 	String() string
 	Addrs() []ma.Multiaddr
 	Id() peer.ID // ID as an Endpoint
@@ -34,8 +36,16 @@ func (n *LocalNode) Key() Key {
 	return n.key
 }
 
+func (n *LocalNode) SetKey(key Key) {
+	n.key = key
+}
+
 func (n *LocalNode) MV() *MembershipVector {
 	return n.mv
+}
+
+func (n *LocalNode) SetMV(mv *MembershipVector) {
+	n.mv = mv
 }
 
 func (n *LocalNode) String() string {

@@ -1,6 +1,6 @@
 // copied from IPFS keystore
 
-package main
+package ayame
 
 import (
 	"fmt"
@@ -12,7 +12,6 @@ import (
 	base32 "encoding/base32"
 
 	ci "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/piax/go-ayame/ayame"
 )
 
 var codec = base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -154,7 +153,7 @@ func (ks *FSKeystore) List() ([]string, error) {
 		if err == nil {
 			list = append(list, decodedName)
 		} else {
-			ayame.Log.Errorf("Ignoring keyfile with invalid encoded filename: %s", name)
+			Log.Errorf("Ignoring keyfile with invalid encoded filename: %s", name)
 		}
 	}
 
@@ -167,7 +166,7 @@ func encode(name string) (string, error) {
 	}
 
 	encodedName := codec.EncodeToString([]byte(name))
-	ayame.Log.Debugf("Encoded key name: %s to: %s", name, encodedName)
+	Log.Debugf("Encoded key name: %s to: %s", name, encodedName)
 
 	return keyFilenamePrefix + strings.ToLower(encodedName), nil
 }
@@ -183,7 +182,7 @@ func decode(name string) (string, error) {
 		return "", err
 	}
 
-	ayame.Log.Debugf("Decoded key name: %s to: %s", name, decodedName)
+	Log.Debugf("Decoded key name: %s to: %s", name, decodedName)
 
 	return string(decodedName), nil
 }

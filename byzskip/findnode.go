@@ -102,7 +102,7 @@ func (ue *BSFindNodeEvent) String() string {
 }
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
-	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, nil, nil, nil, nil, nil)
 	if ue.req != nil {
 		ret.Data.Req = ue.req.Encode()
@@ -115,12 +115,12 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	}*/
 	var cpeers []*pb.Peer
 	for _, n := range ue.candidates {
-		cpeers = append(cpeers, n.parent.Encode())
+		cpeers = append(cpeers, n.Parent.Encode())
 	}
 	ret.Data.CandidatePeers = cpeers
 	var lpeers []*pb.Peer
 	for _, n := range ue.closers {
-		lpeers = append(lpeers, n.parent.Encode())
+		lpeers = append(lpeers, n.Parent.Encode())
 	}
 	ret.Data.CloserPeers = lpeers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)

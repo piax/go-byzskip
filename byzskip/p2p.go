@@ -37,26 +37,26 @@ func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
 		return nil, err
 	}
 	// Add the destination's peer multiaddress in the peerstore.
-	self := n.parent.(*p2p.P2PNode)
+	self := n.Parent.(*p2p.P2PNode)
 	self.Host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 
 	ret := &BSNode{
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
-		parent: p2p.NewIntroducerRemoteNode(self, info.ID, info.Addrs),
+		Parent: p2p.NewIntroducerRemoteNode(self, info.ID, info.Addrs),
 		// stats is not generated at this time
 		IsFailure: false}
 	ret.RoutingTable = NewSkipRoutingTable(ret)
 	return ret, nil
 }
 
-func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector,
-	authorizer func(peer.ID, ayame.Key, *ayame.MembershipVector) []byte,
+func NewP2PNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector, priv crypto.PrivKey,
+	authorizer func(ayame.Node, peer.ID, ayame.Key, *ayame.MembershipVector) []byte,
 	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) (*BSNode, error) {
-	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, nil, ConvertMessage, validator)
+	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, priv, ConvertMessage, validator)
 	if err != nil {
 		return nil, err
 	}
-	p2pNode.Cert = authorizer(p2pNode.Id(), key, mv)
+	p2pNode.Cert = authorizer(p2pNode, p2pNode.Id(), key, mv)
 
 	//p2pNode, err := p2p.NewNodeWithAuth(context.TODO(), locator, key, mv, ConvertMessage, authorizer)
 	if err != nil {
@@ -96,9 +96,11 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
 	if ayame.SecureKeyMV {
 		if self.Validator != nil {
+			ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
 			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
 				return NewBSNode(parent, NewSkipRoutingTable, false), nil
 			}
+			ayame.Log.Debugf("validation failed")
 		} else { // no validator case
 			return NewBSNode(parent, NewSkipRoutingTable, false), nil
 		}
@@ -153,11 +155,16 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
 	author, _ := ConvertPeer(self, mes.Data.Author)
-	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
+	ayame.Log.Infof("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
-		ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record.Value)
-		ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
+		if mes.IsResponse {
+			ev = NewBSUnicastResEvent(author, mes.Data.Id, mes.Data.Record.Value)
+			ev.(*BSUnicastResEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
+		} else {
+			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record.Value)
+			ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
+		}
 		p, _ := ConvertPeer(self, mes.Sender)
 		ev.SetSender(p)
 		ev.SetVerified(valid) // verification conscious

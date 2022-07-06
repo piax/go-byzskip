@@ -7,8 +7,10 @@ import (
 	"strconv"
 )
 
-const MembershipVectorSize = 32
-const DefaultAlpha = 2
+const (
+	MembershipVectorSize = 32
+	DefaultAlpha         = 2
+)
 
 type MembershipVector struct {
 	Alpha int

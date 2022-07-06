@@ -26,9 +26,19 @@ type RemoteNode struct {
 func (n *RemoteNode) Key() ayame.Key {
 	return n.key
 }
+
+func (n *RemoteNode) SetKey(key ayame.Key) {
+	n.key = key
+}
+
 func (n *RemoteNode) MV() *ayame.MembershipVector { // Endpoint
 	return n.mv
 }
+
+func (n *RemoteNode) SetMV(mv *ayame.MembershipVector) { // Endpoint
+	n.mv = mv
+}
+
 func (n *RemoteNode) String() string {
 	return fmt.Sprintf("%s,%s", n.key, n.addrs)
 }

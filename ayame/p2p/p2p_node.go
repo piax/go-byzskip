@@ -14,10 +14,15 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
+
+	//libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	libp2pquic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+
+	//libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
+	libp2ptcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/libp2p/go-msgio"
 	"github.com/libp2p/go-msgio/protoio"
-	libp2ptcp "github.com/libp2p/go-tcp-transport"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-ayame/ayame"
 	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
@@ -30,22 +35,27 @@ const Version = "/go-ayame/message/0.0.0"
 
 // Node type - a p2p host implementing one or more p2p protocols
 type P2PNode struct {
-	host.Host // libp2p host
-	key       ayame.Key
-	mv        *ayame.MembershipVector
-	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent
-	child     ayame.Node
-	Cert      []byte
-	Validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+	host.Host  // libp2p host
+	key        ayame.Key
+	mv         *ayame.MembershipVector
+	converter  func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent
+	child      ayame.Node
+	Cert       []byte
+	Validator  func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+	KeyInBytes map[string]int64
 
 	OutBytes int64
 	InBytes  int64
 	InCount  int64
+	OutCount int64
 	mutex    sync.Mutex
 }
 
 const (
-	sendMessageProto = "/msg/0.0.0"
+	sendMessageProto     = "/msg/0.0.0"
+	CONNMGR_LOW          = 100
+	CONNMGR_HIGH         = 400
+	RECORD_BYTES_PER_KEY = true
 )
 
 var USE_QUIC = true // if false, TCP.
@@ -69,13 +79,23 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		}
 	}
 	var host host.Host
+
+	connmgr, err := connmgr.NewConnManager(
+		100, // Lowwater
+		400, // HighWater,
+		connmgr.WithGracePeriod(time.Minute),
+	)
+	if err != nil {
+		panic(err)
+	}
 	if USE_QUIC { // XXX future work: option constructor.
 		h, err := libp2p.New(
-			ctx,
+			//ctx,
 			libp2p.ListenAddrs(listen),
 			libp2p.Identity(priv),
 			// support QUIC
 			libp2p.Transport(libp2pquic.NewTransport),
+			libp2p.ConnectionManager(connmgr),
 		)
 		if err != nil {
 			ayame.Log.Errorf("libp2p.New %s\n", err)
@@ -84,10 +104,11 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		host = h
 	} else {
 		h, err := libp2p.New(
-			ctx,
+			//ctx,
 			libp2p.ListenAddrs(listen),
 			libp2p.Identity(priv),
 			libp2p.Transport(libp2ptcp.NewTCPTransport),
+			libp2p.ConnectionManager(connmgr),
 		)
 		if err != nil {
 			ayame.Log.Errorf("libp2p.New %s\n", err)
@@ -96,7 +117,14 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 		host = h
 	}
 
-	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, Validator: validator, OutBytes: 0, InBytes: 0, InCount: 0}
+	var keyInBytes map[string]int64
+	if RECORD_BYTES_PER_KEY {
+		keyInBytes = make(map[string]int64)
+	} else {
+		keyInBytes = nil
+	}
+
+	node := &P2PNode{Host: host, key: key, mv: mv, converter: converter, Validator: validator, KeyInBytes: keyInBytes, OutBytes: 0, InBytes: 0, InCount: 0, OutCount: 0}
 	node.SetStreamHandler(sendMessageProto, node.onReceiveMessage)
 
 	return node, nil
@@ -106,9 +134,18 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 func (n *P2PNode) Key() ayame.Key {
 	return n.key
 }
+
+func (n *P2PNode) SetKey(key ayame.Key) {
+	n.key = key
+}
+
 func (n *P2PNode) MV() *ayame.MembershipVector {
 	return n.mv
 }
+func (n *P2PNode) SetMV(mv *ayame.MembershipVector) {
+	n.mv = mv
+}
+
 func (n *P2PNode) String() string {
 	return fmt.Sprintf("%s,%s", n.key, n.Addrs())
 }
@@ -151,7 +188,9 @@ func NewKey(key *p2p.Key) ayame.Key {
 	case p2p.KeyType_INT:
 		return ayame.NewIntKeyFromBytes(key.Body)
 	case p2p.KeyType_STRING:
-		panic("StringKey not implemented yet.")
+		return ayame.NewStringKeyFromBytes(key.Body)
+	case p2p.KeyType_ID:
+		return ayame.NewIdKeyFromBytes(key.Body)
 	}
 	return nil
 }
@@ -172,11 +211,6 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Errorf("%s: %s", n, err)
 		return
 	}
-	n.mutex.Lock()
-	n.InBytes += int64(len(buf))
-	n.InCount++
-	n.mutex.Unlock()
-	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
 
 	// unmarshal it
 	err = proto.Unmarshal(buf, mes)
@@ -184,6 +218,12 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Error(err)
 		return
 	}
+	n.mutex.Lock()
+	n.InBytes += int64(len(buf))
+	n.InCount++
+	n.KeyInBytes[mes.Data.Id] += int64(len(buf))
+	n.mutex.Unlock()
+	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
 	r.ReleaseMsg(buf)
 	ayame.Log.Infof("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 	var valid bool = false
@@ -247,7 +287,12 @@ func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) erro
 		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return err
 	}
-	defer s.Close()
+	/* close is not needed by using connmgr */
+	/*defer func() {
+		// XXX too fast close may lose a packet
+		time.Sleep(time.Duration(100 * time.Millisecond))
+		s.Close()
+	}()*/
 	n.sendMsgToStream(ctx, s, n.sign(ev, sign))
 	if ev.IsRequest() {
 		n.onReceiveMessage(s)
@@ -456,10 +501,21 @@ func (n *P2PNode) sendMsgToStream(ctx context.Context, s network.Stream, msg pro
 	writer := protoio.NewDelimitedWriter(s)
 	err := writer.WriteMsg(msg)
 	if err != nil {
-		ayame.Log.Errorf("%n: write msg %s\n", n, err)
+		ayame.Log.Errorf("%s: write msg %s", n, err)
 		s.Reset()
 		return false
 	}
+	// XXX this is just for measurement.
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		ayame.Log.Errorf("%s: write msg %s", n, err)
+		return false
+	}
+	length := int64(len(data))
+	n.OutBytes += length
+	n.OutCount++
+	//	ayame.Log.Infof("%s: written msg %s", n, msg)
+
 	return true
 }
 
@@ -469,6 +525,9 @@ func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.I
 		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return false
 	}
-	defer s.Close()
+	defer func() {
+		time.Sleep(time.Duration(100 * time.Millisecond))
+		s.Close()
+	}()
 	return n.sendMsgToStream(ctx, s, data)
 }

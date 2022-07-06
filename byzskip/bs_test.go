@@ -165,6 +165,7 @@ func addr(port int, quic bool) string {
 
 func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
+	p2p.USE_QUIC = useQuic
 	InitK(4)
 	numberOfPeers := num
 	keys := []int{}
@@ -174,7 +175,7 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	if shuffle {
 		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 	}
-	authFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+	authFunc := func(node ayame.Node, id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
 		bin := auth.Authorize(id, key, mv)
 		return bin
 	}
@@ -182,12 +183,16 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
 	}
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNodeWithAuth(addr(9000, useQuic), ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), authFunc, validateFunc)
+	var err error
+	peers[0], err = NewP2PNodeWithAuth(addr(9000, useQuic), ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), nil, authFunc, validateFunc)
+	if err != nil {
+		panic(err)
+	}
 	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
 		addr := addr(9000+i, useQuic)
-		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), authFunc, validateFunc)
+		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), nil, authFunc, validateFunc)
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
@@ -196,9 +201,9 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
-		sumCount += peers[i].parent.(*p2p.P2PNode).InCount
-		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
-		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
 	}
 	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
 	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))
@@ -227,8 +232,8 @@ func TestLookup(t *testing.T) {
 	peers := setupNodes(numberOfPeers, true, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
-		peers[i].parent.(*p2p.P2PNode).InCount = 0
-		peers[i].parent.(*p2p.P2PNode).InBytes = 0
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 	}
 	numberOfLookups := numberOfPeers
 	for i := 0; i < numberOfLookups; i++ {
@@ -239,9 +244,9 @@ func TestLookup(t *testing.T) {
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
-		sumCount += peers[i].parent.(*p2p.P2PNode).InCount
-		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
-		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
 	}
 	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
 	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
@@ -250,14 +255,13 @@ func TestLookup(t *testing.T) {
 func TestUnicast(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(numberOfPeers, true, true)
-	ayame.Log.Debugf("------- UNICAST STARTS ---------")
-
+	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", p2p.USE_QUIC)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
 
 	for i := 0; i < numberOfPeers; i++ { // RESET
-		peers[i].parent.(*p2p.P2PNode).InCount = 0
-		peers[i].parent.(*p2p.P2PNode).InBytes = 0
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 
 		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
 			lock.Lock()
@@ -279,24 +283,23 @@ func TestUnicast(t *testing.T) {
 		for src == dst {
 			dst = rand.Intn(numberOfPeers)
 		}
-		peers[src].Unicast(context.Background(), ayame.IntKey(dst), []byte("hello from "+strconv.Itoa(src)))
+		peers[src].Unicast(context.Background(), ayame.IntKey(dst), peers[src].NewMessageId(), []byte("hello from "+strconv.Itoa(src)))
 	}
-	time.Sleep(time.Duration(1) * time.Second)
+	time.Sleep(time.Duration(15) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 
 	for i := 0; i < numberOfPeers; i++ {
-		sumCount += peers[i].parent.(*p2p.P2PNode).InCount
-		sumTraffic += peers[i].parent.(*p2p.P2PNode).InBytes
-		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].parent.(*p2p.P2PNode).InBytes, peers[i].parent.(*p2p.P2PNode).InCount, float64(peers[i].parent.(*p2p.P2PNode).InBytes)/float64(peers[i].parent.(*p2p.P2PNode).InCount))
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
 	}
-
-	fmt.Printf("sum-count: %d\n", sumCount)
-	fmt.Printf("avg-unicast-num-msgs: %f\n", float64(sumCount)/float64(numberOfUnicasts))
-	fmt.Printf("avg-unicast-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfUnicasts))
 	for _, lst := range results {
 		fmt.Printf("%s\n", ayame.SliceString(lst))
 	}
+	fmt.Printf("sum-count: %d\n", sumCount)
+	fmt.Printf("avg-unicast-num-msgs: %f\n", float64(sumCount)/float64(numberOfUnicasts))
+	fmt.Printf("avg-unicast-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfUnicasts))
 }
 
 func TestClose(t *testing.T) {
@@ -328,7 +331,7 @@ func Example() {
 		})
 	}
 	peers[2].Lookup(context.Background(), ayame.IntKey(16))
-	peers[1].Unicast(context.Background(), ayame.IntKey(17), []byte("hello world"))
+	peers[1].Unicast(context.Background(), ayame.IntKey(17), peers[1].NewMessageId(), []byte("hello world"))
 	time.Sleep(time.Duration(100) * time.Millisecond)
 }
 

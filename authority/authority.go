@@ -20,6 +20,10 @@ func NewAuthorizer() *Authorizer {
 	return &Authorizer{pubKey: pub, privKey: priv}
 }
 
+func NewAuthorizerWithKeyPair(priv crypto.PrivKey, pub crypto.PubKey) *Authorizer {
+	return &Authorizer{pubKey: pub, privKey: priv}
+}
+
 func (auth *Authorizer) PublicKey() crypto.PubKey {
 	return auth.pubKey
 }
@@ -39,6 +43,7 @@ func marshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []by
 // Create a new node with its implemented protocols
 func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
 	data := marshalJoinInfo(id, key, mv)
+	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
 	res, err := pubKey.Verify(data, cert)
 	if err != nil {
@@ -51,6 +56,7 @@ func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert 
 func newJoinInfoCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, privKey crypto.PrivKey) []byte {
 	data := marshalJoinInfo(id, key, mv)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
+	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
 	res, _ := privKey.Sign(data) // XXX discarded errors
 	return res
 }

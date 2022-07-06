@@ -23,7 +23,7 @@ func NewBSDelNodeEvent(author *BSNode, requestId string, targetKey ayame.Key) *B
 }
 
 func (ue *BSDelNodeEvent) Encode() *pb.Message {
-	sender := ue.Sender().(*BSNode).parent.(*p2p.P2PNode)
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId, pb.MessageType_DEL_NODE, nil, nil, nil, ue.TargetKey, nil)
 	return ret
 }

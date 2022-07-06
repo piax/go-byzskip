@@ -12,7 +12,8 @@ enum KeyType {
 	INT = 0;
 	FLOAT = 1;
 	STRING = 2;
-    RANGE = 3;
+    ID = 3;
+    RANGE = 4;
 }
 
 message Key {

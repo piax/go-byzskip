@@ -1,6 +1,7 @@
 package ayame
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -152,4 +153,42 @@ func (t StringKey) Encode() *p2p.Key {
 
 func NewStringKeyFromBytes(arg []byte) Key {
 	return StringKey(string(arg))
+}
+
+type IdKey []byte
+
+func (t IdKey) Less(elem interface{}) bool {
+	if v, ok := elem.(IdKey); ok {
+		return bytes.Compare(t, v) < 0
+	}
+	return false
+}
+
+func (t IdKey) Equals(elem interface{}) bool {
+	if v, ok := elem.(IdKey); ok {
+		return bytes.Equal(t, v)
+	}
+	return false
+}
+
+func (t IdKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(IdKey); ok {
+		return bytes.Compare(t, v) <= 0
+	}
+	return false
+}
+
+func (t IdKey) String() string {
+	return string(t)
+}
+
+func (t IdKey) Encode() *p2p.Key {
+	bytes := []byte(t)
+	return &p2p.Key{
+		Type: p2p.KeyType_ID,
+		Body: bytes}
+}
+
+func NewIdKeyFromBytes(arg []byte) Key {
+	return IdKey(arg)
 }

@@ -44,7 +44,7 @@ func main() {
 	}
 
 	ksp := filepath.Join(os.Getenv("HOME"), "keystore")
-	ks, err := NewFSKeystore(ksp)
+	ks, err := ayame.NewFSKeystore(ksp)
 	if err != nil {
 		panic(err)
 	}
@@ -92,7 +92,7 @@ func main() {
 		if strings.HasPrefix(text, "uni") {
 			args := strings.Split(text, " ")
 			ayame.Log.Infof("unicasting: " + strings.Join(args[1:], " "))
-			node.Unicast(context.Background(), ayame.IntKey(1), []byte(strings.Join(args[1:], " ")))
+			node.Unicast(context.Background(), ayame.IntKey(1), "m001", []byte(strings.Join(args[1:], " ")))
 		}
 
 		if strings.HasPrefix(text, "tab") {
