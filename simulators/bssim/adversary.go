@@ -4,8 +4,8 @@ import (
 
 	// "go mod tidy" is needed on go 1.16
 
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip" // "go mod tidy" is needed on go 1.16
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip" // "go mod tidy" is needed on go 1.16
 	//
 )
 

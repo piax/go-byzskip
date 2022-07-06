@@ -3,7 +3,7 @@ package key_issuer
 import (
 	"math/rand"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 )
 
 type KeyIssuer interface {

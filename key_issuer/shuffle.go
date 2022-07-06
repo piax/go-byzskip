@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 )
 
 const (

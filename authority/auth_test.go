@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 )
 
 func TestAuthJoinInfo(t *testing.T) {

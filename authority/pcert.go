@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type PCert struct {

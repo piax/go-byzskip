@@ -1,14 +1,29 @@
-# go-ayame
-An implementation of ayame by Go language
+# go-byzskip
+An implementation of ByzSkip by Go language
 
-Simulators
+## Libraries
 
-* bssim - A ByzSkip simulator
-* kadsim - A S/Kademlia simulator
-* sgsim - A Skip Graph simulator
-* keysim - A key issuer simulator
+Our ByzSkip implementation codes are located in the byzskip directory.
+It uses ayame framework, which provides an abstract layer of real-p2p execution and discrete event simulation.
 
-Libraries
+* byzskip - ByzSkip core modules
+* ayame - a simulation / execution integration framework
 
-* ayame - Ayame modules by Go
-* byzskip - ByzSkip modules
+## Command Line Tools
+
+* authsrv - an authority server that issues the participation certificate according to the request
+* bssrv - a ByzSkip node with API/web server
+
+## Simulators
+
+The simulators related to ByzSkip.
+
+* bssim - a ByzSkip simulator
+* kadsim - a S/Kademlia simulator
+* sgsim - a Skip Graph simulator
+* keysim - a key issuer simulator
+
+## Misc (Experimental)
+
+* dht - an experimental DHT implementation using ByzSkip
+* mobile - an experimental gomobile app for mobile platforms (iOS/Android)

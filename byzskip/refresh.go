@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/jbenet/goprocess"
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 )
 
 var periodicBootstrapInterval = 1 * time.Minute

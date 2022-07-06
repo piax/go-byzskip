@@ -11,8 +11,8 @@ import (
 	"golang.org/x/mobile/event/size"
 	"golang.org/x/mobile/gl"
 
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 var (

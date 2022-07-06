@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 	"github.com/thoas/go-funk"
 
-	p2p "github.com/piax/go-ayame/ayame/p2p"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type BSUnicastEvent struct {

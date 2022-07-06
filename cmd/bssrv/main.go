@@ -19,10 +19,10 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/op/go-logging"
-	"github.com/piax/go-ayame/authority"
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p"
-	"github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-byzskip/authority"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
+	"github.com/piax/go-byzskip/byzskip"
 )
 
 var verbose *bool

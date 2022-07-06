@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 
-	p2p "github.com/piax/go-ayame/ayame/p2p"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 func (req *NeighborRequest) Encode() *pb.FindNodeRequest {

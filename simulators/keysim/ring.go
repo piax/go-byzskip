@@ -3,7 +3,7 @@ package main
 import (
 	"sort"
 
-	ki "github.com/piax/go-ayame/key_issuer"
+	ki "github.com/piax/go-byzskip/key_issuer"
 )
 
 type Ring []interface{}

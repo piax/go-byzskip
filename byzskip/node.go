@@ -23,8 +23,8 @@ import (
 	goprocessctx "github.com/jbenet/goprocess/context"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/piax/go-ayame/ayame"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/ayame"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	"github.com/thoas/go-funk"
 )
 

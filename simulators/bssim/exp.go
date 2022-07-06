@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/montanaflynn/stats"
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
 	"github.com/thoas/go-funk"
 )
 

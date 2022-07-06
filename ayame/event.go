@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
+	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type Event interface {

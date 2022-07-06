@@ -5,7 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type Node interface {

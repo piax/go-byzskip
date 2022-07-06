@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 	"github.com/thoas/go-funk"
 )
 

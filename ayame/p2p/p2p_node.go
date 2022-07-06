@@ -24,14 +24,14 @@ import (
 	"github.com/libp2p/go-msgio"
 	"github.com/libp2p/go-msgio/protoio"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 
 	"github.com/gogo/protobuf/proto"
 )
 
 // protocol version
-const Version = "/go-ayame/message/0.0.0"
+const Version = "/ayame/0.0.0"
 
 // Node type - a p2p host implementing one or more p2p protocols
 type P2PNode struct {

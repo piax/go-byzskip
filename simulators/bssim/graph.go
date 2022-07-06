@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 type Array []*bs.BSNode

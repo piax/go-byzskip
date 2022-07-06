@@ -13,9 +13,9 @@ import (
 
 	"github.com/montanaflynn/stats"
 	"github.com/op/go-logging"
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip"
-	"github.com/piax/go-ayame/key_issuer"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
+	"github.com/piax/go-byzskip/key_issuer"
 	"github.com/thoas/go-funk"
 )
 

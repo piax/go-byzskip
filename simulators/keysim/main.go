@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/op/go-logging"
-	"github.com/piax/go-ayame/ayame"
-	ki "github.com/piax/go-ayame/key_issuer"
+	"github.com/piax/go-byzskip/ayame"
+	ki "github.com/piax/go-byzskip/key_issuer"
 	"golang.org/x/exp/rand"
 	"gonum.org/v1/gonum/stat/distuv"
 )

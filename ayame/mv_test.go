@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 	ast "github.com/stretchr/testify/assert"
 )
 

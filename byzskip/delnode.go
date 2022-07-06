@@ -3,9 +3,9 @@ package byzskip
 import (
 	"context"
 
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p"
-	pb "github.com/piax/go-ayame/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type BSDelNodeEvent struct {

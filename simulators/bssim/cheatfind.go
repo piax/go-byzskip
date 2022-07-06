@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/piax/go-ayame/ayame" // "go mod tidy" is needed on go 1.16
+	"github.com/piax/go-byzskip/ayame" // "go mod tidy" is needed on go 1.16
 
-	bs "github.com/piax/go-ayame/byzskip" // "go mod tidy" is needed on go 1.16
+	bs "github.com/piax/go-byzskip/byzskip" // "go mod tidy" is needed on go 1.16
 	//
 )
 

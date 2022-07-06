@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/montanaflynn/stats"
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 	funk "github.com/thoas/go-funk"
 )
 

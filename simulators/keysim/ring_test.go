@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	ki "github.com/piax/go-ayame/key_issuer"
+	ki "github.com/piax/go-byzskip/key_issuer"
 	ast "github.com/stretchr/testify/assert"
 )
 

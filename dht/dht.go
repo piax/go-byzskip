@@ -10,8 +10,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p-kad-dht/providers"
 	record "github.com/libp2p/go-libp2p-record"
-	"github.com/piax/go-ayame/ayame"
-	bs "github.com/piax/go-ayame/byzskip"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 // assertion

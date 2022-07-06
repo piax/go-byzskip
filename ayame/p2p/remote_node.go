@@ -9,8 +9,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type RemoteNode struct {

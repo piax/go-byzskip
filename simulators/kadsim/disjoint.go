@@ -6,7 +6,7 @@ import (
 	"time"
 
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
-	"github.com/piax/go-ayame/ayame"
+	"github.com/piax/go-byzskip/ayame"
 )
 
 type DisjointQuery struct {

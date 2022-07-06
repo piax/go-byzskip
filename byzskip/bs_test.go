@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/piax/go-ayame/authority"
-	"github.com/piax/go-ayame/ayame"
-	p2p "github.com/piax/go-ayame/ayame/p2p"
+	"github.com/piax/go-byzskip/authority"
+	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	ast "github.com/stretchr/testify/assert"
 )
 
