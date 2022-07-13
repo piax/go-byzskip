@@ -1,5 +1,5 @@
 # go-byzskip
-An implementation of ByzSkip by Go language
+A Go implementation of ByzSkip by Go language
 
 ## Libraries
 
@@ -23,7 +23,7 @@ The simulators related to ByzSkip.
 * sgsim - a Skip Graph simulator
 * keysim - a key issuer simulator
 
-## Misc (Experimental)
+##  Applications (Experimental)
 
 * dht - an experimental DHT implementation using ByzSkip
-* mobile - an experimental gomobile app for mobile platforms (iOS/Android)
+* mobile - an experimental app for mobile platforms (iOS/Android)
