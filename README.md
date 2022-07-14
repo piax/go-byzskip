@@ -11,7 +11,7 @@ Our ByzSkip implementation codes are located in the byzskip directory.
 
 ## Command Line Tools
 
-* [authsrv](cmd/authserv) - an authority server that issues a participation certificate according to the request
+* [authsrv](cmd/authsrv) - an authority server that issues a participation certificate according to the request
 * [bssrv](cmd/bssrv) - a ByzSkip node with API/web server
 
 ## Simulators
