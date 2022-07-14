@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-core/protocol"
 
 	//libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 
@@ -303,9 +302,9 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 				mes.Data.Path = path                // restore
 				mes.Data.Timestamp = ts
 			}
-		} else { // not author
-			//ayame.Log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
-		}
+		} //else { // not author
+		//ayame.Log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
+		//}
 		if n.VerifyIntegrity {
 			mes.SenderSign, _ = n.signProtoMessage(mes)
 		}
@@ -556,6 +555,7 @@ func (n *P2PNode) sendMsgToStream(ctx context.Context, s network.Stream, msg pro
 	return nil
 }
 
+/*
 func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.ID, data proto.Message) error {
 	s, err := n.NewStream(context.Background(), id, p)
 	if err != nil {
@@ -568,3 +568,4 @@ func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.I
 	}()
 	return n.sendMsgToStream(ctx, s, data)
 }
+*/
