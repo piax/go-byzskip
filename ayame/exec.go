@@ -45,7 +45,7 @@ func (ee *EventExecutor) RunForever() {
 				resp.SetReceiver(sev.Sender())
 				ee.RegisterEvent(resp, NETWORK_LATENCY)
 			} else {
-				sev.Run(context.TODO(), n)
+				_ = sev.Run(context.TODO(), n) // ignore err
 			}
 		}
 		if ee.finishTime <= ee.time {

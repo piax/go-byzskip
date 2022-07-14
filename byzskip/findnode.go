@@ -127,9 +127,9 @@ func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSFindNodeEvent) Run(ctx context.Context, node ayame.Node) {
+func (ue *BSFindNodeEvent) Run(ctx context.Context, node ayame.Node) error {
 	n := node.(*BSNode)
-	n.handleFindNode(ctx, ue)
+	return n.handleFindNode(ctx, ue)
 }
 
 func (ue *BSFindNodeEvent) IsResponse() bool {

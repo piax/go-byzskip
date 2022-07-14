@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p"
 	ci "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -23,6 +24,7 @@ import (
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	"github.com/piax/go-byzskip/byzskip"
+	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 var verbose *bool
@@ -67,12 +69,7 @@ func nodeTable(w http.ResponseWriter, req *http.Request) {
 func nodeStat(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "--key: %d\n", *key)
 	/*	fmt.Fprintf(w, "join-elapsed: %f\n", float64(joinElapsed)/1000.0)
-		fmt.Fprintf(w, "join-msgs: %d\n", joinMsgs)
-		fmt.Fprintf(w, "join-in-bytes: %d\n", joinInBytes)
-		fmt.Fprintf(w, "join-out-bytes: %d\n", joinOutBytes)
-		fmt.Fprintf(w, "after-join-msgs: %d\n", node.Parent.(*p2p.P2PNode).InCount-joinMsgs)
-		fmt.Fprintf(w, "after-join-in-bytes: %d\n", node.Parent.(*p2p.P2PNode).InBytes-joinInBytes)
-		fmt.Fprintf(w, "after-join-out-bytes: %d\n", node.Parent.(*p2p.P2PNode).OutBytes-joinOutBytes)*/
+		fmt.Fprintf(w, "join-out-bytes: %d\n", joinOutBytes)*/
 	fmt.Fprintf(w, "join-msgs: %d\n", joinMsgs)
 	fmt.Fprintf(w, "join-traffic: %d\n", joinBytes)
 	fmt.Fprintf(w, "recv-msgs: %d\n", node.Parent.(*p2p.P2PNode).InCount)
@@ -112,12 +109,12 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 			//node.Unicast(uniCtx, ayame.IntKey(i), mid, []byte("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyyyyyyyyyyyyyyyyyyyyyyyyyyyy"))
 			// 0 byte
 			node.Unicast(uniCtx, ayame.IntKey(i), mid, []byte(""))
-			resMap[mid] = make(chan *byzskip.BSUnicastResEvent)
+			resMap[mid] = make(chan *bs.BSUnicastResEvent)
 			//elapsed := int64(0)
 			results := make(map[string]int64)
 			retStr := ""
 		L:
-			for len(results) < byzskip.K {
+			for len(results) < bs.K {
 				//for i := 0; i < byzskip.K; i++ {
 				select {
 				case <-uniCtx.Done():
@@ -138,13 +135,12 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func authorizeWeb(node ayame.Node, id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+func authorizeWeb(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 	c, err := authWeb(*authURL, id, key)
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
 	}
-	node.SetMV(c.Mv)
-	return c.Cert
+	return c.Key, c.Mv, c.Cert, nil
 }
 
 func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
@@ -177,10 +173,10 @@ func string2PubKey(pubstr string) (ci.PubKey, error) {
 	return ci.UnmarshalPublicKey(b)
 }
 
-func receiveMessage(node *byzskip.BSNode, ev *byzskip.BSUnicastEvent) {
+func receiveMessage(node *bs.BSNode, ev *bs.BSUnicastEvent) {
 	ayame.Log.Infof("received message: %s", ev.Payload)
-	sender := ev.Author().(*byzskip.BSNode)
-	res := byzskip.NewBSUnicastResEvent(node, ev.MessageId, ev.Payload)
+	sender := ev.Author().(*bs.BSNode)
+	res := bs.NewBSUnicastResEvent(node, ev.MessageId, ev.Payload)
 	res.Path = ev.Path       // copy the path info
 	if sender.Equals(node) { //&& ev.TargetKey.Equals(node.Key()) {
 		ayame.Log.Infof("Send to self: %s", node)
@@ -188,7 +184,7 @@ func receiveMessage(node *byzskip.BSNode, ev *byzskip.BSUnicastEvent) {
 			receiveResponse(node, res)
 		}()
 	} else {
-		ayame.Log.Infof("sending response to: %s", sender)
+		ayame.Log.Infof("sending response to: %s from: %s", sender, node)
 		node.SendEventAsync(context.Background(), sender, res, true)
 		//if err != nil {
 		//	ayame.Log.Infof("Sending response failed: %s", err)
@@ -198,6 +194,7 @@ func receiveMessage(node *byzskip.BSNode, ev *byzskip.BSUnicastEvent) {
 
 func receiveResponse(node *byzskip.BSNode, ev *byzskip.BSUnicastResEvent) {
 	// ugly
+	ayame.Log.Infof("received response response from: %s", ev.Sender())
 	resMap[ev.MessageId] <- ev
 }
 
@@ -208,11 +205,11 @@ func main() {
 	k = flag.Int("k", 4, "the parameter k")
 	alpha = flag.Int("alpha", 2, "the parameter alpha")
 	tcp = flag.Bool("t", false, "use TCP")
-	iAddr = flag.String("i", "/ip4/127.0.0.1/udp/9000/quic/p2p/16Uiu2HAkv3b9KPSZUzoezMYKkNpLVoiD2ejPN7Z5Hv8j67SKFq2L", "introducer addr (ignored when bootstrap)")
-	port = flag.Int("p", 9000, "the peer-to-peer port to listen to")
+	iAddr = flag.String("i", "/ip4/127.0.0.1/udp/9000/quic/p2p/16Uiu2HAkwNMzueRAnytwz3uR3cMVpNBCJ3DMbTgeStss2gNZuGxC", "introducer addr (ignored when bootstrap)")
+	port = flag.Int("p", 9001, "the peer-to-peer port to listen to")
 	//keystore = flag.String("s", filepath.Join(os.Getenv("HOME"), "keystore"), "the filepath for the keystore")
-	keystore = flag.String("s", "keystore", "the filepath for the keystore")
-	srvPort = flag.Int("l", 8000, "the server port to listen to")
+	keystore = flag.String("ks", "keystore", "the path name of the keystore")
+	srvPort = flag.Int("s", 8001, "the server port to listen to")
 	authURL = flag.String("auth", "http://localhost:7001", "the authenticator web URL")
 	pubKeyString = flag.String("apub", "BABBEIIDM7V3FR4RWNGVXYRSHOCL6SYWLNIJLP4ONDGNB25HS7PKE6C56M2Q", "the public key of the authority")
 
@@ -225,7 +222,7 @@ func main() {
 	var selfAddr string
 
 	if *tcp {
-		p2p.USE_QUIC = false
+		//p2p.USE_QUIC = false
 		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/", *port)
 	} else {
 		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic/", *port)
@@ -255,9 +252,8 @@ func main() {
 		panic(err)
 	}
 	//var node *byzskip.BSNode
-
+	var priv ci.PrivKey = nil
 	if *bootstrap {
-		var priv ci.PrivKey = nil
 		if exist, err := ks.Has("introducer"); !exist || err != nil {
 			priv, _, err = ci.GenerateKeyPair(ci.Secp256k1, 256)
 			if err != nil {
@@ -270,15 +266,54 @@ func main() {
 				panic(err)
 			}
 		}
-		node, _ = byzskip.NewP2PNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, priv,
-			authorizeWeb, validateWeb)
+	} else {
+		priv, _, err = ci.GenerateKeyPair(ci.Secp256k1, 256)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	p2pOpts := []libp2p.Option{
+		libp2p.Identity(priv),
+		libp2p.ListenAddrStrings(selfAddr),
+	}
+
+	h, err := libp2p.New(p2pOpts...)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, addr := range h.Addrs() {
+		fmt.Printf("address: %s/p2p/%s\n", addr, h.ID())
+	}
+	fmt.Printf("web port: %d\n", *srvPort)
+
+	if err != nil {
+		panic(err)
+	}
+
+	bsOpts := []bs.Option{
+		bs.Authorizer(authorizeWeb),
+		bs.AuthValidator(validateWeb),
+		bs.Key(ayame.IntKey(*key)),
+	}
+
+	node, err = byzskip.New(h, bsOpts...)
+
+	if err != nil {
+		panic(err)
+	}
+
+	//node, _ = byzskip.NewNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, priv,
+	//	authorizeWeb, validateWeb)
+	if *bootstrap {
 		node.RunBootstrap(context.Background())
 	} else {
 		if len(*iAddr) == 0 {
 			panic("need introducer address")
 		}
-		node, _ = byzskip.NewP2PNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, nil,
-			authorizeWeb, validateWeb)
+		//node, _ = byzskip.NewNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, nil,
+		//			authorizeWeb, validateWeb)
 
 		//start := time.Now().UnixMicro()
 		if err := node.Join(context.Background(), *iAddr); err != nil {

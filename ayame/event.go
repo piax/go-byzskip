@@ -104,17 +104,17 @@ func (ev *AbstractEvent) IsResponse() bool {
 }
 
 func NewEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractEvent {
-	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
+	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: true, isRequest: false, sendTime: -1, vTime: -1}
 }
 
 func NewEventNoAuthor() *AbstractEvent {
-	return &AbstractEvent{sender: nil, receiver: nil, isVerified: false, isRequest: false, sendTime: -1, vTime: -1}
+	return &AbstractEvent{sender: nil, receiver: nil, isVerified: true, isRequest: false, sendTime: -1, vTime: -1}
 }
 
 type SchedEvent interface {
 	SetJob(job func())
 	Job() func()
-	Run(ctx context.Context, node Node)
+	Run(ctx context.Context, node Node) error
 	ProcessRequest(ctx context.Context, node Node) SchedEvent
 	SetCanceled(c bool)
 	IsCanceled() bool
@@ -147,15 +147,16 @@ func NewSchedEventWithJob(job func()) *AbstractSchedEvent {
 	return &AbstractSchedEvent{AbstractEvent: *NewEventNoAuthor(), job: job, isCanceled: false}
 }
 
-func (aj *AsyncJobEvent) Run(node Node) {
+func (aj *AsyncJobEvent) Run(node Node) error {
 	ch := make(chan bool)
 	aj.asyncJob(ch)
 	<-ch // wait for the job
+	return nil
 }
 
-func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) {
+func (se *AbstractSchedEvent) Run(ctx context.Context, n Node) error {
 	se.Job()()
-	//n.Yield(ctx)
+	return nil
 }
 
 func (se *AbstractSchedEvent) ProcessRequest(ctx context.Context, n Node) SchedEvent {

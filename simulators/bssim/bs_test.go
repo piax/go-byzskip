@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p"
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip"
 	ast "github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestSim(t *testing.T) {
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewBSNode(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -47,20 +48,21 @@ func TestSim(t *testing.T) {
 func TestP2P(t *testing.T) {
 	numberOfPeers := 100
 	peers := make([]*bs.BSNode, numberOfPeers)
-	peers[0], _ = bs.NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2), nil)
+	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic"))
+	peers[0], _ = bs.New(h, bs.Key(ayame.IntKey(0)))
 	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers/2; i++ {
-		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)))
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
 	}
 	time.Sleep(time.Duration(10) * time.Second)
 	for i := numberOfPeers / 2; i < numberOfPeers; i++ {
-		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = bs.NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)))
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
@@ -73,7 +75,7 @@ func TestP2P(t *testing.T) {
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewBSNode(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -86,7 +88,7 @@ func TestTableIndex(t *testing.T) {
 	numberOfPeers := 100
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(i), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(i), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -102,9 +104,9 @@ func TestPickAlternately(t *testing.T) {
 	sorted := []bs.KeyMV{}
 	queried := []bs.KeyMV{}
 	keys := []int{8, 10, 11, 9, 5, 3, 4, 15, 6}
-	self := bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(7), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false)
+	self := bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(7), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false)
 	for _, n := range keys {
-		lst = append(lst, bs.NewBSNode(ayame.NewLocalNode(ayame.IntKey(n), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false))
+		lst = append(lst, bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(n), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, false))
 	}
 	for _, n := range lst {
 		sorted = bs.SortCircularAppend(self.Key(), sorted, n)

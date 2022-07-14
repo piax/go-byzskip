@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
@@ -165,7 +166,6 @@ func addr(port int, quic bool) string {
 
 func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
-	p2p.USE_QUIC = useQuic
 	InitK(4)
 	numberOfPeers := num
 	keys := []int{}
@@ -175,24 +175,36 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	if shuffle {
 		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 	}
-	authFunc := func(node ayame.Node, id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+		mv := ayame.NewMembershipVector(2)
 		bin := auth.Authorize(id, key, mv)
-		return bin
+		return key, mv, bin, nil
 	}
 	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
 		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
 	}
 	peers := make([]*BSNode, numberOfPeers)
 	var err error
-	peers[0], err = NewP2PNodeWithAuth(addr(9000, useQuic), ayame.IntKey(keys[0]), ayame.NewMembershipVector(2), nil, authFunc, validateFunc)
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
 	if err != nil {
 		panic(err)
 	}
+	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
 	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
-		addr := addr(9000+i, useQuic)
-		peers[i], _ = NewP2PNodeWithAuth(addr, ayame.IntKey(keys[i]), ayame.NewMembershipVector(2), nil, authFunc, validateFunc)
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+		peers[i], err = New(h, []Option{Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		if err != nil {
+			panic(err)
+		}
 		go func(pos int) {
 			peers[pos].Join(context.Background(), locator)
 		}(i)
@@ -253,9 +265,10 @@ func TestLookup(t *testing.T) {
 }
 
 func TestUnicast(t *testing.T) {
-	numberOfPeers := 32
-	peers := setupNodes(numberOfPeers, true, true)
-	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", p2p.USE_QUIC)
+	numberOfPeers := 100
+	useQuic := true
+	peers := setupNodes(numberOfPeers, true, useQuic)
+	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
 
@@ -314,29 +327,32 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func Example() {
+func TestExample(t *testing.T) {
 	numberOfPeers := 32
 	InitK(4)
-	ayame.SecureKeyMV = false
 	peers := make([]*BSNode, numberOfPeers)
-	peers[0], _ = NewP2PNode("/ip4/127.0.0.1/udp/9000/quic", ayame.IntKey(0), ayame.NewMembershipVector(2), nil)
-	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+
+	h, _ := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic")}...)
+	peers[0], _ = New(h)
+	bootstrapAddr := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers; i++ {
-		addr := fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)
-		peers[i], _ = NewP2PNode(addr, ayame.IntKey(i), ayame.NewMembershipVector(2), nil)
-		peers[i].Join(context.Background(), locator)
+		h, _ := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i))}...)
+		peers[i], _ = New(h)
+		peers[i].Join(context.Background(), bootstrapAddr)
 		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
-			fmt.Printf("%d: received '%s'\n", node.Key(), string(ev.Payload))
+			fmt.Printf("%s: received '%s'\n", node.Key(), string(ev.Payload))
 		})
 	}
-	peers[2].Lookup(context.Background(), ayame.IntKey(16))
-	peers[1].Unicast(context.Background(), ayame.IntKey(17), peers[1].NewMessageId(), []byte("hello world"))
+	result := peers[2].Lookup(context.Background(), ayame.NewStringIdKey("hello"))
+	for _, r := range result {
+		fmt.Printf("found %s\n", r.Key())
+	}
+	peers[1].Unicast(context.Background(), peers[1].Key(), peers[1].NewMessageId(), []byte("hello world"))
 	time.Sleep(time.Duration(100) * time.Millisecond)
 }
 
 func TestTCP(t *testing.T) {
 	numberOfPeers := 100
-	p2p.USE_QUIC = false
 	setupNodes(numberOfPeers, true, false)
 }

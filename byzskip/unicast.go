@@ -112,7 +112,7 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
 
-	if !strings.HasPrefix(ev.MessageId, ev.Author().String()+".") { // check if adversary generated mimic message id.
+	if !strings.HasPrefix(ev.MessageId, ev.Author().Id().String()+".") { // check if adversary generated mimic message id.
 		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Author().String(), myNode.String())
 		return false
 	}
@@ -128,7 +128,7 @@ func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 
 func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 	msgLevel := ev.level
-	ayame.Log.Debugf("set seen: %s at %d on %d\n", ev.MessageId, msgLevel, myNode.Key())
+	ayame.Log.Debugf("set seen: %s at %d on %s\n", ev.MessageId, msgLevel, myNode.Key())
 	myNode.seenMutex.Lock()
 	myNode.QuerySeen[ev.MessageId] = msgLevel
 	myNode.seenMutex.Unlock()
@@ -170,10 +170,8 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSUnicastEvent) Run(ctx context.Context, node ayame.Node) {
-	if err := node.(*BSNode).handleUnicast(ctx, ue, false); err != nil {
-		panic(err)
-	}
+func (ue *BSUnicastEvent) Run(ctx context.Context, node ayame.Node) error {
+	return node.(*BSNode).handleUnicast(ctx, ue, false)
 }
 
 func (ev *BSUnicastEvent) nextMsg(n *BSNode, level int) *BSUnicastEvent {
@@ -335,11 +333,9 @@ func (ue *BSUnicastResEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSUnicastResEvent) Run(ctx context.Context, node ayame.Node) {
+func (ue *BSUnicastResEvent) Run(ctx context.Context, node ayame.Node) error {
 	ayame.Log.Infof("running unicast response handler.")
-	if err := node.(*BSNode).handleUnicastResponse(ctx, ue, ue.Sender().Key().Equals(node.Key())); err != nil {
-		panic(err)
-	}
+	return node.(*BSNode).handleUnicastResponse(ctx, ue, ue.Sender().Key().Equals(node.Key()))
 }
 
 func (ue *BSUnicastResEvent) IsResponse() bool {

@@ -20,6 +20,7 @@ type RemoteNode struct {
 	addrs []ma.Multiaddr
 	cert  []byte
 	id    peer.ID
+	app   interface{}
 }
 
 // ayame.Node interface
@@ -60,7 +61,7 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
-		Cert:       IfNeededSign(n.cert),
+		Cert:       IfNeededSign(n.self.VerifyIntegrity, n.cert),
 		Connection: ConnectionType(n.self.Network().Connectedness(n.id)),
 	}
 }
@@ -68,6 +69,14 @@ func (n *RemoteNode) Encode() *p2p.Peer {
 func (n *RemoteNode) Close() error {
 	// Nothing to do
 	return nil
+}
+
+func (n *RemoteNode) SetApp(app interface{}) {
+	n.app = app
+}
+
+func (n *RemoteNode) App() interface{} {
+	return n.app
 }
 
 func (n *RemoteNode) Addrs() []ma.Multiaddr {

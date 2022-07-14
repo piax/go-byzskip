@@ -78,9 +78,10 @@ func (ue *UnicastEvent) createSubMessage(nextHop *SGNode, level int) *UnicastEve
 	return &sub
 }
 
-func (ue *UnicastEvent) Run(ctx context.Context, node ayame.Node) {
+func (ue *UnicastEvent) Run(ctx context.Context, node ayame.Node) error {
 	//	fmt.Print(node.Id())
 	node.(*SGNode).handleUnicast(ue)
+	return nil
 }
 
 type RoutingTableSingleLevel struct {

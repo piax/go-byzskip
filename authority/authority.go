@@ -43,7 +43,7 @@ func marshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []by
 // Create a new node with its implemented protocols
 func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
 	data := marshalJoinInfo(id, key, mv)
-	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
+	//ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
 	res, err := pubKey.Verify(data, cert)
 	if err != nil {

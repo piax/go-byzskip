@@ -1,29 +1,29 @@
 # go-byzskip
-An implementation of ByzSkip by Go language
+An implementation of ByzSkip by Go language.
+This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for the P2P transport.
 
 ## Libraries
 
 Our ByzSkip implementation codes are located in the byzskip directory.
-It uses ayame framework, which provides an abstract layer of real-p2p execution and discrete event simulation.
 
-* byzskip - ByzSkip core modules
-* ayame - a simulation / execution integration framework
+* byzskip - ByzSkip modules
+* ayame - real&sim abstract execution modules
 
 ## Command Line Tools
 
-* authsrv - an authority server that issues the participation certificate according to the request
-* bssrv - a ByzSkip node with API/web server
+* [authsrv](cmd/authserv) - an authority server that issues a participation certificate according to the request
+* [bssrv](cmd/bssrv) - a ByzSkip node with API/web server
 
 ## Simulators
 
 The simulators related to ByzSkip.
 
-* bssim - a ByzSkip simulator
-* kadsim - a S/Kademlia simulator
-* sgsim - a Skip Graph simulator
-* keysim - a key issuer simulator
+* [bssim](simulators/bssim) - a ByzSkip simulator
+* [kadsim](simulators/bssim) - a S/Kademlia simulator
+* [sgsim](simulators/sgsim) - a Skip Graph simulator
+* [keysim](simulators/keysim) - a key issuer simulator
 
 ## Misc (Experimental)
 
-* dht - an experimental DHT implementation using ByzSkip
-* mobile - an experimental gomobile app for mobile platforms (iOS/Android)
+* [dht](dht) - an experimental DHT implementation using ByzSkip
+* [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)

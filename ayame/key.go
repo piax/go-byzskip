@@ -2,12 +2,15 @@ package ayame
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-base32"
 	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
@@ -157,6 +160,16 @@ func NewStringKeyFromBytes(arg []byte) Key {
 
 type IdKey []byte
 
+func NewStringIdKey(key string) IdKey {
+	hash := sha256.Sum256([]byte(key))
+	return IdKey(hash[:])
+}
+
+func NewIdKey(id peer.ID) IdKey {
+	hash := sha256.Sum256([]byte(id))
+	return IdKey(hash[:])
+}
+
 func (t IdKey) Less(elem interface{}) bool {
 	if v, ok := elem.(IdKey); ok {
 		return bytes.Compare(t, v) < 0
@@ -179,7 +192,8 @@ func (t IdKey) LessOrEquals(elem interface{}) bool {
 }
 
 func (t IdKey) String() string {
-	return string(t)
+	str := base32.RawStdEncoding.EncodeToString(t)
+	return "<" + str[3:10] + ">" // for readability
 }
 
 func (t IdKey) Encode() *p2p.Key {

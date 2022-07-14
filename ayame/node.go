@@ -19,13 +19,17 @@ type Node interface {
 	Send(ctx context.Context, ev SchedEvent, sign bool) error
 	Encode() *pb.Peer
 	Close() error
+	App() interface{}
+	SetApp(interface{})
 }
 
-var SecureKeyMV bool = true
+// Abolish
+// var SecureKeyMV bool = true
 
 type LocalNode struct {
 	key Key
 	mv  *MembershipVector
+	app interface{}
 }
 
 func NewLocalNode(key Key, mv *MembershipVector) *LocalNode {
@@ -73,6 +77,14 @@ func (an *LocalNode) Send(ctx context.Context, ev SchedEvent, sign bool) error {
 	//ev.SetSender(an)
 	GlobalEventExecutor.RegisterEvent(ev, NETWORK_LATENCY)
 	return nil
+}
+
+func (an *LocalNode) SetApp(app interface{}) {
+	an.app = app
+}
+
+func (an *LocalNode) App() interface{} {
+	return an.app
 }
 
 //type yieldCh chan struct{}

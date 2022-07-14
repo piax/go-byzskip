@@ -28,9 +28,10 @@ func (ue *BSDelNodeEvent) Encode() *pb.Message {
 	return ret
 }
 
-func (ue *BSDelNodeEvent) Run(ctx context.Context, node ayame.Node) {
+func (ue *BSDelNodeEvent) Run(ctx context.Context, node ayame.Node) error {
 	n := node.(*BSNode)
 	n.handleDelNode(ue)
+	return nil
 }
 
 func (ue *BSDelNodeEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {

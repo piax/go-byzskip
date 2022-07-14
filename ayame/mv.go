@@ -14,11 +14,11 @@ const (
 
 type MembershipVector struct {
 	Alpha int
-	Val   [MembershipVectorSize]int
+	Val   []int
 }
 
 func NewMembershipVector(alpha int) *MembershipVector {
-	var v [MembershipVectorSize]int
+	v := make([]int, MembershipVectorSize)
 	for i := 0; i < MembershipVectorSize; i++ {
 		v[i] = rand.Intn(alpha)
 	}
@@ -26,10 +26,11 @@ func NewMembershipVector(alpha int) *MembershipVector {
 }
 
 func NewMembershipVectorLiteral(alpha int, literal []int) *MembershipVector {
-	var v [MembershipVectorSize]int
-	for i := 0; i < len(literal); i++ {
-		v[i] = literal[i]
-	}
+	v := make([]int, MembershipVectorSize)
+	copy(v, literal)
+	//	for i := 0; i < len(literal); i++ {
+	//		v[i] = literal[i]
+	//	}
 	return &MembershipVector{Val: v, Alpha: alpha}
 }
 

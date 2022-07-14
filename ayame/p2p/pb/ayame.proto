@@ -65,7 +65,7 @@ message Peer {
 
 message Record {
     // The key that references this record
-    Key key = 1;
+    bytes key = 1;
 
     // The actual value this record is storing
     bytes value = 2;

@@ -168,7 +168,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, false)
+			n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -176,9 +176,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewStopRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewStopRoutingTable, f)
 			} else {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -190,9 +190,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, f)
 			} else {
-				n = bs.NewBSNode(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -297,7 +297,7 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
 	count := 0
 	prev := 0
-	ayame.SecureKeyMV = false // no authentication
+	//ayame.SecureKeyMV = false // no authentication
 	bs.ResponseCount = 0
 	for i, n := range nodes {
 		if index != i {
@@ -627,7 +627,7 @@ func main() {
 	verbose = flag.Bool("v", false, "verbose output")
 
 	flag.Parse()
-	ayame.SecureKeyMV = false // skip authentication
+	//ayame.SecureKeyMV = false // skip authentication
 	bs.InitK(*kValue)
 
 	bs.ALPHA = *alpha
@@ -729,7 +729,7 @@ func main() {
 	if *compareCheat {
 		testPeers := make([]*bs.BSNode, *numberOfNodes)
 		for i := 0; i < *numberOfNodes; i++ {
-			testPeers[i] = bs.NewBSNode(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, false)
+			testPeers[i] = bs.NewWithParent(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, false)
 		}
 		FastJoinAllByCheat(testPeers)
 		diffs := 0

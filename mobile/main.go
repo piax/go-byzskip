@@ -11,6 +11,7 @@ import (
 	"golang.org/x/mobile/event/size"
 	"golang.org/x/mobile/gl"
 
+	"github.com/libp2p/go-libp2p"
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip"
 )
@@ -20,9 +21,9 @@ var (
 )
 
 const (
-	// hard coded...
+	// XXX hard coded.
 	KEY        = 1
-	INTRODUCER = "/ip4/192.168.0.3/udp/9000/quic/p2p/16Uiu2HAkwsZM1xaK9iG55i8MMdgep6hsF9wuiKkYrht6yj7BL2ct"
+	INTRODUCER = "/ip4/your-introducer-ip/udp/9000/quic/your-introducer-id"
 )
 
 func main() {
@@ -49,7 +50,8 @@ func main() {
 }
 
 func startNode(a app.App) {
-	node, _ := bs.NewP2PNode("/ip4/0.0.0.0/udp/9000/quic", ayame.IntKey(KEY), ayame.NewMembershipVector(2), nil)
+	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/udp/9000/quic"))
+	node, _ := bs.New(h, bs.Key(ayame.IntKey(KEY)))
 	introducer := INTRODUCER
 
 	node.Join(context.Background(), introducer)
