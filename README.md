@@ -23,7 +23,7 @@ The simulators related to ByzSkip.
 * [sgsim](simulators/sgsim) - a Skip Graph simulator
 * [keysim](simulators/keysim) - a key issuer simulator
 
-## Misc (Experimental)
+##  Applications (Experimental)
 
 * [dht](dht) - an experimental DHT implementation using ByzSkip
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)
