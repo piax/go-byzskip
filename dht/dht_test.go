@@ -48,7 +48,7 @@ func setupDHTs(ctx context.Context, numberOfPeers int, useQuic bool) []*BSDHT {
 
 	peers := make([]*BSDHT, numberOfPeers)
 
-	var introducer string
+	var introducer string = ""
 	for i := 0; i < numberOfPeers; i++ {
 		locator := addr(9000+i, useQuic)
 		p2pOpts := []libp2p.Option{libp2p.ListenAddrStrings(locator)}
@@ -56,17 +56,20 @@ func setupDHTs(ctx context.Context, numberOfPeers int, useQuic bool) []*BSDHT {
 		if err != nil {
 			panic(err)
 		}
+		if introducer != "" { // not a bootstrap node
+			dhtOpts = append(dhtOpts, Bootstrap(introducer))
+		}
 		peer, err := New(h, dhtOpts...)
 		if err != nil {
 			panic(err)
 		}
 		peers[i] = peer
 		if i == 0 { // bootstrap
-			introducer = locator + "/p2p/" + peers[0].node.Id().String()
-			peers[i].node.RunBootstrap(ctx)
+			introducer = locator + "/p2p/" + peers[0].Node.Id().String()
+			peers[i].RunAsBootstrap(ctx)
 		} else {
 			go func(pos int) {
-				if err := peers[pos].node.Join(ctx, introducer); err != nil {
+				if err := peers[pos].Bootstrap(ctx); err != nil {
 					panic(err)
 				}
 			}(i)
@@ -76,9 +79,9 @@ func setupDHTs(ctx context.Context, numberOfPeers int, useQuic bool) []*BSDHT {
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 	for i := 0; i < numberOfPeers; i++ {
-		sumCount += peers[i].node.Parent.(*p2p.P2PNode).InCount
-		sumTraffic += peers[i].node.Parent.(*p2p.P2PNode).InBytes
-		fmt.Printf("%s %d %d %f\n", peers[i].node.Key(), peers[i].node.Parent.(*p2p.P2PNode).InBytes, peers[i].node.Parent.(*p2p.P2PNode).InCount, float64(peers[i].node.Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].node.Parent.(*p2p.P2PNode).InCount))
+		sumCount += peers[i].Node.Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Node.Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Node.Key(), peers[i].Node.Parent.(*p2p.P2PNode).InBytes, peers[i].Node.Parent.(*p2p.P2PNode).InCount, float64(peers[i].Node.Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Node.Parent.(*p2p.P2PNode).InCount))
 	}
 	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
 	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))

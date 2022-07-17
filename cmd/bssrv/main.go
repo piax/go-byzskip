@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -23,7 +22,6 @@ import (
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
-	"github.com/piax/go-byzskip/byzskip"
 	bs "github.com/piax/go-byzskip/byzskip"
 )
 
@@ -31,7 +29,6 @@ var verbose *bool
 var bootstrap *bool
 var key *int
 var k *int
-var alpha *int
 var iAddr *string
 
 //var addr *string
@@ -41,12 +38,11 @@ var keystore *string
 var authURL *string
 var pubKeyString *string
 
-var node *byzskip.BSNode
-var codec = base32.StdEncoding.WithPadding(base32.NoPadding)
+var node *bs.BSNode
 
 var pubKey ci.PubKey
 var tcp *bool
-var resMap map[string]chan *byzskip.BSUnicastResEvent
+var resMap map[string]chan *bs.BSUnicastResEvent
 
 var sem sync.Mutex
 
@@ -148,7 +144,7 @@ func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []b
 }
 
 func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%d&id=%s", key, id.Pretty()))
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.Pretty()))
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +159,6 @@ func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
 		return nil, err
 	}
 	return &c, nil
-}
-
-func string2PubKey(pubstr string) (ci.PubKey, error) {
-	b, err := codec.DecodeString(pubstr)
-	if err != nil {
-		return nil, err
-	}
-	return ci.UnmarshalPublicKey(b)
 }
 
 func receiveMessage(node *bs.BSNode, ev *bs.BSUnicastEvent) {
@@ -192,7 +180,7 @@ func receiveMessage(node *bs.BSNode, ev *bs.BSUnicastEvent) {
 	}
 }
 
-func receiveResponse(node *byzskip.BSNode, ev *byzskip.BSUnicastResEvent) {
+func receiveResponse(node *bs.BSNode, ev *bs.BSUnicastResEvent) {
 	// ugly
 	ayame.Log.Infof("received response response from: %s", ev.Sender())
 	resMap[ev.MessageId] <- ev
@@ -201,23 +189,20 @@ func receiveResponse(node *byzskip.BSNode, ev *byzskip.BSUnicastResEvent) {
 func main() {
 	verbose = flag.Bool("v", false, "verbose output")
 	bootstrap = flag.Bool("b", false, "runs as the bootstrap node")
-	key = flag.Int("key", 1, "key (integer)")
+	key = flag.Int("key", 0, "key (integer)")
 	k = flag.Int("k", 4, "the parameter k")
-	alpha = flag.Int("alpha", 2, "the parameter alpha")
 	tcp = flag.Bool("t", false, "use TCP")
 	iAddr = flag.String("i", "/ip4/127.0.0.1/udp/9000/quic/p2p/16Uiu2HAkwNMzueRAnytwz3uR3cMVpNBCJ3DMbTgeStss2gNZuGxC", "introducer addr (ignored when bootstrap)")
-	port = flag.Int("p", 9001, "the peer-to-peer port to listen to")
+	port = flag.Int("p", 9000, "the peer-to-peer port to listen to")
 	//keystore = flag.String("s", filepath.Join(os.Getenv("HOME"), "keystore"), "the filepath for the keystore")
 	keystore = flag.String("ks", "keystore", "the path name of the keystore")
-	srvPort = flag.Int("s", 8001, "the server port to listen to")
+	srvPort = flag.Int("s", 8000, "the server port to listen to")
 	authURL = flag.String("auth", "http://localhost:7001", "the authenticator web URL")
 	pubKeyString = flag.String("apub", "BABBEIIDM7V3FR4RWNGVXYRSHOCL6SYWLNIJLP4ONDGNB25HS7PKE6C56M2Q", "the public key of the authority")
 
-	resMap = make(map[string]chan *byzskip.BSUnicastResEvent)
+	resMap = make(map[string]chan *bs.BSUnicastResEvent)
 
 	flag.Parse()
-
-	byzskip.InitK(*k)
 
 	var selfAddr string
 
@@ -234,13 +219,13 @@ func main() {
 		ayame.InitLogger(logging.INFO)
 	}
 
-	ayame.Log.Infof("apub = %s", *pubKeyString)
+	fmt.Printf("authority url: %s\nauthority pub: %s\n", *authURL, *pubKeyString)
 
 	if len(*pubKeyString) == 0 {
 		panic("need public key")
 	}
 
-	p, err := string2PubKey(*pubKeyString)
+	p, err := authority.UnmarshalStringToPubKey(*pubKeyString)
 	if err != nil {
 		panic(err)
 	}
@@ -284,47 +269,30 @@ func main() {
 	}
 
 	for _, addr := range h.Addrs() {
-		fmt.Printf("address: %s/p2p/%s\n", addr, h.ID())
+		fmt.Printf("listen address: %s/p2p/%s\n", addr, h.ID())
 	}
 	fmt.Printf("web port: %d\n", *srvPort)
 
-	if err != nil {
-		panic(err)
-	}
-
 	bsOpts := []bs.Option{
+		bs.Key(ayame.IntKey(*key)),
+		bs.Bootstrap(*iAddr),
+		bs.RedundancyFactor(*k),
 		bs.Authorizer(authorizeWeb),
 		bs.AuthValidator(validateWeb),
-		bs.Key(ayame.IntKey(*key)),
+		bs.DetailedStatistics(true),
 	}
-
-	node, err = byzskip.New(h, bsOpts...)
-
+	node, err = bs.New(h, bsOpts...)
 	if err != nil {
 		panic(err)
 	}
-
-	//node, _ = byzskip.NewNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, priv,
-	//	authorizeWeb, validateWeb)
 	if *bootstrap {
 		node.RunBootstrap(context.Background())
 	} else {
-		if len(*iAddr) == 0 {
-			panic("need introducer address")
-		}
-		//node, _ = byzskip.NewNodeWithAuth(selfAddr, ayame.IntKey(*key), nil, nil,
-		//			authorizeWeb, validateWeb)
-
-		//start := time.Now().UnixMicro()
-		if err := node.Join(context.Background(), *iAddr); err != nil {
+		if err := node.Join(context.Background()); err != nil {
 			panic(err)
 		}
 		joinBytes = node.Parent.(*p2p.P2PNode).InBytes + node.Parent.(*p2p.P2PNode).OutBytes
 		joinMsgs = node.Parent.(*p2p.P2PNode).InCount
-		/*joinElapsed = time.Now().UnixMicro() - start
-		joinMsgs = node.Parent.(*p2p.P2PNode).InCount
-		joinInBytes = node.Parent.(*p2p.P2PNode).InBytes
-		joinOutBytes = node.Parent.(*p2p.P2PNode).OutBytes*/
 	}
 
 	node.SetMessageReceiver(receiveMessage)

@@ -193,7 +193,7 @@ func (t IdKey) LessOrEquals(elem interface{}) bool {
 
 func (t IdKey) String() string {
 	str := base32.RawStdEncoding.EncodeToString(t)
-	return "<" + str[3:10] + ">" // for readability
+	return "<" + str[0:15] + ">" // for readability
 }
 
 func (t IdKey) Encode() *p2p.Key {

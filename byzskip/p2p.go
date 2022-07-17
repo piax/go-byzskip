@@ -6,7 +6,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
@@ -21,19 +20,8 @@ func ConvertEvent(ev ayame.SchedEvent, sender *BSNode) *p2p.Message {
 	case BSFindNodeEvent:
 	}
 }*/
-func (n *BSNode) IntroducerNode(locator string) (*BSNode, error) {
+func (n *BSNode) IntroducerNode(info peer.AddrInfo) (*BSNode, error) {
 	// Turn the destination into a multiaddr.
-	maddr, err := multiaddr.NewMultiaddr(locator)
-	if err != nil {
-		ayame.Log.Errorf("locator=%s, %v", locator, err)
-		return nil, err
-	}
-	// Extract the peer ID from the multiaddr.
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
-	if err != nil {
-		ayame.Log.Errorf("maddr=%v, %v", maddr, err)
-		return nil, err
-	}
 	// Add the destination's peer multiaddress in the peerstore.
 	self := n.Parent.(*p2p.P2PNode)
 	self.Host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)

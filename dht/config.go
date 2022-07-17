@@ -1,11 +1,16 @@
 package dht
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/ipfs/go-datastore"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p-kad-dht/providers"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -49,30 +54,43 @@ func ChainOptions(opts ...Option) Option {
 	}
 }
 
+const (
+	PROTOCOL = "/ipfs/byzskip/0.0.1"
+)
+
 func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 	key := ayame.NewIdKey(h.ID())
 	assignedKey, mv, cert, err := c.Authorizer(h.ID(), key)
 	if err != nil {
 		return nil, err
 	}
-	parent := p2p.New(h, key, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity)
+	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
+		*c.DetailedStatistics, PROTOCOL)
+
+	pm, err := providers.NewProviderManager(context.TODO(), h.ID(), h.Peerstore(), c.Datastore)
+	if err != nil {
+		return nil, err
+	}
 
 	ret :=
 		&BSDHT{
-			node: &bs.BSNode{
+			Node: &bs.BSNode{
+				BootstrapAddrs:     c.BootstrapAddrs,
 				Parent:             parent,
 				QuerySeen:          make(map[string]int),
 				Procs:              make(map[string]*bs.RequestProcess),
 				DisableFixLowPeers: false,
 			},
+			ProviderManager: pm,
 			RecordValidator: c.RecordValidator,
 			datastore:       c.Datastore,
 		}
-	ret.node.SetKey(assignedKey)
-	ret.node.SetMV(mv)
-	ret.node.SetApp(ret)
-	ret.node.RoutingTable = c.RoutingTableMaker(ret.node)
-	parent.SetChild(ret.node)
+	ret.Node.SetKey(assignedKey)
+	ret.Node.SetMV(mv)
+	ayame.Log.Debugf("running key=%s, mv=%s", assignedKey, mv)
+	ret.Node.SetApp(ret)
+	ret.Node.RoutingTable = c.RoutingTableMaker(ret.Node)
+	parent.SetChild(ret.Node)
 	return ret, nil
 }
 
@@ -102,4 +120,21 @@ func NamespacedValidator(ns string, v record.Validator) Option {
 		nsval[ns] = v
 		return nil
 	}
+}
+
+func RecordValidator(v record.Validator) Option {
+	return func(c *Config) error {
+		c.RecordValidator = v
+		return nil
+	}
+}
+
+// for IPFS
+func BSDHTOption(ctx context.Context,
+	host host.Host,
+	dstore datastore.Batching,
+	validator record.Validator,
+	bootstrapPeers ...peer.AddrInfo,
+) (routing.Routing, error) {
+	return New(host, Datastore(dstore), RecordValidator(validator), BootstrapAddrs(bootstrapPeers...))
 }

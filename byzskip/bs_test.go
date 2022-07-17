@@ -201,12 +201,12 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 		if err != nil {
 			panic(err)
 		}
-		peers[i], err = New(h, []Option{Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
 		if err != nil {
 			panic(err)
 		}
 		go func(pos int) {
-			peers[pos].Join(context.Background(), locator)
+			peers[pos].Join(context.Background())
 		}(i)
 	}
 	time.Sleep(time.Duration(5) * time.Second)
@@ -327,24 +327,23 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func TestExample(t *testing.T) {
+func Example() {
 	numberOfPeers := 32
-	InitK(4)
 	peers := make([]*BSNode, numberOfPeers)
 
-	h, _ := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic")}...)
+	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic"))
 	peers[0], _ = New(h)
-	bootstrapAddr := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
-
+	introducer := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+	peers[0].RunBootstrap(context.Background())
 	for i := 1; i < numberOfPeers; i++ {
-		h, _ := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i))}...)
-		peers[i], _ = New(h)
-		peers[i].Join(context.Background(), bootstrapAddr)
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		peers[i], _ = New(h, Bootstrap(introducer))
+		peers[i].Join(context.Background())
 		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
 			fmt.Printf("%s: received '%s'\n", node.Key(), string(ev.Payload))
 		})
 	}
-	result := peers[2].Lookup(context.Background(), ayame.NewStringIdKey("hello"))
+	result, _ := peers[2].Lookup(context.Background(), ayame.NewStringIdKey("hello"))
 	for _, r := range result {
 		fmt.Printf("found %s\n", r.Key())
 	}

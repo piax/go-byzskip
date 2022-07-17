@@ -2,11 +2,9 @@ package byzskip
 
 import (
 	"fmt"
-	"runtime"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p/config"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 )
@@ -14,13 +12,15 @@ import (
 type Option func(*Config) error
 
 type Config struct {
-	config.Config
-	Key               ayame.Key
-	Authorizer        func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)
-	AuthValidator     func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
-	RoutingTableMaker func(KeyMV) RoutingTable
-	IsFailure         *bool
-	VerifyIntegrity   *bool
+	Key                ayame.Key
+	BootstrapAddrs     []peer.AddrInfo
+	RedundancyFactor   *int // the parameter 'k'
+	Authorizer         func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)
+	AuthValidator      func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+	RoutingTableMaker  func(KeyMV) RoutingTable
+	IsFailure          *bool
+	VerifyIntegrity    *bool
+	DetailedStatistics *bool
 }
 
 // Apply applies the given options to this Option
@@ -47,25 +47,20 @@ func ChainOptions(opts ...Option) Option {
 	}
 }
 
-func traceError(err error, skip int) error {
-	if err == nil {
-		return nil
-	}
-	_, file, line, ok := runtime.Caller(skip + 1)
-	if !ok {
-		return err
-	}
-	return fmt.Errorf("%s:%d: %s", file, line, err)
-}
+const (
+	PROTOCOL = "/byzskip/0.0.1"
+)
 
 func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 	assignedKey, mv, cert, err := c.Authorizer(h.ID(), c.Key)
 	if err != nil {
 		return nil, err
 	}
-	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity)
+	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
+		*c.DetailedStatistics, PROTOCOL)
 
 	ret := &BSNode{key: assignedKey, mv: mv,
+		BootstrapAddrs:     c.BootstrapAddrs,
 		Parent:             parent,
 		QuerySeen:          make(map[string]int),
 		Procs:              make(map[string]*RequestProcess),

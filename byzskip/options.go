@@ -2,8 +2,17 @@ package byzskip
 
 import (
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
 )
+
+func RedundancyFactor(k int) Option {
+	return func(cfg *Config) error {
+		cfg.RedundancyFactor = &k
+		InitK(k)
+		return nil
+	}
+}
 
 func Authorizer(authorizer func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)) Option {
 	return func(c *Config) error {
@@ -40,10 +49,44 @@ func VerifyIntegrity(verify bool) Option {
 	}
 }
 
+func DetailedStatistics(enable bool) Option {
+	return func(c *Config) error {
+		c.DetailedStatistics = &enable
+		return nil
+	}
+}
+
 // desired key
 func Key(key ayame.Key) Option {
 	return func(c *Config) error {
 		c.Key = key
+		return nil
+	}
+}
+
+func Bootstrap(bns ...string) Option {
+	return func(c *Config) error {
+		infos := []peer.AddrInfo{}
+		for _, bn := range bns {
+			maddr, err := multiaddr.NewMultiaddr(bn)
+			if err != nil {
+				return err
+			}
+			// Extract the peer ID from the multiaddr.
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				return err
+			}
+			infos = append(infos, *info)
+		}
+		c.BootstrapAddrs = infos
+		return nil
+	}
+}
+
+func BootstrapAddrs(infos ...peer.AddrInfo) Option {
+	return func(c *Config) error {
+		c.BootstrapAddrs = infos
 		return nil
 	}
 }

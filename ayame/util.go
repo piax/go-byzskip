@@ -2,6 +2,7 @@ package ayame
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"strings"
@@ -45,6 +46,27 @@ func LessThanExists(lst []int, x int) bool {
 	return true
 }
 
+type Equality[T any] interface {
+	Equals(T) bool
+}
+
+func Exclude[T Equality[T]](lst []T, ex []T) []T {
+	ret := []T{}
+	for _, n := range lst {
+		found := false
+		for _, m := range ex {
+			if n.Equals(m) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ret = append(ret, n)
+		}
+	}
+	return ret
+}
+
 func AppendIfMissing(slice []Key, i Key) []Key {
 	for _, ele := range slice {
 		if ele.Equals(i) {
@@ -60,6 +82,11 @@ func SliceString[T fmt.Stringer](args []T) string {
 		rval[i] = x.String()
 	}
 	return "[" + strings.Join(rval, ",") + "]"
+}
+
+func PickRandomly[T any](arg []T) T {
+	i := rand.Intn(len(arg))
+	return arg[i]
 }
 
 func SliceStringOld(args interface{}) string {

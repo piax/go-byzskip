@@ -13,6 +13,7 @@ package byzskip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -81,6 +82,7 @@ type BSNode struct {
 	proc               goprocess.Process
 	DisableFixLowPeers bool
 	app                interface{}
+	BootstrapAddrs     []peer.AddrInfo
 }
 
 func (n *BSNode) Key() ayame.Key {
@@ -121,7 +123,7 @@ func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
 func (n *BSNode) Equals(m KeyMV) bool {
 	//return m.Key().Equals(n.key)
 	mn := m.(*BSNode)
-	return mn.Id() == n.Id() && m.Key().Equals(n.key)
+	return mn.Id() == n.Id() // && m.Key().Equals(n.key)
 }
 
 func (n *BSNode) String() string {
@@ -374,7 +376,8 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 	return ret
 }
 
-func (n *BSNode) IsIntroducer() bool {
+func (n *BSNode) isIntroducer() bool {
+	// introducer remote node initially don't have key information
 	return n.Key() == nil
 }
 
@@ -384,12 +387,19 @@ func NewSimNode(key ayame.Key, mv *ayame.MembershipVector) *BSNode {
 }
 
 // Join a node join to the network.
-// introducer's multiaddr is specified as a addr argument
-func (n *BSNode) Join(ctx context.Context, addr string) error {
-	introducer, err := n.IntroducerNode(addr)
+// introducer's multiaddr candidates are specified as addrs argument
+func (n *BSNode) Join(ctx context.Context) error {
+	if len(n.BootstrapAddrs) == 0 {
+		return errors.New("no bootstrap address specified")
+	}
+	introducer, err := n.IntroducerNode(ayame.PickRandomly(n.BootstrapAddrs))
 	if err != nil {
 		return err
 	}
+	if introducer.Id() == n.Id() {
+		return n.RunBootstrap(ctx)
+	}
+
 	return n.JoinWithNode(ctx, introducer)
 }
 
@@ -433,7 +443,7 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 	for !n.allQueried() {
 		reqCount := 0
 		cs := n.pickCandidates(n.stats, FIND_NODE_PARALLELISM)
-		if len(cs) == 1 && cs[0].IsIntroducer() { // remove the special node
+		if len(cs) == 1 && cs[0].isIntroducer() { // remove the special node
 			//n.statsMutex.Lock()
 			n.stats.closest = []*BSNode{}
 			//n.statsMutex.Unlock()
@@ -486,7 +496,7 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 	return nil
 }
 
-func (n *BSNode) RunBootstrap(ctx context.Context) {
+func (n *BSNode) RunBootstrap(ctx context.Context) error {
 
 	n.stats = &JoinStats{
 		runningQueries: 0,
@@ -498,6 +508,7 @@ func (n *BSNode) RunBootstrap(ctx context.Context) {
 	if !n.DisableFixLowPeers {
 		n.proc.Go(n.fixLowPeersRoutine)
 	}
+	return nil
 }
 
 func (n *BSNode) JoinAsync(ctx context.Context, introducer *BSNode) {
@@ -516,7 +527,7 @@ func (n *BSNode) JoinAsync(ctx context.Context, introducer *BSNode) {
 func (n *BSNode) sendNextParalellRequest(ctx context.Context, parallel int) int {
 	reqCount := 0
 	cs := n.pickCandidates(n.stats, parallel)
-	if len(cs) == 1 && cs[0].IsIntroducer() { // remove the special node
+	if len(cs) == 1 && cs[0].isIntroducer() { // remove the special node
 		//n.statsMutex.Lock()
 		n.stats.closest = []*BSNode{}
 		//n.statsMutex.Unlock()
@@ -659,7 +670,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	n.ProcsMutex.Unlock()
 
 	if response.level == 0 { // just for debug
-		ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", n.Key(),
+		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
 			ayame.SliceString(UnincludedNodes(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
@@ -727,7 +738,7 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	n.ProcsMutex.Unlock()
 
 	if response.level == 0 { // just for debug
-		ayame.Log.Debugf("%d: start neighbor collection from %s, queried=%s\n", n.Key(),
+		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
 			ayame.SliceString(UnincludedNodes(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
@@ -814,14 +825,14 @@ func (n *BSNode) allQueried() bool {
 	return ret
 }
 
-func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
+func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, time.Duration(LOOKUP_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
 
 	closers, level := n.GetClosestNodes(key)
 	if level == 0 {
 		ayame.Log.Debugf("FindNode ended locally")
-		return closers
+		return closers, nil
 	}
 	queried := []*BSNode{}
 	results := []*BSNode{}
@@ -859,9 +870,9 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 				}
 				if response.level == 0 {
 					results = AppendNodesIfMissing(results, response.closest)
-					if ContainsKey(key, results) {
-						return results // cancel other FindNode
-					}
+					//if ContainsKey(key, results) {
+					//	return results, nil // cancel other FindNode
+					//}
 				}
 				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
 				queried = AppendNodeIfMissing(queried, response.sender)
@@ -869,7 +880,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) []*BSNode {
 			}
 		}
 	}
-	return results
+	return results, nil
 }
 
 func (n *BSNode) SetMessageReceiver(receiver func(*BSNode, *BSUnicastEvent)) {
@@ -960,7 +971,7 @@ func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev aya
 	}()
 }
 
-func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, node *BSNode, key ayame.Key, requestId string) chan interface{} {
+func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, node *BSNode, key ayame.Key, requestId string) {
 	ev := NewBSFindNodeReqEvent(n, requestId, key, nil)
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
@@ -988,7 +999,6 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, n
 		ayame.Log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
-	return ch
 }
 
 func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, requestId string) {

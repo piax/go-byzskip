@@ -39,7 +39,8 @@ enum ConnectionType { //
 enum MessageType {
 	PUT_VALUE = 0;
 	GET_VALUE = 1;
-    // 2, 3 are removed
+    ADD_PROVIDER = 2;
+    GET_PROVIDERS = 3;
 	FIND_NODE = 4;
 	PING = 5;
     DEL_NODE = 6;
@@ -64,14 +65,20 @@ message Peer {
 }
 
 message Record {
-    // The key that references this record
-    bytes key = 1;
+        // The key that references this record
+        bytes key = 1;
 
-    // The actual value this record is storing
-    bytes value = 2;
+        // The actual value this record is storing
+        bytes value = 2;
 
-    // The time when the record was created 
-    int64 timestamp = 5;
+        // Note: These fields were removed from the Record message
+        // hash of the authors public key
+        //optional string author = 3;
+        // A PKI signature for the key+value+author
+        //optional bytes signature = 4;
+
+        // Time the record was received, set by receiver
+        string timeReceived = 5;
 }
 
 message TableIndex {

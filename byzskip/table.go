@@ -485,6 +485,7 @@ func (table *SkipRoutingTable) ensureHeight(level int) {
 }
 
 func (table *SkipRoutingTable) Add(c KeyMV, truncate bool) {
+	ayame.Log.Debugf("%s is adding %s", table.km, c)
 	if table.km.Equals(c) {
 		return // cannot add self
 	}

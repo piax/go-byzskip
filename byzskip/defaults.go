@@ -21,6 +21,10 @@ var DefaultAuthValidator = func(cfg *Config) error {
 	}))
 }
 
+var DefaultRedundancyFactor = func(cfg *Config) error {
+	return cfg.Apply(RedundancyFactor(4))
+}
+
 // Complete list of default options and when to fallback on them.
 //
 // Please *DON'T* specify default options any other way. Putting this all here
@@ -29,6 +33,10 @@ var defaults = []struct {
 	fallback func(cfg *Config) bool
 	opt      Option
 }{
+	{
+		fallback: func(cfg *Config) bool { return cfg.RedundancyFactor == nil },
+		opt:      DefaultRedundancyFactor,
+	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.RoutingTableMaker == nil },
 		opt:      RoutingTableMaker(NewSkipRoutingTable),
@@ -44,6 +52,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.VerifyIntegrity == nil },
 		opt:      VerifyIntegrity(true),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.DetailedStatistics == nil },
+		opt:      DetailedStatistics(false),
 	},
 }
 

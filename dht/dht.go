@@ -10,17 +10,22 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
+	u "github.com/ipfs/go-ipfs-util"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p-kad-dht/providers"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/multiformats/go-base32"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multihash"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	bs "github.com/piax/go-byzskip/byzskip"
+	"go.opentelemetry.io/otel"
 )
 
 // assertion
@@ -37,7 +42,7 @@ var (
 // many functions are imported from go-libp2p-kad-dht FullRT
 
 type BSDHT struct {
-	node *bs.BSNode
+	Node *bs.BSNode
 
 	RecordValidator record.Validator
 	ProviderManager *providers.ProviderManager
@@ -58,68 +63,74 @@ func NewWithoutDefaults(h host.Host, options ...Option) (*BSDHT, error) {
 	return cfg.NewDHT(h)
 }
 
+func handlePutProviderEvent(ctx context.Context, dht *BSDHT, ev *BSPutProviderEvent) error {
+	ayame.Log.Debugf("put provider from=%v\n", ev.Sender())
+	for _, p := range ev.Providers {
+		mh, err := multihash.FromB58String(ev.Key)
+		if err != nil {
+			return err
+		}
+		ayame.Log.Debugf("adding provider key=%s, id=%v\n", mh, p.Id())
+		dht.ProviderManager.AddProvider(ctx,
+			mh, peer.AddrInfo{ID: p.Id(), Addrs: p.Addrs()})
+	}
+	return nil
+}
+
+func handleGetProvidersResEvent(ctx context.Context, dht *BSDHT, ev *BSGetProvidersEvent) error {
+	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
+	dht.Node.ProcsMutex.RLock()
+	proc, exists := dht.Node.Procs[ev.MessageId()]
+	dht.Node.ProcsMutex.RUnlock()
+	if exists && proc.Ch != nil { // sync
+		ayame.Log.Debugf("get finished from=%v\n", ev.Sender())
+		proc.Ch <- ev
+		return nil
+	} // XXX async is not implemented yet
+	return fmt.Errorf("%v: unregistered response msgid=%s received from %s", dht, ev.MessageId(), ev.Sender())
+}
+
+func handleGetProvidersRequest(ctx context.Context, dht *BSDHT, ev *BSGetProvidersEvent) ayame.SchedEvent {
+	ayame.Log.Debugf("get providers from=%v, key=%s\n", ev.Sender(), string(ev.Key))
+	mh, err := multihash.FromB58String(ev.Key)
+	if err != nil {
+		ayame.Log.Debugf("failed to make multihash %s \n", ev.Key)
+		return nil
+	}
+	provs, err := dht.ProviderManager.GetProviders(ctx, mh)
+	ayame.Log.Debugf("found providers for %s len=%d\n", mh, len(provs))
+	if err != nil {
+		ayame.Log.Debugf("failed to get providers %s \n", ev.Key)
+		return nil
+	}
+	peers := []*pb.Peer{}
+	for _, p := range provs {
+		peers = append(peers, &pb.Peer{
+			Id:    peer.Encode(p.ID),
+			Addrs: p2p.EncodeAddrs(p.Addrs),
+		})
+	}
+	return NewBSGetProvidersEvent(dht.Node, ev.messageId, false, ev.Key, peers)
+}
+
 func handleGetRequest(ctx context.Context, dht *BSDHT, ev *BSGetEvent) ayame.SchedEvent {
-	rec, err := dht.checkLocalDatastore(ctx, mkDsKey(string(ev.Record.GetKey())))
+	ayame.Log.Debugf("get from=%v, key=%s\n", ev.Sender(), string(ev.Record.GetKey()))
+	rec, err := dht.getRecordFromDatastore(ctx, mkDsKey(string(ev.Record.GetKey())))
 
 	if err != nil { // XXX ignore
 		rec = nil
 	}
-	ret := NewBSGetEvent(dht.node, ev.MessageId(), false, rec)
+
+	ayame.Log.Debugf("got rec=%v", rec)
+	ret := NewBSGetEvent(dht.Node, ev.MessageId(), false, rec)
 	return ret
-}
-
-func (dht *BSDHT) checkLocalDatastore(ctx context.Context, dskey ds.Key) (*pb.Record, error) {
-	buf, err := dht.datastore.Get(ctx, dskey)
-	ayame.Log.Debugf("%s checking data store got: %v", dht.node.Key(), buf)
-
-	if err == ds.ErrNotFound {
-		return nil, nil
-	}
-
-	// if we got an unexpected error, bail.
-	if err != nil {
-		return nil, err
-	}
-
-	// if we have the value, send it back
-	ayame.Log.Debugf("%s handleGetValue success!", dht.node.Key())
-
-	rec := new(pb.Record)
-	err = proto.Unmarshal(buf, rec)
-	if err != nil {
-		ayame.Log.Debug("failed to unmarshal DHT record from datastore")
-		return nil, err
-	}
-
-	var recordIsBad bool
-	recvtime := time.Unix(rec.GetTimestamp(), 0)
-
-	if time.Since(recvtime) > MAX_RECORD_AGE {
-		ayame.Log.Debug("old record found, tossing.")
-		recordIsBad = true
-	}
-
-	// NOTE: We do not verify the record here beyond checking these timestamps.
-	// we put the burden of checking the records on the requester as checking a record
-	// may be computationally expensive
-
-	if recordIsBad {
-		err := dht.datastore.Delete(ctx, dskey)
-		if err != nil {
-			ayame.Log.Error("Failed to delete bad record from datastore: ", err)
-		}
-
-		return nil, nil // can treat this as not having the record at all
-	}
-
-	return rec, nil
 }
 
 func handleGetResEvent(ctx context.Context, dht *BSDHT, ev *BSGetEvent) error {
 	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
-	dht.node.ProcsMutex.RLock()
-	proc, exists := dht.node.Procs[ev.MessageId()]
-	dht.node.ProcsMutex.RUnlock()
+	dht.Node.ProcsMutex.RLock()
+	proc, exists := dht.Node.Procs[ev.MessageId()]
+	dht.Node.ProcsMutex.RUnlock()
 	if exists && proc.Ch != nil { // sync
 		ayame.Log.Debugf("get finished from=%v\n", ev.Sender())
 		proc.Ch <- ev
@@ -130,9 +141,9 @@ func handleGetResEvent(ctx context.Context, dht *BSDHT, ev *BSGetEvent) error {
 
 func handlePutResEvent(ctx context.Context, dht *BSDHT, ev *BSPutEvent) error {
 	//strKey := base32.RawStdEncoding.EncodeToString(ev.Key.(ayame.IdKey))
-	dht.node.ProcsMutex.RLock()
-	proc, exists := dht.node.Procs[ev.MessageId()]
-	dht.node.ProcsMutex.RUnlock()
+	dht.Node.ProcsMutex.RLock()
+	proc, exists := dht.Node.Procs[ev.MessageId()]
+	dht.Node.ProcsMutex.RUnlock()
 	if exists && proc.Ch != nil { // sync
 		ayame.Log.Debugf("put finished from=%v\n", ev.Sender())
 		proc.Ch <- ev
@@ -144,14 +155,16 @@ func handlePutResEvent(ctx context.Context, dht *BSDHT, ev *BSPutEvent) error {
 func handlePutRequest(ctx context.Context, dht *BSDHT, ev *BSPutEvent) ayame.SchedEvent {
 	//strKey := base32.RawStdEncoding.EncodeToString(ev.Key.(ayame.IdKey))
 	dht.putLocal(ctx, string(ev.Record.GetKey()), ev.Record) // why key?
-	ayame.Log.Debugf("put finished on %v from=%v\n", dht.node.Id(), ev.Sender())
+	ayame.Log.Debugf("put finished on %v from=%v, key=%s, len=%d\n", dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
 
-	rec, err := dht.checkLocalDatastore(ctx, mkDsKey(string(ev.Record.GetKey())))
+	rec, err := dht.getRecordFromDatastore(ctx, mkDsKey(string(ev.Record.GetKey())))
 
 	if err != nil { // XXX ignore
+		ayame.Log.Debugf("checking datastore failed on %v from=%v, key=%s, len=%d\n", dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
 		rec = nil
 	}
-	ret := NewBSPutEvent(dht.node, ev.MessageId(), false, rec)
+	ret := NewBSPutEvent(dht.Node, ev.MessageId(), false, rec)
+	ayame.Log.Debugf("returning put record on %v to=%v, key=%s, len=%d\n", dht.Node.Id(), ev.Sender(), string(ret.Record.GetKey()), len(ret.Record.Value))
 	return ret
 }
 
@@ -184,6 +197,7 @@ func (dht *BSDHT) getLocal(ctx context.Context, key string) (*pb.Record, error) 
 	return dht.getRecordFromDatastore(ctx, mkDsKey(key))
 }
 
+// XXX somewhat tricky using "recpb"
 func (dht *BSDHT) putLocal(ctx context.Context, key string, rec *pb.Record) error {
 	data, err := proto.Marshal(rec)
 	if err != nil {
@@ -206,11 +220,14 @@ func MakePutRecord(key string, value []byte) *pb.Record {
 
 // PutValue
 func (dht *BSDHT) PutValue(ctx context.Context, key string, value []byte, opts ...routing.Option) error {
+	ayame.Log.Debugf("Put key=%s, len=%d", key, len(value))
 	if err := dht.RecordValidator.Validate(key, value); err != nil {
+		ayame.Log.Debugf("validation failure key=%s, len=%d", key, len(value))
 		return err
 	}
 	old, err := dht.getLocal(ctx, key)
 	if err != nil {
+		ayame.Log.Debugf("get local failure key=%s, %s", key, err)
 		return err
 	}
 	// Check if we have an old value that's not the same as the new one.
@@ -218,6 +235,7 @@ func (dht *BSDHT) PutValue(ctx context.Context, key string, value []byte, opts .
 		// Check to see if the new one is better.
 		i, err := dht.RecordValidator.Select(key, [][]byte{value, old.GetValue()})
 		if err != nil {
+			ayame.Log.Debugf("select failure key=%s, %s", key, err)
 			return err
 		}
 		if i != 0 {
@@ -226,16 +244,20 @@ func (dht *BSDHT) PutValue(ctx context.Context, key string, value []byte, opts .
 	}
 
 	rec := MakePutRecord(key, value)
-	rec.Timestamp = time.Now().Unix()
+	rec.TimeReceived = u.FormatRFC3339(time.Now())
 	err = dht.putLocal(ctx, key, rec)
 	if err != nil {
+		ayame.Log.Debugf("put local failure key=%s, %s", key, err)
 		return err
 	}
 
 	//keyByte, _ := base32.RawStdEncoding.DecodeString(key)
 	idKey := ayame.NewStringIdKey(key)
 
-	peers := dht.node.Lookup(ctx, idKey)
+	peers, err := dht.Node.Lookup(ctx, idKey)
+	if err != nil {
+		return err
+	}
 	ayame.Log.Debugf("lookup done: %v", peers)
 
 	successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
@@ -259,12 +281,45 @@ func nsToIs(lst []*bs.BSNode) []ayame.Node {
 	return ret
 }
 
-func (dht *BSDHT) sendPutValue(ctx context.Context, p ayame.Node, rec *pb.Record) error {
-	if dht.node.Id() == p.Id() { // put to self. This should be already done.
+func (dht *BSDHT) sendGetProviders(ctx context.Context, p ayame.Node, key multihash.Multihash) ([]*peer.AddrInfo, error) {
+	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
+		return nil, nil
+	}
+	mes := NewBSGetProvidersEvent(dht.Node, dht.Node.NewMessageId(), true, key.B58String(), nil)
+	resp := dht.Node.SendRequest(ctx, p, mes)
+	if ev, ok := resp.(*BSGetProvidersEvent); ok {
+		addrs := []*peer.AddrInfo{}
+		for _, p := range ev.providers {
+			pid, err := peer.Decode(p.Id)
+			if err != nil {
+				return nil, err
+			}
+			addrs = append(addrs, &peer.AddrInfo{ID: pid, Addrs: p2p.Addresses(p.Addrs)})
+		}
+		return addrs, nil
+	}
+	if ev, ok := resp.(*bs.FailureResponse); ok {
+		return nil, ev.Err
+	}
+	return nil, fmt.Errorf("invalid response type %s", resp)
+}
+
+func (dht *BSDHT) sendPutProvider(ctx context.Context, p ayame.Node, key multihash.Multihash) error {
+	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
 		return nil
 	}
-	mes := NewBSPutEvent(dht.node, dht.node.NewMessageId(), true, rec)
-	resp := dht.node.SendRequest(ctx, p, mes)
+	ayame.Log.Debugf("sending provider to %s", p)
+	mes := NewBSPutProviderEvent(dht.Node, dht.Node.NewMessageId(), key.B58String(), []*bs.BSNode{dht.Node})
+	dht.Node.SendEventAsync(ctx, p, mes, false)
+	return nil
+}
+
+func (dht *BSDHT) sendPutValue(ctx context.Context, p ayame.Node, rec *pb.Record) error {
+	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
+		return nil
+	}
+	mes := NewBSPutEvent(dht.Node, dht.Node.NewMessageId(), true, rec)
+	resp := dht.Node.SendRequest(ctx, p, mes)
 	if ev, ok := resp.(*BSPutEvent); ok {
 		if !bytes.Equal(rec.Value, ev.Record.Value) {
 			const errStr = "value not put correctly"
@@ -281,11 +336,11 @@ func (dht *BSDHT) sendPutValue(ctx context.Context, p ayame.Node, rec *pb.Record
 }
 
 func (dht *BSDHT) sendGetValue(ctx context.Context, p ayame.Node, key string) (*pb.Record, error) {
-	if dht.node.Id() == p.Id() { // put to self.
-		return dht.checkLocalDatastore(ctx, mkDsKey(key))
+	if dht.Node.Id() == p.Id() { // put to self.
+		return dht.getRecordFromDatastore(ctx, mkDsKey(key))
 	}
-	mes := NewBSGetEvent(dht.node, dht.node.NewMessageId(), true, &pb.Record{Key: []byte(key)})
-	resp := dht.node.SendRequest(ctx, p, mes)
+	mes := NewBSGetEvent(dht.Node, dht.Node.NewMessageId(), true, &pb.Record{Key: []byte(key)})
+	resp := dht.Node.SendRequest(ctx, p, mes)
 	if ev, ok := resp.(*BSGetEvent); ok {
 		return ev.Record, nil
 	}
@@ -527,14 +582,15 @@ func (dht *BSDHT) getValues(ctx context.Context, key string, stopQuery chan stru
 		select {
 		case valCh <- RecvdVal{
 			Val:  rec.GetValue(),
-			From: dht.node.Id(),
+			From: dht.Node.Id(),
 		}:
 		case <-ctx.Done():
 		}
 	}
 
 	idKey := ayame.NewStringIdKey(key)
-	peers := nsToIs(dht.node.Lookup(ctx, &idKey))
+	ps, _ := dht.Node.Lookup(ctx, &idKey)
+	peers := nsToIs(ps)
 
 	go func() {
 		defer close(valCh)
@@ -572,7 +628,7 @@ func (dht *BSDHT) updatePeerValues(ctx context.Context, key string, val []byte, 
 	for _, p := range peers {
 		go func(p ayame.Node) {
 			//TODO: Is this possible?
-			if p.Id() == dht.node.Id() {
+			if p.Id() == dht.Node.Id() {
 				err := dht.putLocal(ctx, key, fixupRec)
 				if err != nil {
 					ayame.Log.Error("Error correcting local dht entry:", err)
@@ -589,23 +645,177 @@ func (dht *BSDHT) updatePeerValues(ctx context.Context, key string, val []byte, 
 	}
 }
 
+var Tracer = otel.Tracer("")
+
 // Provide
 func (dht *BSDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) error {
-	return routing.ErrNotSupported
+	ayame.Log.Debugf("Put Provider key=%s", key)
+	keyMH := key.Hash()
+
+	// add self locally
+	ayame.Log.Debugf("adding providers for %s as %s\n", keyMH, dht.Node.Id())
+	dht.ProviderManager.AddProvider(ctx, keyMH, peer.AddrInfo{ID: dht.Node.Id()})
+	if !brdcst {
+		return nil
+	}
+
+	closerCtx := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		now := time.Now()
+		timeout := deadline.Sub(now)
+
+		if timeout < 0 {
+			// timed out
+			return context.DeadlineExceeded
+		} else if timeout < 10*time.Second {
+			// Reserve 10% for the final put.
+			deadline = deadline.Add(-timeout / 10)
+		} else {
+			// Otherwise, reserve a second (we'll already be
+			// connected so this should be fast).
+			deadline = deadline.Add(-time.Second)
+		}
+		var cancel context.CancelFunc
+		closerCtx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
+
+	var exceededDeadline bool
+	idKey := ayame.NewStringIdKey(string(keyMH))
+	ps, err := dht.Node.Lookup(closerCtx, idKey)
+	peers := nsToIs(ps)
+	ayame.Log.Debugf("put providers on %s", ayame.SliceString(peers))
+
+	switch err {
+	case context.DeadlineExceeded:
+		// If the _inner_ deadline has been exceeded but the _outer_
+		// context is still fine, provide the value to the closest peers
+		// we managed to find, even if they're not the _actual_ closest peers.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		exceededDeadline = true
+	case nil:
+	default:
+		return err
+	}
+
+	successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
+		err := dht.sendPutProvider(context.Background(), p, keyMH) //dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h)
+		return err
+	}, peers, true)
+
+	if exceededDeadline {
+		return context.DeadlineExceeded
+	}
+
+	if successes == 0 {
+		return fmt.Errorf("failed to complete provide")
+	}
+
+	return ctx.Err()
 }
 
 // FindProvidersAsync
 func (dht *BSDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count int) <-chan peer.AddrInfo {
-	ch := make(chan peer.AddrInfo)
+	ayame.Log.Debugf("Find Provider key=%s", key)
+	if !key.Defined() {
+		peerOut := make(chan peer.AddrInfo)
+		close(peerOut)
+		return peerOut
+	}
+
+	chSize := count
+	if count == 0 {
+		chSize = 1
+	}
+	peerOut := make(chan peer.AddrInfo, chSize)
+
 	keyMH := key.Hash()
-	idKey := ayame.IdKey(keyMH)
-	go func(key ayame.IdKey) {
-		clst := dht.node.Lookup(ctx, key)
-		for _, n := range clst {
-			ch <- peer.AddrInfo{ID: n.Id(), Addrs: n.Addrs()}
+
+	go dht.findProvidersAsyncRoutine(ctx, keyMH, count, peerOut)
+	return peerOut
+}
+
+func (dht *BSDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash.Multihash, count int, peerOut chan peer.AddrInfo) {
+	defer close(peerOut)
+
+	findAll := count == 0
+	var ps *peer.Set
+	if findAll {
+		ps = peer.NewSet()
+	} else {
+		ps = peer.NewLimitedSet(count)
+	}
+
+	provs, err := dht.ProviderManager.GetProviders(ctx, key)
+	ayame.Log.Debugf("found providers for %s len=%d\n", key, len(provs))
+
+	if err != nil {
+		return
+	}
+	for _, p := range provs {
+		// NOTE: Assuming that this list of peers is unique
+		if ps.TryAdd(p.ID) {
+			select {
+			case peerOut <- p:
+			case <-ctx.Done():
+				return
+			}
 		}
-	}(idKey)
-	return ch
+
+		// If we have enough peers locally, don't bother with remote RPC
+		// TODO: is this a DOS vector?
+		if !findAll && ps.Size() >= count {
+			return
+		}
+	}
+
+	idKey := ayame.NewStringIdKey(string(key))
+	peers, _ := dht.Node.Lookup(ctx, idKey)
+
+	queryctx, cancelquery := context.WithCancel(ctx)
+	defer cancelquery()
+
+	fn := func(ctx context.Context, p ayame.Node) error {
+		provs, err := dht.sendGetProviders(context.Background(), p, key)
+		if err != nil {
+			return err
+		}
+
+		ayame.Log.Debugf("%d provider entries", len(provs))
+
+		// Add unique providers from request, up to 'count'
+		for _, prov := range provs {
+			dht.maybeAddAddrs(prov.ID, prov.Addrs, peerstore.TempAddrTTL)
+			ayame.Log.Debugf("got provider: %s", prov)
+			if ps.TryAdd(prov.ID) {
+				ayame.Log.Debugf("using provider: %s", prov)
+				select {
+				case peerOut <- *prov:
+				case <-ctx.Done():
+					ayame.Log.Debug("context timed out sending more providers")
+					return ctx.Err()
+				}
+			}
+			if !findAll && ps.Size() >= count {
+				ayame.Log.Debugf("got enough providers (%d/%d)", ps.Size(), count)
+				cancelquery()
+				return nil
+			}
+		}
+		return nil
+	}
+	dht.execOnMany(queryctx, fn, nsToIs(peers), false)
+}
+
+func (dht *BSDHT) maybeAddAddrs(p peer.ID, addrs []multiaddr.Multiaddr, ttl time.Duration) {
+	// Don't add addresses for self or our connected peers. We have better ones.
+	if p == dht.Node.Id() {
+		return
+	}
+	self := dht.Node.Parent.(*p2p.P2PNode)
+	self.Host.Peerstore().AddAddrs(p, addrs, ttl)
 }
 
 func (dht *BSDHT) FindPeer(ctx context.Context, id peer.ID) (peer.AddrInfo, error) {
@@ -613,7 +823,7 @@ func (dht *BSDHT) FindPeer(ctx context.Context, id peer.ID) (peer.AddrInfo, erro
 		return peer.AddrInfo{}, err
 	}
 	idkey := ayame.NewIdKey(id)
-	clst := dht.node.Lookup(ctx, idkey)
+	clst, _ := dht.Node.Lookup(ctx, idkey)
 	for _, n := range clst {
 		if n.Key().Equals(idkey) {
 			return peer.AddrInfo{ID: n.Id(), Addrs: n.Addrs()}, nil
@@ -622,13 +832,19 @@ func (dht *BSDHT) FindPeer(ctx context.Context, id peer.ID) (peer.AddrInfo, erro
 	return peer.AddrInfo{}, routing.ErrNotFound
 }
 
-// nothing to do.
-func (dht *BSDHT) Bootstrap(context.Context) error {
+// run as the bootstrap node.
+func (dht *BSDHT) RunAsBootstrap(ctx context.Context) error {
+	dht.Node.RunBootstrap(ctx)
 	return nil
 }
 
+// bootstrap the node.
+func (dht *BSDHT) Bootstrap(ctx context.Context) error {
+	return dht.Node.Join(ctx)
+}
+
 func (dht *BSDHT) Close() error {
-	return dht.node.Close()
+	return dht.Node.Close()
 }
 
 func (dht *BSDHT) GetPublicKey(ctx context.Context, p peer.ID) (crypto.PubKey, error) {
@@ -659,6 +875,27 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetSender(p)
 		ev.SetVerified(true) // always verified
 		return ev
+	case pb.MessageType_ADD_PROVIDER:
+		ev = NewBSPutProviderEvent(author, mes.Data.Id, mes.Data.SenderAppData,
+			bs.ConvertPeers(self, mes.Data.CandidatePeers))
+		p, err := bs.ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetSender(p)
+		ev.SetVerified(true) // always verified
+		return ev
+	case pb.MessageType_GET_PROVIDERS:
+		ev = NewBSGetProvidersEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.SenderAppData,
+			mes.Data.CandidatePeers)
+		p, err := bs.ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetSender(p)
+		ev.SetVerified(true) // always verified
+		return ev
+
 	}
 	return bs.ConvertMessage(mes, self, valid)
 }

@@ -54,17 +54,17 @@ func TestP2P(t *testing.T) {
 
 	for i := 1; i < numberOfPeers/2; i++ {
 		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
-		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)))
+		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)), bs.Bootstrap(locator))
 		go func(pos int) {
-			peers[pos].Join(context.Background(), locator)
+			peers[pos].Join(context.Background())
 		}(i)
 	}
 	time.Sleep(time.Duration(10) * time.Second)
 	for i := numberOfPeers / 2; i < numberOfPeers; i++ {
 		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
-		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)))
+		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)), bs.Bootstrap(locator))
 		go func(pos int) {
-			peers[pos].Join(context.Background(), locator)
+			peers[pos].Join(context.Background())
 		}(i)
 	}
 	time.Sleep(time.Duration(10) * time.Second)

@@ -23,7 +23,7 @@ var (
 const (
 	// XXX hard coded.
 	KEY        = 1
-	INTRODUCER = "/ip4/your-introducer-ip/udp/9000/quic/your-introducer-id"
+	INTRODUCER = "/ip4/your-introducer-ip-addr/udp/9000/quic/your-introducer-id"
 )
 
 func main() {
@@ -51,10 +51,9 @@ func main() {
 
 func startNode(a app.App) {
 	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/udp/9000/quic"))
-	node, _ := bs.New(h, bs.Key(ayame.IntKey(KEY)))
-	introducer := INTRODUCER
+	node, _ := bs.New(h, bs.Key(ayame.IntKey(KEY)), bs.Bootstrap(INTRODUCER))
 
-	node.Join(context.Background(), introducer)
+	node.Join(context.Background())
 	node.SetMessageReceiver(func(node *bs.BSNode, ev *bs.BSUnicastEvent) {
 		ok = !ok // inverse
 		a.Send(paint.Event{})

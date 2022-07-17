@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 
 	ci "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -22,8 +20,6 @@ var port *int
 var keystore *string
 
 var auth *authority.Authorizer
-
-var codec = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 const (
 	SEQ_NO      = "_seq"
@@ -43,20 +39,13 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ikey, err := strconv.Atoi(vals["key"][0])
+	key, err := authority.UnmarshalStringToKey(vals["key"][0])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	//db, err := leveldb.OpenFile("authority", nil)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//defer db.Close()
-
 	mv := ayame.NewMembershipVector(2)
-	key := ayame.IntKey(ikey)
 	bin := auth.Authorize(id, key, mv)
 
 	p := authority.NewPCert(key, id, mv, bin)
@@ -64,29 +53,13 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 	pcert, _ := json.Marshal(p)
 	//db.Put([]byte(KEY_PREFIX+vals["user"][0]), pcert, nil)
 
-	ayame.Log.Infof("issueing: id=%s, key=%d pcert=%s", vals["id"][0], ikey, pcert)
+	ayame.Log.Infof("issueing: id=%s, key=%s", vals["id"][0], key)
 
 	fmt.Fprintf(w, "%s", pcert)
 }
 
-func pubKey2String(pub ci.PubKey) (string, error) {
-	b, err := ci.MarshalPublicKey(pub)
-	if err != nil {
-		return "", err
-	}
-	return codec.EncodeToString(b), nil
-}
-
-func string2PubKey(pubstr string) (ci.PubKey, error) {
-	b, err := codec.DecodeString(pubstr)
-	if err != nil {
-		return nil, err
-	}
-	return ci.UnmarshalPublicKey(b)
-}
-
 func main() {
-	verbose = flag.Bool("v", true, "verbose output")
+	verbose = flag.Bool("v", false, "verbose output")
 	port = flag.Int("p", 7001, "the port to listen to")
 	keystore = flag.String("s", "keystore", "the filepath for the keystore")
 
@@ -119,7 +92,7 @@ func main() {
 		panic(err)
 	}
 	auth = authority.NewAuthorizerWithKeyPair(priv, priv.GetPublic())
-	ps, _ := pubKey2String(auth.PublicKey())
+	ps, _ := authority.MarshalPubKeyToString(auth.PublicKey())
 	fmt.Fprintf(os.Stderr, "authority publickey: %s\n", ps)
 
 	http.HandleFunc("/issue", issueCert)

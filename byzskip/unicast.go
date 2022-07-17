@@ -77,7 +77,7 @@ func NewBSUnicastEvent(author *BSNode, authorSign []byte, authorPubKey []byte,
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
 		MessageId:                  messageId,
-		Path:                       []PathEntry{{Node: author, Level: ayame.MembershipVectorSize}},
+		Path:                       []PathEntry{{Node: author, Level: ayame.MembershipVectorSize - 1}},
 		Payload:                    payload,
 		level:                      level,
 		hop:                        0,

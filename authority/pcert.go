@@ -3,7 +3,9 @@ package authority
 import (
 	"encoding/json"
 
+	ci "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-base32"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
@@ -14,6 +16,42 @@ type PCert struct {
 	id   peer.ID                 `json:"-"`
 	Mv   *ayame.MembershipVector `json:"-"`
 	Cert []byte                  `json:"cert"`
+}
+
+var codec = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func MarshalKeyToString(key ayame.Key) string {
+	bin, _ := key.Encode().Marshal()
+	return codec.EncodeToString(bin)
+}
+
+func UnmarshalStringToKey(keyStr string) (ayame.Key, error) {
+	key := &pb.Key{}
+	buf, err := codec.DecodeString(keyStr)
+	if err != nil {
+		return nil, err
+	}
+	err = key.Unmarshal(buf)
+	if err != nil {
+		return nil, err
+	}
+	return p2p.NewKey(key), nil
+}
+
+func MarshalPubKeyToString(pub ci.PubKey) (string, error) {
+	b, err := ci.MarshalPublicKey(pub)
+	if err != nil {
+		return "", err
+	}
+	return codec.EncodeToString(b), nil
+}
+
+func UnmarshalStringToPubKey(pubstr string) (ci.PubKey, error) {
+	b, err := codec.DecodeString(pubstr)
+	if err != nil {
+		return nil, err
+	}
+	return ci.UnmarshalPublicKey(b)
 }
 
 func NewPCert(key ayame.Key, id peer.ID, mv *ayame.MembershipVector, cert []byte) *PCert {

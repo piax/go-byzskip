@@ -10,7 +10,7 @@ import (
 
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
-	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type RemoteNode struct {
@@ -55,8 +55,8 @@ func EncodeAddrs(maddrs []ma.Multiaddr) [][]byte {
 	return addrs
 }
 
-func (n *RemoteNode) Encode() *p2p.Peer {
-	return &p2p.Peer{
+func (n *RemoteNode) Encode() *pb.Peer {
+	return &pb.Peer{
 		Id:         peer.Encode(n.id),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
@@ -97,38 +97,38 @@ func Addresses(addrs [][]byte) []ma.Multiaddr {
 	return maddrs
 }
 
-func ConnectionType(c network.Connectedness) p2p.ConnectionType {
+func ConnectionType(c network.Connectedness) pb.ConnectionType {
 	switch c {
 	default:
-		return p2p.ConnectionType_NOT_CONNECTED
+		return pb.ConnectionType_NOT_CONNECTED
 	case network.NotConnected:
-		return p2p.ConnectionType_NOT_CONNECTED
+		return pb.ConnectionType_NOT_CONNECTED
 	case network.Connected:
-		return p2p.ConnectionType_CONNECTED
+		return pb.ConnectionType_CONNECTED
 	case network.CanConnect:
-		return p2p.ConnectionType_CAN_CONNECT
+		return pb.ConnectionType_CAN_CONNECT
 	case network.CannotConnect:
-		return p2p.ConnectionType_CANNOT_CONNECT
+		return pb.ConnectionType_CANNOT_CONNECT
 	}
 }
 
 // XXX not used yet.
-func Connectedness(c p2p.ConnectionType) network.Connectedness {
+func Connectedness(c pb.ConnectionType) network.Connectedness {
 	switch c {
 	default:
 		return network.NotConnected
-	case p2p.ConnectionType_NOT_CONNECTED:
+	case pb.ConnectionType_NOT_CONNECTED:
 		return network.NotConnected
-	case p2p.ConnectionType_CONNECTED:
+	case pb.ConnectionType_CONNECTED:
 		return network.Connected
-	case p2p.ConnectionType_CAN_CONNECT:
+	case pb.ConnectionType_CAN_CONNECT:
 		return network.CanConnect
-	case p2p.ConnectionType_CANNOT_CONNECT:
+	case pb.ConnectionType_CANNOT_CONNECT:
 		return network.CannotConnect
 	}
 }
 
-func NewRemoteNode(self *P2PNode, p *p2p.Peer) *RemoteNode {
+func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 	// store to peerstore on self.
 	id, _ := peer.Decode(p.Id)
 	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.ProviderAddrTTL)
