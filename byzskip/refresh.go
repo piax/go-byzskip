@@ -33,6 +33,7 @@ func (n *BSNode) fixLowPeers() {
 		return
 	}
 	clst, _ := n.RoutingTable.KClosestWithKey(n.Key())
+	ayame.Log.Debugf("%s: refresh start nodes: %s", n, ayame.SliceString(clst))
 	n.stats = &JoinStats{runningQueries: 0,
 		closest:    ksToNs(clst),
 		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}

@@ -220,7 +220,7 @@ func (ue *BSGetProvidersEvent) Encode() *pb.Message {
 
 func (ue *BSGetProvidersEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
-		ayame.Log.Debugf("running get response handler.")
+		ayame.Log.Debugf("running get providers response handler.")
 		if err := handleGetProvidersResEvent(ctx, node.App().(*BSDHT), ue); err != nil {
 			return err
 		}
@@ -242,6 +242,6 @@ func (ue *BSGetProvidersEvent) MessageId() string {
 }
 
 func (ev *BSGetProvidersEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running get providersrequest handler.")
+	ayame.Log.Debugf("running get providers request handler.")
 	return handleGetProvidersRequest(ctx, node.App().(*BSDHT), ev)
 }

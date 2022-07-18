@@ -39,9 +39,12 @@ var (
 //	_ ayame.Node             = (*BSDHT)(nil)
 )
 
-// many functions are imported from go-libp2p-kad-dht FullRT
+// many functions are imported from the FullRT in go-libp2p-kad-dht
 
 type BSDHT struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	Node *bs.BSNode
 
 	RecordValidator record.Validator
@@ -70,7 +73,7 @@ func handlePutProviderEvent(ctx context.Context, dht *BSDHT, ev *BSPutProviderEv
 		if err != nil {
 			return err
 		}
-		ayame.Log.Debugf("adding provider key=%s, id=%v\n", mh, p.Id())
+		ayame.Log.Debugf("adding provider mh=%s, id=%v\n", mh, p.Id())
 		dht.ProviderManager.AddProvider(ctx,
 			mh, peer.AddrInfo{ID: p.Id(), Addrs: p.Addrs()})
 	}
@@ -83,7 +86,7 @@ func handleGetProvidersResEvent(ctx context.Context, dht *BSDHT, ev *BSGetProvid
 	proc, exists := dht.Node.Procs[ev.MessageId()]
 	dht.Node.ProcsMutex.RUnlock()
 	if exists && proc.Ch != nil { // sync
-		ayame.Log.Debugf("get finished from=%v\n", ev.Sender())
+		ayame.Log.Debugf("get providers finished from=%v\n", ev.Sender())
 		proc.Ch <- ev
 		return nil
 	} // XXX async is not implemented yet
@@ -91,12 +94,12 @@ func handleGetProvidersResEvent(ctx context.Context, dht *BSDHT, ev *BSGetProvid
 }
 
 func handleGetProvidersRequest(ctx context.Context, dht *BSDHT, ev *BSGetProvidersEvent) ayame.SchedEvent {
-	ayame.Log.Debugf("get providers from=%v, key=%s\n", ev.Sender(), string(ev.Key))
 	mh, err := multihash.FromB58String(ev.Key)
 	if err != nil {
 		ayame.Log.Debugf("failed to make multihash %s \n", ev.Key)
 		return nil
 	}
+	ayame.Log.Debugf("getting providers from=%v, mh=%s\n", ev.Sender(), string(mh))
 	provs, err := dht.ProviderManager.GetProviders(ctx, mh)
 	ayame.Log.Debugf("found providers for %s len=%d\n", mh, len(provs))
 	if err != nil {
@@ -844,6 +847,7 @@ func (dht *BSDHT) Bootstrap(ctx context.Context) error {
 }
 
 func (dht *BSDHT) Close() error {
+	dht.cancel()
 	return dht.Node.Close()
 }
 

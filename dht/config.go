@@ -67,13 +67,19 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
-	pm, err := providers.NewProviderManager(context.TODO(), h.ID(), h.Peerstore(), c.Datastore)
+	// toplevel context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	pm, err := providers.NewProviderManager(ctx, h.ID(), h.Peerstore(), c.Datastore)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
 	ret :=
 		&BSDHT{
+			ctx:    ctx,
+			cancel: cancel,
 			Node: &bs.BSNode{
 				BootstrapAddrs:     c.BootstrapAddrs,
 				Parent:             parent,
