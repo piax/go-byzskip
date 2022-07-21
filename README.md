@@ -8,6 +8,7 @@ Our ByzSkip implementation codes are located in the byzskip directory.
 
 * [byzskip](byzskip) - a library for ByzSkip 
 * [ayame](byzskip) - a real & simulation abstraction library
+* [authority](authority) - a library for authority functions
 
 ## Command Line Tools
 
