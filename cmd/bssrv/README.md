@@ -2,7 +2,7 @@
 An experimental code to run a ByzSkip node.
 
 It runs as a ByzSkip node with an integer key.
-The intention of this implementation is to measure the performance of ByzSkip in real networks.
+The aim of this implementation is to measure the performance of ByzSkip in real networks.
 
 ## Web API
 

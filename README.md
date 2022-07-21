@@ -6,8 +6,8 @@ This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for th
 
 Our ByzSkip implementation codes are located in the byzskip directory.
 
-* byzskip - ByzSkip modules
-* ayame - real&sim abstract execution modules
+* byzskip - a library for ByzSkip 
+* ayame - a real&sim abstract execution library
 
 ## Command Line Tools
 
@@ -19,7 +19,7 @@ Our ByzSkip implementation codes are located in the byzskip directory.
 The simulators related to ByzSkip.
 
 * [bssim](simulators/bssim) - a ByzSkip simulator
-* [kadsim](simulators/bssim) - a S/Kademlia simulator
+* [kadsim](simulators/kadsim) - a S/Kademlia simulator
 * [sgsim](simulators/sgsim) - a Skip Graph simulator
 
 ## Experimental
@@ -27,9 +27,8 @@ The simulators related to ByzSkip.
 Some experimental codes.
 
 * [dht](dht) - an experimental DHT implementation using ByzSkip
-* [bssrv](cmd/dhtsrv) - an experimental DHT node with API/web server
+* [dhtsrv](cmd/dhtsrv) - an experimental DHT node with API/web server
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)
-* [keysim](simulators/keysim) - an experimental code to simulate shuffled keys
 
 ## Requirements
 
