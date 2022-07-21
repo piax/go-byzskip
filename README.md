@@ -6,8 +6,8 @@ This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for th
 
 Our ByzSkip implementation codes are located in the byzskip directory.
 
-* byzskip - a library for ByzSkip 
-* ayame - a real&sim abstract execution library
+* [byzskip](byzskip) - a library for ByzSkip 
+* [ayame](byzskip) - a real & simulation abstraction library
 
 ## Command Line Tools
 
