@@ -112,8 +112,8 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
 
-	if !strings.HasPrefix(ev.MessageId, ev.Author().Id().String()+".") { // check if adversary generated mimic message id.
-		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Author().String(), myNode.String())
+	if !strings.HasPrefix(ev.MessageId, ev.Author().MessageIdPrefix()+".") { // check if adversary generated mimic message id.
+		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Author().Id().String(), myNode.String())
 		return false
 	}
 	myNode.seenMutex.RLock()

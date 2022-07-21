@@ -21,9 +21,24 @@ The simulators related to ByzSkip.
 * [bssim](simulators/bssim) - a ByzSkip simulator
 * [kadsim](simulators/bssim) - a S/Kademlia simulator
 * [sgsim](simulators/sgsim) - a Skip Graph simulator
-* [keysim](simulators/keysim) - a key issuer simulator
 
-##  Applications (Experimental)
+## Experimental
+
+Some experimental codes.
 
 * [dht](dht) - an experimental DHT implementation using ByzSkip
+* [bssrv](cmd/dhtsrv) - an experimental DHT node with API/web server
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)
+* [keysim](simulators/keysim) - an experimental code to simulate shuffled keys
+
+## Requirements
+
+Go 1.18 or higher
+
+## License
+
+MIT License
+
+## Acknowledgements
+
+This work was partially supported by JSPS KAKENHI Grant Number JP20H04186.

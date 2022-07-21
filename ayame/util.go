@@ -88,12 +88,3 @@ func PickRandomly[T any](arg []T) T {
 	i := rand.Intn(len(arg))
 	return arg[i]
 }
-
-func SliceStringOld(args interface{}) string {
-	r := reflect.ValueOf(args)
-	rval := make([]string, r.Len())
-	for i := 0; i < r.Len(); i++ {
-		rval[i] = r.Index(i).Interface().(fmt.Stringer).String()
-	}
-	return "[" + strings.Join(rval, ",") + "]"
-}

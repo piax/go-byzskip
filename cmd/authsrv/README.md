@@ -22,9 +22,9 @@ authsrv [OPTIONS]
   -v	verbose output
 ```
 
-The authsrv generates its key pair at first time (when the keystore exists).
+The authsrv generates its key pair at first time.
 The authsrv reads its key pair from its keystore after the second time.
-If you need to refresh the key pair, remove the keystore file.
+If you want to refresh the key pair, remove the keystore file.
 
 After successfully started, authsrv prints the following line.
 
@@ -32,4 +32,4 @@ After successfully started, authsrv prints the following line.
 authority publickey: BABBEIIDM7V3FR4RWNGVXYRSHOCL6SYWLNIJLP4ONDG...
 ````
 
-This public key needs to be specified as the authority's publickey in ByzSkip nodes. You can copy and paste the displayed string.
+This public key string (base32 encoded string) needs to be specified as the authority's publickey in ByzSkip nodes. You can copy and paste the displayed string.

@@ -1,18 +1,20 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"strconv"
 
 	"github.com/montanaflynn/stats"
+	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
+	flag "github.com/spf13/pflag"
 	funk "github.com/thoas/go-funk"
 )
 
 var alpha *int
 var numberOfNodes *int
+var trials *int
 var seed *int64
 var verbose *bool
 
@@ -27,7 +29,7 @@ func ConstructOverlay(numberOfNodes int, fast bool) []*SGNode {
 	}
 	FastJoinAll(nodes)
 	ave, _ := stats.Mean(funk.Map(nodes, func(n *SGNode) float64 { return float64(n.routingTableHeight()) }).([]float64))
-	fmt.Printf("avg. routing table height: %f\n", ave)
+	ayame.Log.Debugf("avg. routing table height: %f\n", ave)
 	return nodes
 }
 
@@ -38,11 +40,18 @@ func dumpNodesMV(nodes []*SGNode) {
 }
 
 func main() {
-	alpha = flag.Int("alpha", 2, "the alphabet size (default: 2)")
-	numberOfNodes = flag.Int("nodes", 16, "number of nodes (default: 16)")
-	seed = flag.Int64("seed", 2, "give a random seed (default: 1)")
-	verbose = flag.Bool("v", false, "verbose output")
+	alpha = flag.IntP("alpha", "a", 2, "the alphabet size of the membership vector")
+	numberOfNodes = flag.IntP("nodes", "n", 100, "number of nodes")
+	seed = flag.Int64P("seed", "s", 3, "give a random seed")
+	trials = flag.IntP("trials", "t", -1, "number of search trials (-1 means same as nodes)")
+	verbose = flag.BoolP("verbose", "v", false, "verbose output")
 	flag.Parse()
+
+	if *verbose {
+		ayame.InitLogger(logging.DEBUG)
+	} else {
+		ayame.InitLogger(logging.INFO)
+	}
 
 	rand.Seed(*seed)
 	nodes := ConstructOverlay(*numberOfNodes, true)
@@ -51,29 +60,29 @@ func main() {
 			fmt.Println("key=" + strconv.Itoa(n.key) + "\n" + n.routingTableString())
 		}
 	}
+	if *trials < 0 {
+		*trials = *numberOfNodes
+	}
 	msgs := []*UnicastEvent{}
-	numberOfTrials := *numberOfNodes * 4
-	for i := 1; i <= numberOfTrials; i++ {
+	for i := 1; i <= *trials; i++ {
 		src := rand.Intn(*numberOfNodes)
 		dst := rand.Intn(*numberOfNodes)
 		msg := NewUnicastEvent(nodes[src], dst)
 		msgs = append(msgs, msg)
 		if *verbose {
-			fmt.Printf("id=%d,src=%d, dst=%d\n", msg.messageId, src, dst)
+			ayame.Log.Debugf("id=%d,src=%d, dst=%d\n", msg.messageId, src, dst)
 		}
 		ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
 	}
 	for _, msg := range msgs {
 		go func(msg *UnicastEvent) {
 			<-msg.root.channel
-			if *verbose {
-				fmt.Printf("%d: %d, hops %d\n", msg.messageId, msg.Time(), len(msg.path))
-			}
+			ayame.Log.Debugf("%d: %d, hops %d\n", msg.messageId, msg.Time(), len(msg.path))
 		}(msg)
 	}
-	ayame.GlobalEventExecutor.Sim(int64(numberOfTrials*1000*2), true)
+	ayame.GlobalEventExecutor.Sim(int64(*trials*1000*2), true)
 	ayame.GlobalEventExecutor.AwaitFinish()
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *UnicastEvent) float64 { return float64(len(msg.path)) }).([]float64))
-	fmt.Printf("avg. path length: %f\n", ave)
+	ayame.Log.Infof("avg-match-hops: %f\n", ave)
 }

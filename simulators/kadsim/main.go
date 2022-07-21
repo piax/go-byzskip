@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/montanaflynn/stats"
 	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
+	flag "github.com/spf13/pflag"
 	"github.com/thoas/go-funk"
 )
 
@@ -19,9 +19,8 @@ var alpha *int
 var kValue *int
 var dValue *int
 var numberOfNodes *int
-var numberOfTrials *int
-var convergeTimes *int
-var failureType *string
+var trials *int
+var underAttackType *string
 var failureRatio *float64
 var expType *string
 var seed *int64
@@ -31,7 +30,7 @@ var AdversaryList = []*KADNode{}
 var JoinedAdversaryList = []*KADNode{}
 var NormalList = []*KADNode{}
 
-func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d int) []*KADNode {
+func ConstructOverlay(numberOfNodes int, alpha int, k int, d int) []*KADNode {
 	nodes := make([]*KADNode, 0, numberOfNodes)
 	for i := 0; i < numberOfNodes; i++ {
 		var n *KADNode
@@ -61,7 +60,7 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 		FailureType = F_NONE
 		bak = true
 	}
-	err := FastJoinAllDisjoint(convergeTimes, nodes, alpha, k, d)
+	err := FastJoinAllDisjoint(nodes, alpha, k, d)
 	if err != nil {
 		fmt.Printf("join failed:%s\n", err)
 	}
@@ -75,35 +74,6 @@ func ConstructOverlay(numberOfNodes int, convergeTimes int, alpha int, k int, d 
 func meanOfInt(lst []int) float64 {
 	v, _ := stats.Mean(funk.Map(lst, func(x int) float64 { return float64(x) }).([]float64))
 	return v
-}
-
-func FastJoinAll(convergeTimes int, nodes []*KADNode, alpha int, k int, d int) error {
-	bak := FailureType
-	FailureType = F_NONE
-	sumMsgs := 0
-	for i := 0; i < convergeTimes; i++ {
-		index := 0 // introducer index
-		for _, n := range nodes {
-			if n.isFailure && FailureType == F_COLLAB {
-				AdversaryList = append(AdversaryList, n) // only used when F_COLLAB
-			}
-			n.routingTable.Add(nodes[index])
-			_, _, msgs, _, _ := FastNodeLookup(n.routingTable.dhtId, n, alpha, k)
-			sumMsgs += msgs
-		}
-	}
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
-	count := 0
-	fcount := 0
-	for _, n := range NormalList {
-		c, f := n.routingTable.Count()
-		count += c
-		fcount += f
-	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(count))
-
-	FailureType = bak
-	return nil
 }
 
 func min(a int, b int) int {
@@ -168,11 +138,13 @@ func FastDoRefresh(node *KADNode, alpha, k, d int) int {
 	return msgs
 }
 
-func FastJoinAllDisjoint(convergeTimes int, nodes []*KADNode, alpha int, k int, d int) error {
+func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 	//	bak := FailureType
 	//	FailureType = F_NONE
 	sumMsgs := 0
 	index := 0 // introducer index
+	prev := 0
+	count := 0
 	for _, n := range nodes {
 		if n.isFailure {
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
@@ -183,28 +155,26 @@ func FastJoinAllDisjoint(convergeTimes int, nodes []*KADNode, alpha int, k int, 
 		// query for self
 		_, _, msgs, _, _ := FastNodeLookupDisjoint(n.routingTable.dhtId, n, alpha, k, d)
 		sumMsgs += msgs
+		percent := 100 * count / len(nodes)
+		if percent/10 != prev {
+			ayame.Log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+		}
+		count++
+		prev = percent / 10
 	}
 	for _, n := range nodes {
 		sumMsgs += FastDoRefresh(n, alpha, k, d)
 	}
-	/*
-		for i := 0; i < convergeTimes; i++ { // search a randomly picked normal node
-			for _, n := range nodes {
-				dst := rand.Intn(len(NormalList))
-				_, _, msgs, _, _ := FastNodeLookupDisjoint(nodes[dst].routingTable.dhtId, n, alpha, k, d)
-				sumMsgs += msgs
-			}
-		}*/
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 
-	count := 0
+	count = 0
 	fcount := 0
 	for _, n := range NormalList {
 		c, f := n.routingTable.Count()
 		count += c
 		fcount += f
 	}
-	ayame.Log.Infof("polluted-entry-ratio: %s %f\n", paramsString, float64(fcount)/float64(count))
+	ayame.Log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, count, float64(fcount)/float64(count))
 
 	//	FailureType = bak
 	return nil
@@ -270,7 +240,7 @@ func expEachIterative() {
 				match_lengths = append(match_lengths, float64(hops_to_match))
 			} else {
 				failures++
-				ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+				ayame.Log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
 			ayame.Log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
 		}
@@ -288,17 +258,16 @@ func expEachIterative() {
 var paramsString string
 
 func main() {
-	alpha = flag.Int("alpha", 3, "the parallelism parameter")
-	kValue = flag.Int("k", 16, "the bucket size parameter")
-	dValue = flag.Int("d", 1, "the disjoint path parameter")
-	numberOfNodes = flag.Int("nodes", 1000, "number of nodes")
-	numberOfTrials = flag.Int("trials", -1, "number of search trials (-1 means same as nodes)")
-	convergeTimes = flag.Int("c", 3, "converge times")
-	failureType = flag.String("type", "collab", "failure type {none|stop|collab|collab-after}")
-	expType = flag.String("expType", "each", "each|uni")
-	failureRatio = flag.Float64("f", 0.0, "failure ratio")
-	seed = flag.Int64("seed", 1, "give a random seed")
-	verbose = flag.Bool("v", false, "verbose output")
+	alpha = flag.IntP("alpha", "a", 3, "the parallelism parameter")
+	dValue = flag.IntP("disjoint-paths", "d", 1, "the disjoint path parameter")
+	expType = flag.StringP("exp-type", "e", "uni", "uni|uni-max")
+	failureRatio = flag.Float64P("failure-ratio", "f", 0.2, "failure ratio")
+	kValue = flag.IntP("bucket-size", "k", 16, "the bucket size parameter")
+	numberOfNodes = flag.IntP("nodes", "n", 100, "number of nodes")
+	trials = flag.IntP("trials", "t", -1, "number of search trials (-1 means same as nodes)")
+	underAttackType = flag.StringP("attack-type", "u", "cea", "runs under attacks {none|ara|cea|stop}")
+	seed = flag.Int64P("seed", "s", 1, "give a random seed")
+	verbose = flag.BoolP("verbose", "v", false, "verbose output")
 
 	flag.Parse()
 
@@ -312,33 +281,33 @@ func main() {
 		rand.Seed(*seed)
 	}
 	// At JOIN, normal behavior
-	switch *failureType {
+	switch *underAttackType {
 	case "none":
 		FailureType = F_NONE
 	case "stop":
 		FailureType = F_STOP
-	case "collab":
+	case "cea":
 		FailureType = F_COLLAB
-	case "collab-after":
+	case "ara":
 		FailureType = F_COLLAB_AFTER
 	default:
-		panic(fmt.Errorf("no such type %s", *failureType))
+		panic(fmt.Errorf("no such type %s", *underAttackType))
 	}
-	trials := *numberOfNodes
-	if *numberOfTrials > 0 {
-		trials = *numberOfTrials
+	strials := *numberOfNodes
+	if *trials > 0 {
+		strials = *trials
 	}
 
-	paramsString = fmt.Sprintf("%d %d %d %d %.2f %s %d", *numberOfNodes, *kValue, *dValue, *alpha, *failureRatio, *failureType, *convergeTimes)
+	paramsString = fmt.Sprintf("%d %d %d %d %.2f %s", *numberOfNodes, *kValue, *dValue, *alpha, *failureRatio, *underAttackType)
 
-	nodes := ConstructOverlay(*numberOfNodes, *convergeTimes, *alpha, *kValue, *dValue)
+	nodes := ConstructOverlay(*numberOfNodes, *alpha, *kValue, *dValue)
 	//numberOfTrials := *numberOfNodes * 6
 
 	switch *expType {
-	case "each":
+	case "uni-max":
 		expEachIterative()
 	case "uni":
-		expIterative(trials)
+		expIterative(strials)
 	default:
 		panic(fmt.Errorf("no such experience type %s", *expType))
 	}

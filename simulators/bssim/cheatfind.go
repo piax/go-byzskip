@@ -54,7 +54,7 @@ const (
 	CONFUSED_ROUTING_TABLE = true
 )
 
-func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode) []*bs.BSNode {
+func FastJoinRequest(node *bs.BSNode, target *bs.BSNode) []*bs.BSNode {
 	//ret := node.GetCandidates()
 	ret := node.RoutingTable.GetCommonNeighbors(target.MV())
 
@@ -62,14 +62,14 @@ func FastJoinRequest(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode)
 	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
 	node.RoutingTable.Add(target, true)
 	//ayame.Log.Debugf("%s: %d \n updated:\n %s\n", node, target, node.routingTable.String())
-	for _, n := range piggyback {
-		node.RoutingTable.Add(n, true)
-	}
+	//for _, n := range piggyback {
+	//	node.RoutingTable.Add(n, true)
+	//}
 	//	}
 	return ksToNs(ret)
 }
 
-func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*bs.BSNode, req *bs.NeighborRequest) []*bs.BSNode {
+func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, req *bs.NeighborRequest) []*bs.BSNode {
 	//ret := node.GetCandidates()
 	ret := node.RoutingTable.Neighbors(req)
 
@@ -77,9 +77,9 @@ func FastJoinRequestWithIndex(node *bs.BSNode, target *bs.BSNode, piggyback []*b
 	ayame.Log.Debugf("%s: adding %s for join request\n", node, target)
 	node.RoutingTable.Add(target, true)
 	//ayame.Log.Debugf("%s: %d \n updated:\n %s\n", node, target, node.routingTable.String())
-	for _, n := range piggyback {
-		node.RoutingTable.Add(n, true)
-	}
+	//for _, n := range piggyback {
+	//	node.RoutingTable.Add(n, true)
+	//}
 	//	}
 	return ksToNs(ret)
 }
@@ -169,19 +169,19 @@ func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried [
 		next := candidates[0]
 		// XXX use message
 		msgs++
-		piggyback := []*bs.BSNode{}
-		if PiggybackJoinRequest {
-			piggyback = target.GetList(true, false)
-		}
+		//piggyback := []*bs.BSNode{}
+		//if PiggybackJoinRequest {
+		//	piggyback = target.GetList(true, false)
+		//}
 		var newCandidates []*bs.BSNode
-		if *useTableIndex {
+		if bs.USE_TABLE_INDEX {
 			idxs := target.RoutingTable.GetTableIndex()
 			for _, idx := range idxs {
 				ayame.Log.Debugf("%s: index level=%d, min=%s, max=%s\n", target, idx.Level, idx.Min, idx.Max)
 			}
-			newCandidates = FastJoinRequestWithIndex(next, target, piggyback, &bs.NeighborRequest{Key: target.Key(), MV: target.MV(), NeighborListIndex: idxs})
+			newCandidates = FastJoinRequestWithIndex(next, target, &bs.NeighborRequest{Key: target.Key(), MV: target.MV(), NeighborListIndex: idxs})
 		} else {
-			newCandidates = FastJoinRequest(next, target, piggyback)
+			newCandidates = FastJoinRequest(next, target)
 		}
 		sumCandidates += len(newCandidates)
 		ayame.Log.Debugf("%d: join request to %d, got %s \n", target.Key(), next.Key(), ayame.SliceString(newCandidates))
@@ -250,7 +250,7 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 			msgs++
 			var curNeighbors, curCandidates []*bs.BSNode
 			var curLevel int
-			if *useTableIndex {
+			if bs.USE_TABLE_INDEX {
 				idxs := target.RoutingTable.GetTableIndex()
 				req := &bs.NeighborRequest{Key: target.Key(), MV: target.MV(), NeighborListIndex: idxs}
 				curNeighbors, curLevel, curCandidates = FastFindNodeWithRequest(next, target, req)

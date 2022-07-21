@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -139,7 +138,7 @@ func sgContains(s []*SGNode, e *SGNode) bool {
 
 func (sg *SGNode) highestLevelInRoutingTable(node *SGNode) int {
 	rt := append([]*RoutingTableSingleLevel{}, sg.routingTable...)
-	reverseSlice(rt)
+	ayame.ReverseSlice(rt)
 	for i, t := range rt {
 		if sgContains(t.nodes[RIGHT], node) || sgContains(t.nodes[LEFT], node) {
 			return i
@@ -188,7 +187,7 @@ func maxNode(nodes []*SGNode) *SGNode {
 	return max
 }
 
-// reverse snipet
+/* reverse snipet
 func reverseSlice(data interface{}) {
 	value := reflect.ValueOf(data)
 	valueLen := value.Len()
@@ -198,7 +197,7 @@ func reverseSlice(data interface{}) {
 		value.Index(reverseIndex).Set(value.Index(i))
 		value.Index(i).Set(reflect.ValueOf(tmp))
 	}
-}
+}*/
 
 // nodes is modified
 func sortCircular(base int, nodes []*SGNode) {
@@ -230,7 +229,7 @@ func (rts *RoutingTableSingleLevel) Add(d int, u *SGNode) {
 	rts.nodes[d] = append(rts.nodes[d], u)
 	sortCircular(rts.owner.key, rts.nodes[d])
 	if d == LEFT {
-		reverseSlice(rts.nodes[d])
+		ayame.ReverseSlice(rts.nodes[d])
 	}
 }
 

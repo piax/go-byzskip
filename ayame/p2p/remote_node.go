@@ -83,6 +83,14 @@ func (n *RemoteNode) Addrs() []ma.Multiaddr {
 	return n.addrs
 }
 
+func (n *RemoteNode) MessageIdPrefix() string {
+	return n.Id().String()
+}
+
+func (n *RemoteNode) Equals(o ayame.Node) bool {
+	return n.Id() == o.Id()
+}
+
 func Addresses(addrs [][]byte) []ma.Multiaddr {
 	maddrs := make([]ma.Multiaddr, 0, len(addrs))
 	for _, addr := range addrs {

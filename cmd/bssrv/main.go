@@ -196,7 +196,7 @@ func main() {
 	port = flag.Int("p", 9000, "the peer-to-peer port to listen to")
 	//keystore = flag.String("s", filepath.Join(os.Getenv("HOME"), "keystore"), "the filepath for the keystore")
 	keystore = flag.String("ks", "keystore", "the path name of the keystore")
-	srvPort = flag.Int("s", 8000, "the server port to listen to")
+	srvPort = flag.Int("s", 8000, "the web api server port to listen to")
 	authURL = flag.String("auth", "http://localhost:7001", "the authenticator web URL")
 	pubKeyString = flag.String("apub", "BABBEIIDM7V3FR4RWNGVXYRSHOCL6SYWLNIJLP4ONDGNB25HS7PKE6C56M2Q", "the public key of the authority")
 

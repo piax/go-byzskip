@@ -21,6 +21,7 @@ type Node interface {
 	Close() error
 	App() interface{}
 	SetApp(interface{})
+	MessageIdPrefix() string
 }
 
 // Abolish
@@ -85,6 +86,14 @@ func (an *LocalNode) SetApp(app interface{}) {
 
 func (an *LocalNode) App() interface{} {
 	return an.app
+}
+
+func (n *LocalNode) MessageIdPrefix() string {
+	return n.key.String()
+}
+
+func (n *LocalNode) Equals(o Node) bool {
+	return n.Key().Equals(o.Key())
 }
 
 //type yieldCh chan struct{}

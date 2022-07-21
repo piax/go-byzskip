@@ -137,7 +137,7 @@ func expIterative(trials int) {
 		}
 		if failure {
 			failures++
-			ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+			ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 		}
 		ayame.Log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 	}
@@ -175,7 +175,7 @@ func expEachIterative() {
 				match_lengths = append(match_lengths, float64(hops_to_match))
 			} else {
 				failures++
-				ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+				ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
 			ayame.Log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
 		}
@@ -229,7 +229,7 @@ func recursiveUnicastExperiment(msgs []*bs.BSUnicastEvent, trials int) {
 				ayame.Log.Debugf("%s is included in %s\n", msg.TargetKey, msg.Root.Destinations)
 				success++
 			} else {
-				ayame.Log.Infof("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
+				ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
 			}
 			close(msg.Root.Channel)
 		}(msg)

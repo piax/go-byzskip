@@ -123,7 +123,7 @@ func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
 func (n *BSNode) Equals(m KeyMV) bool {
 	//return m.Key().Equals(n.key)
 	mn := m.(*BSNode)
-	return mn.Id() == n.Id() // && m.Key().Equals(n.key)
+	return mn.Id() == n.Id() && m.Key().Equals(n.key)
 }
 
 func (n *BSNode) String() string {
@@ -155,6 +155,10 @@ func (n *BSNode) SetApp(app interface{}) {
 
 func (n *BSNode) App() interface{} {
 	return n.app
+}
+
+func (n *BSNode) MessageIdPrefix() string {
+	return n.Parent.MessageIdPrefix()
 }
 
 /*type BSRoutingTable struct {
@@ -896,7 +900,7 @@ func (n *BSNode) SetUnicastHandler(handler func(*BSNode, *BSUnicastEvent, bool, 
 }
 
 func (n *BSNode) NewMessageId() string {
-	return n.Id().String() + "." + NextId() //n.Id().String() + "." + NextId()
+	return n.MessageIdPrefix() + "." + NextId() //n.Id().String() + "." + NextId()
 }
 
 // unicast a message with payload to a node with key
@@ -949,7 +953,7 @@ func (n *BSNode) sendUnicastEvent(ctx context.Context, ch chan struct{}, node *B
 	if node.Equals(n) {
 		n.handleUnicast(ctx, ev, true)
 	} else {
-		fmt.Printf("sent event %s from=%s,to=%s %s\n", ev.MessageId, n.Key(), node.Key(), time.Now().String())
+		ayame.Log.Debugf("sent event %s from=%s,to=%s %s\n", ev.MessageId, n.Key(), node.Key(), time.Now().String())
 		n.SendEventAsync(ctx, node, ev, true)
 	}
 	//if ch != nil {
@@ -958,17 +962,29 @@ func (n *BSNode) sendUnicastEvent(ctx context.Context, ch chan struct{}, node *B
 	//	}()
 }
 
+func (n *BSNode) SendEventAsyncSim(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
+	//go func() {
+	ev.SetSender(n)
+	ev.SetReceiver(receiver)
+	err := n.Send(ctx, ev, sign)
+	if err != nil {
+		n.stats.failed = append(n.stats.failed, receiver.(*BSNode))
+	}
+	//}()
+}
+
 func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
-	go func() {
-		ev.SetSender(n)
-		ev.SetReceiver(receiver)
-		err := n.Send(ctx, ev, sign)
-		if err != nil {
-			n.failureMutex.Lock()
-			n.stats.failed = append(n.stats.failed, receiver.(*BSNode))
-			n.failureMutex.Unlock()
-		}
-	}()
+	// XXX run asynchronously? it should be ended in a short time.
+	//go func() {
+	ev.SetSender(n)
+	ev.SetReceiver(receiver)
+	err := n.Send(ctx, ev, sign)
+	if err != nil {
+		n.failureMutex.Lock()
+		n.stats.failed = append(n.stats.failed, receiver.(*BSNode))
+		n.failureMutex.Unlock()
+	}
+	//}()
 }
 
 func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, node *BSNode, key ayame.Key, requestId string) {
@@ -1177,7 +1193,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 					msg.SetAlreadySeen(n)
 					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
-					fmt.Printf("sent event %s from=%s,to=%s %s\n", next.MessageId, n.Key(), node.Key(), time.Now().String())
+					//fmt.Printf("sent event %s from=%s,to=%s %s\n", next.MessageId, n.Key(), node.Key(), time.Now().String())
 					n.SendEventAsync(ctx, node, next, true)
 				}
 			}

@@ -212,6 +212,14 @@ func (n *P2PNode) App() interface{} {
 	return n.app
 }
 
+func (n *P2PNode) MessageIdPrefix() string {
+	return n.Id().String()
+}
+
+func (n *P2PNode) Equals(o ayame.Node) bool {
+	return n.Id() == o.Id()
+}
+
 func (n *P2PNode) SetChild(c ayame.Node) {
 	n.child = c
 }
@@ -269,6 +277,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		valid = n.authenticateMessage(mes, s)
 	}
 	ev := n.converter(mes, n, valid)
+	// XXX should be TempAddrTTL
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	if mes.IsRequest {
 		resp := ev.ProcessRequest(context.TODO(), n.child)
