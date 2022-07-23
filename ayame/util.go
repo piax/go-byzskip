@@ -46,11 +46,11 @@ func LessThanExists(lst []int, x int) bool {
 	return true
 }
 
-type Equality[T any] interface {
-	Equals(T) bool
+type Equality interface {
+	Equals(any) bool
 }
 
-func Exclude[T Equality[T]](lst []T, ex []T) []T {
+func Exclude[T Equality](lst []T, ex []T) []T {
 	ret := []T{}
 	for _, n := range lst {
 		found := false
@@ -67,14 +67,45 @@ func Exclude[T Equality[T]](lst []T, ex []T) []T {
 	return ret
 }
 
-func AppendIfMissing(slice []Key, i Key) []Key {
+// Deprecated: Use AppendIfAbsent
+/*func AppendIfMissing[T Equality](slice []T, i T) []T {
 	for _, ele := range slice {
 		if ele.Equals(i) {
 			return slice
 		}
 	}
 	return append(slice, i)
+}*/
+
+/*func AppendIfAbsent2[T Equality](slice []T, a ...T) []T {
+	for _, ele := range a {
+		slice = AppendIfMissing(slice, ele)
+	}
+	return slice
+}*/
+
+func AppendIfAbsent[T Equality](slice []T, a ...T) []T {
+	for _, appending := range a {
+		for _, ele := range slice {
+			if ele.Equals(appending) {
+				goto L
+			}
+		}
+		slice = append(slice, appending)
+	L:
+	}
+	return slice
 }
+
+/*
+func appendIfMissingKey(slice []Key, i Key) []Key {
+	for _, ele := range slice {
+		if ele.Equals(i) {
+			return slice
+		}
+	}
+	return append(slice, i)
+}*/
 
 func SliceString[T fmt.Stringer](args []T) string {
 	rval := make([]string, len(args))

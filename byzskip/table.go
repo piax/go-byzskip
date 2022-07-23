@@ -40,7 +40,7 @@ func halvesOfK(k int) (int, int) {
 type KeyMV interface {
 	Key() ayame.Key
 	MV() *ayame.MembershipVector
-	Equals(other KeyMV) bool
+	Equals(any) bool
 	//String() string
 	fmt.Stringer
 }
@@ -58,8 +58,11 @@ func (km IntKeyMV) MV() *ayame.MembershipVector {
 	return km.Mvdata
 }
 
-func (km IntKeyMV) Equals(other KeyMV) bool {
-	return km.key.Equals(other.Key())
+func (km IntKeyMV) Equals(other any) bool {
+	if o, ok := other.(IntKeyMV); ok {
+		return km.key.Equals(o.Key())
+	}
+	return false
 }
 
 func (km IntKeyMV) String() string {
@@ -186,10 +189,10 @@ func RoutingTableDiffs(t1 RoutingTable, t2 RoutingTable) int {
 	mp := make(map[ayame.Key]bool)
 	for _, levelTable := range t1.GetNeighborLists() {
 		for _, node := range levelTable.Neighbors[LEFT] {
-			lst1 = ayame.AppendIfMissing(lst1, node.Key())
+			lst1 = ayame.AppendIfAbsent(lst1, node.Key())
 		}
 		for _, node := range levelTable.Neighbors[RIGHT] {
-			lst1 = ayame.AppendIfMissing(lst1, node.Key())
+			lst1 = ayame.AppendIfAbsent(lst1, node.Key())
 		}
 	}
 
@@ -575,10 +578,10 @@ func (table *SkipRoutingTable) Size() int {
 
 	for _, levelTable := range table.NeighborLists {
 		for _, node := range levelTable.Neighbors[LEFT] {
-			lst = ayame.AppendIfMissing(lst, node.Key())
+			lst = ayame.AppendIfAbsent(lst, node.Key())
 		}
 		for _, node := range levelTable.Neighbors[RIGHT] {
-			lst = ayame.AppendIfMissing(lst, node.Key())
+			lst = ayame.AppendIfAbsent(lst, node.Key())
 		}
 	}
 	return len(lst)

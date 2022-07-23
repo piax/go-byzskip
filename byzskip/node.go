@@ -112,10 +112,12 @@ func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
 	n.mv = mv
 }
 
-func (n *BSNode) Equals(m KeyMV) bool {
+func (n *BSNode) Equals(m any) bool {
 	//return m.Key().Equals(n.key)
-	mn := m.(*BSNode)
-	return mn.Id() == n.Id() && m.Key().Equals(n.key)
+	if mn, ok := m.(ayame.Node); ok {
+		return mn.Id() == n.Id() && mn.Key().Equals(n.key)
+	}
+	return false
 }
 
 func (n *BSNode) String() string {
@@ -288,21 +290,22 @@ func ContainsKey(key ayame.Key, nodes []*BSNode) bool {
 	return false
 }
 
-func AppendNodesIfMissing(lst []*BSNode, nodes []*BSNode) []*BSNode {
-	for _, ele := range nodes {
-		lst = AppendNodeIfMissing(lst, ele)
-	}
-	return lst
-}
+//func AppendIfAbsent(lst []*BSNode, nodes ...*BSNode) []*BSNode {
+//	for _, ele := range nodes {
+//	lst = ayame.AppendIfAbsent(lst, nodes...)
+//	}
+//	return lst
+//}
 
-func AppendNodeIfMissing(lst []*BSNode, node *BSNode) []*BSNode {
-	for _, ele := range lst {
-		if ele.Equals(node) {
-			return lst
-		}
-	}
-	return append(lst, node)
-}
+//
+//func AppendNodeIfMissing(lst []*BSNode, node *BSNode) []*BSNode {
+//	for _, ele := range lst {
+//		if ele.Equals(node) {
+//			return lst
+//		}
+//	}
+//	return append(lst, node)
+//}
 
 func PathsString(paths [][]PathEntry) string {
 	ret := ""
@@ -352,7 +355,7 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 			return ret
 		}
 		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
-			ret = AppendNodeIfMissing(ret, c)
+			ret = ayame.AppendIfAbsent(ret, c)
 			ret = UnincludedNodes(ret, stat.queried)
 			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
 		}
@@ -363,7 +366,7 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 			return ret
 		}
 		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
-			ret = AppendNodeIfMissing(ret, c)
+			ret = ayame.AppendIfAbsent(ret, c)
 			ret = UnincludedNodes(ret, stat.queried)
 			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
 		}
@@ -581,9 +584,9 @@ func (n *BSNode) GetNeighborRequest() *NeighborRequest {
 
 func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	if response.isFailure { // timed out
-		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+		n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 		n.failureMutex.Lock()
-		n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+		n.stats.failed = ayame.AppendIfAbsent(n.stats.failed, response.sender)
 		n.failureMutex.Unlock()
 		// delete response.sender from the routing table if already exists.
 		n.rtMutex.Lock()
@@ -623,11 +626,11 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 			}
 		}
 	*/
-	n.stats.closest = AppendNodesIfMissing(n.stats.closest, response.closest)
+	n.stats.closest = ayame.AppendIfAbsent(n.stats.closest, response.closest...)
 
-	n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, response.candidates)
+	n.stats.candidates = ayame.AppendIfAbsent(n.stats.candidates, response.candidates...)
 	if EXCLUDE_CLOSEST_IN_NEIGHBORS {
-		n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, response.closest)
+		n.stats.candidates = ayame.AppendIfAbsent(n.stats.candidates, response.closest...)
 	}
 	/*
 		for _, c := range response.candidates {
@@ -656,7 +659,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	//ksToNs(n.stats.candidateTable.AllNeighbors(false, true))
 	//n.stats.candidates = AppendNodesIfMissing(n.stats.candidates, ksToNs(n.stats.candidateTable.AllNeighbors(false, true)))
 
-	n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+	n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 
 	ayame.Log.Debugf("%s: received closest=%s, level=%d, candidates=%s,  candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
 		ayame.SliceString(response.candidates),
@@ -676,9 +679,9 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 
 func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	if response.isFailure { // timed out
-		n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+		n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 		n.failureMutex.Lock()
-		n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+		n.stats.failed = ayame.AppendIfAbsent(n.stats.failed, response.sender)
 		n.failureMutex.Unlock()
 		// delete response.sender from the routing table if already exists.
 		n.rtMutex.Lock()
@@ -717,14 +720,14 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 		}
 	}
 
-	n.stats.closest = AppendNodesIfMissing(n.stats.closest, response.closest)
+	n.stats.closest = ayame.AppendIfAbsent(n.stats.closest, response.closest...)
 	// read from routing table
 	n.rtMutex.RLock()
 	n.stats.candidates = n.GetList(false, true)
 	n.rtMutex.RUnlock()
 	//n.stats.candidates = append(n.stats.candidates, response.candidates...)
 
-	n.stats.queried = AppendNodeIfMissing(n.stats.queried, response.sender)
+	n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 
 	ayame.Log.Debugf("%s: received closest=%s, level=%d, candidates=%s, next candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
 		ayame.SliceString(response.candidates),
@@ -853,9 +856,9 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 			case res := <-lookupCh: // FindNode finished
 				response := res.(*FindNodeResponse)
 				if response.isFailure { // timed out
-					queried = AppendNodeIfMissing(queried, response.sender)
+					queried = ayame.AppendIfAbsent(queried, response.sender)
 					n.failureMutex.Lock()
-					n.stats.failed = AppendNodeIfMissing(n.stats.failed, response.sender)
+					n.stats.failed = ayame.AppendIfAbsent(n.stats.failed, response.sender)
 					n.failureMutex.Unlock()
 					// delete response.sender from the routing table if already exists.
 					n.rtMutex.Lock()
@@ -865,14 +868,14 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 					continue L
 				}
 				if response.level == 0 {
-					results = AppendNodesIfMissing(results, response.closest)
+					results = ayame.AppendIfAbsent(results, response.closest...)
 					//if ContainsKey(key, results) {
 					//	return results, nil // cancel other FindNode
 					//}
 				}
 				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
-				queried = AppendNodeIfMissing(queried, response.sender)
-				closers = AppendNodesIfMissing(closers, response.closest)
+				queried = ayame.AppendIfAbsent(queried, response.sender)
+				closers = ayame.AppendIfAbsent(closers, response.closest...)
 			}
 		}
 	}

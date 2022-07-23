@@ -19,7 +19,7 @@ func simUnicastHandler(n *bs.BSNode, msg *bs.BSUnicastEvent, alreadySeen bool, a
 			strings.Join(funk.Map(msg.Path, func(pe bs.PathEntry) string {
 				return fmt.Sprintf("%s@%d", pe.Node, pe.Level)
 			}).([]string), ","))
-		msg.Root.Results = bs.AppendNodeIfMissing(msg.Root.Results, n)
+		msg.Root.Results = ayame.AppendIfAbsent(msg.Root.Results, n)
 		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	} else {
 		ayame.Log.Debugf("level=0 on %d msg=%s\n", n.Key(), msg)
@@ -45,7 +45,7 @@ func simUnicastHandler(n *bs.BSNode, msg *bs.BSUnicastEvent, alreadySeen bool, a
 			}
 		}
 		// add anyway to check redundancy & record number of messages
-		msg.Root.Results = bs.AppendNodeIfMissing(msg.Root.Results, n)
+		msg.Root.Results = ayame.AppendIfAbsent(msg.Root.Results, n)
 		msg.Root.Paths = append(msg.Root.Paths, msg.Path)
 	}
 }

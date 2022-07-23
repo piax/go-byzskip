@@ -18,7 +18,7 @@ type Key interface {
 	// Less reports whether the element is less than b
 	Less(elem interface{}) bool
 	// Equals reports whether the element equals to b
-	Equals(elem interface{}) bool
+	Equals(elem any) bool
 	// Suger.
 	LessOrEquals(elem interface{}) bool
 	String() string
@@ -35,7 +35,7 @@ func (t IntKey) Less(elem interface{}) bool {
 	return false
 }
 
-func (t IntKey) Equals(elem interface{}) bool {
+func (t IntKey) Equals(elem any) bool {
 	if v, ok := elem.(IntKey); ok {
 		return int(t) == int(v)
 	}
@@ -87,7 +87,7 @@ func (t FloatKey) Less(elem interface{}) bool {
 	return false
 }
 
-func (t FloatKey) Equals(elem interface{}) bool {
+func (t FloatKey) Equals(elem any) bool {
 	if v, ok := elem.(FloatKey); ok {
 		return float64(t) == float64(v)
 	}
@@ -129,7 +129,7 @@ func (t StringKey) Less(elem interface{}) bool {
 	return false
 }
 
-func (t StringKey) Equals(elem interface{}) bool {
+func (t StringKey) Equals(elem any) bool {
 	if v, ok := elem.(StringKey); ok {
 		return t == v
 	}
@@ -177,7 +177,7 @@ func (t IdKey) Less(elem interface{}) bool {
 	return false
 }
 
-func (t IdKey) Equals(elem interface{}) bool {
+func (t IdKey) Equals(elem any) bool {
 	if v, ok := elem.(IdKey); ok {
 		return bytes.Equal(t, v)
 	}
