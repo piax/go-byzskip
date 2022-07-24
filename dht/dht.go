@@ -404,6 +404,7 @@ func (dht *BSDHT) execOnMany(ctx context.Context, fn func(context.Context, ayame
 					tickChan = ticker.C
 					successSinceLastTick = numSuccess
 				}
+				ayame.Log.Debugf("numSuccess=%d numDone=%d len=%d", numSuccess, successSinceLastTick, len(peers))
 				// This is equivalent to numSuccess * 2 + numFailures >= len(peers) and is a heuristic that seems to be
 				// performing reasonably.
 				// TODO: Make this metric more configurable
@@ -419,6 +420,7 @@ func (dht *BSDHT) execOnMany(ctx context.Context, fn func(context.Context, ayame
 		case <-tickChan:
 			if numSuccess > successSinceLastTick {
 				// If there were additional successes, then wait another tick
+				ayame.Log.Debugf("numSuccess=%d successLastTick=%d ", numSuccess, successSinceLastTick)
 				successSinceLastTick = numSuccess
 			} else {
 				cancel()

@@ -359,17 +359,19 @@ func excludeNeighborsInRequest(self KeyMV, lst []KeyMV, req *NeighborRequest) []
 		}
 	}
 	ret := excludeNodes(lst, ir)
+	//ret := ayame.Exclude(lst, ir)
 	return ret
 }
 
-func appendKeyMVIfMissing(lst []KeyMV, node KeyMV) []KeyMV {
+/*
+func appendKeyMVIfMissing2(lst []KeyMV, node KeyMV) []KeyMV {
 	for _, ele := range lst {
 		if ele.Equals(node) {
 			return lst
 		}
 	}
 	return append(lst, node)
-}
+}*/
 
 func (table *SkipRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []KeyMV {
 	ret := []KeyMV{}
@@ -382,26 +384,26 @@ func (table *SkipRoutingTable) AllNeighbors(includeSelf bool, sorted bool) []Key
 		// sorted list from bottom.
 		for _, singleLevel := range table.NeighborLists {
 			for _, n := range singleLevel.Neighbors[RIGHT] {
-				right = appendKeyMVIfMissing(right, n)
+				right = ayame.AppendIfAbsent(right, n)
 			}
 			for _, n := range singleLevel.Neighbors[LEFT] {
-				left = appendKeyMVIfMissing(left, n)
+				left = ayame.AppendIfAbsent(left, n)
 			}
 		}
 		for len(right) > 0 || len(left) > 0 {
 			if len(right) > 0 {
-				ret = appendKeyMVIfMissing(ret, right[0])
+				ret = ayame.AppendIfAbsent(ret, right[0])
 				right = right[1:]
 			}
 			if len(left) > 0 {
-				ret = appendKeyMVIfMissing(ret, left[0])
+				ret = ayame.AppendIfAbsent(ret, left[0])
 				left = left[1:]
 			}
 		}
 	} else {
 		for _, singleLevel := range table.NeighborLists {
 			for _, n := range singleLevel.concatenate(includeSelf) {
-				ret = appendKeyMVIfMissing(ret, n)
+				ret = ayame.AppendIfAbsent(ret, n)
 			}
 		}
 	}
@@ -455,7 +457,7 @@ func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 			break
 		}
 		for _, n := range singleLevel.concatenateWithIndex(req, true) {
-			ret = appendKeyMVIfMissing(ret, n)
+			ret = ayame.AppendIfAbsent(ret, n)
 		}
 		//fmt.Printf("level %d, table=%d, key=%d, common=%d, can=%s\n", l, table.km.Key(), kmv.Key(), commonLen, ayame.SliceString(ret))
 	}
@@ -472,7 +474,7 @@ func (table *SkipRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []
 			break
 		}
 		for _, n := range singleLevel.concatenate(true) {
-			ret = appendKeyMVIfMissing(ret, n)
+			ret = ayame.AppendIfAbsent(ret, n)
 		}
 		//fmt.Printf("level %d, table=%d, key=%d, common=%d, can=%s\n", l, table.km.Key(), kmv.Key(), commonLen, ayame.SliceString(ret))
 	}
@@ -716,20 +718,20 @@ func (rt *SkipRoutingTable) GetCloserCandidates() []KeyMV {
 	// sorted list from bottom.
 	for _, singleLevel := range rt.NeighborLists {
 		for _, n := range singleLevel.Neighbors[RIGHT] {
-			right = appendKeyMVIfMissing(right, n)
+			right = ayame.AppendIfAbsent(right, n)
 		}
 		for _, n := range singleLevel.Neighbors[LEFT] {
-			left = appendKeyMVIfMissing(left, n)
+			left = ayame.AppendIfAbsent(left, n)
 		}
 	}
 	ret := []KeyMV{}
 	for len(right) > 0 || len(left) > 0 {
 		if len(right) > 0 {
-			ret = appendKeyMVIfMissing(ret, right[0])
+			ret = ayame.AppendIfAbsent(ret, right[0])
 			right = right[1:]
 		}
 		if len(left) > 0 {
-			ret = appendKeyMVIfMissing(ret, left[0])
+			ret = ayame.AppendIfAbsent(ret, left[0])
 			left = left[1:]
 		}
 	}
@@ -908,7 +910,7 @@ func closestKNodesDisjoint(target ayame.Key, nodes []KeyMV) []KeyMV {
 func UniqueNodes(nodes []KeyMV) []KeyMV {
 	ret := []KeyMV{}
 	for _, n := range nodes {
-		ret = appendKeyMVIfMissing(ret, n)
+		ret = ayame.AppendIfAbsent(ret, n)
 	}
 	return ret
 }

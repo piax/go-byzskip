@@ -165,7 +165,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev = &BSFindNodeEvent{
 			isResponse:         mes.IsResponse,
 			req:                req, //ConvertFindNodeRequest(mes.Data.Req),
-			MessageId:          mes.Data.Id,
+			messageId:          mes.Data.Id,
 			candidates:         ConvertPeers(self, mes.Data.CandidatePeers),
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
 			level:              level,

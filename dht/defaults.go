@@ -3,17 +3,23 @@ package dht
 // This file contains all the default configuration options.
 
 import (
+	"os"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
+	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 var DefaultAuthorizer = func(cfg *Config) error {
+	if url := os.Getenv(authority.WEBAUTH_URL); len(url) != 0 { // if environment variable is set, use webauth.
+		return cfg.Apply(Authorizer(authority.WebAuthAuthorize))
+	}
+	// default
 	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
 		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2
@@ -21,6 +27,9 @@ var DefaultAuthorizer = func(cfg *Config) error {
 }
 
 var DefaultAuthValidator = func(cfg *Config) error {
+	if pk := os.Getenv(authority.WEBAUTH_PUBKEY); len(pk) != 0 { // if environment variable is set, use webauth.
+		return cfg.Apply(AuthValidator(authority.WebAuthValidate))
+	}
 	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
 		return true
 	}))

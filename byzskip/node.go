@@ -19,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
+	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	"github.com/thoas/go-funk"
 )
@@ -75,6 +76,9 @@ type BSNode struct {
 	DisableFixLowPeers bool
 	app                interface{}
 	BootstrapAddrs     []peer.AddrInfo
+
+	lastPing    time.Time
+	lastRefresh time.Time
 }
 
 func (n *BSNode) Key() ayame.Key {
@@ -236,7 +240,9 @@ func (node *BSNode) RoutingTableString() string {
 	return node.RoutingTable.String()
 }
 */
-func UnincludedNodes(nodes []*BSNode, queried []*BSNode) []*BSNode {
+
+// Deprecated: Use Exclude instead
+/*func UnincludedNodes2(nodes []*BSNode, queried []*BSNode) []*BSNode {
 	ret := []*BSNode{}
 	for _, n := range nodes {
 		found := false
@@ -252,9 +258,9 @@ func UnincludedNodes(nodes []*BSNode, queried []*BSNode) []*BSNode {
 	}
 	//ayame.Log.Debugf("%d/%d queried\n", found, len(curKNodes))
 	return ret
-}
+}*/
 
-func AllContained(curKNodes []*BSNode, queried []*BSNode) bool {
+func AllContained2(curKNodes []*BSNode, queried []*BSNode) bool {
 	for _, n := range curKNodes {
 		contained := false
 		for _, m := range queried {
@@ -356,8 +362,8 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		}
 		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
 			ret = ayame.AppendIfAbsent(ret, c)
-			ret = UnincludedNodes(ret, stat.queried)
-			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+			ret = ayame.Exclude(ret, stat.queried)
+			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
 		}
 	}
 	///}
@@ -367,8 +373,8 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		}
 		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
 			ret = ayame.AppendIfAbsent(ret, c)
-			ret = UnincludedNodes(ret, stat.queried)
-			ret = UnincludedNodes(ret, []*BSNode{n}) // remove self.
+			ret = ayame.Exclude(ret, stat.queried)
+			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
 		}
 	}
 	// not enough number
@@ -423,11 +429,13 @@ func (n *BSNode) SendRequest(ctx context.Context, node ayame.Node, req RequestEv
 	mid := req.MessageId()
 	n.Procs[mid] = &RequestProcess{Ev: req, Id: mid, Ch: reqCh}
 	n.ProcsMutex.Unlock()
+	start := time.Now()
 	n.SendEventAsync(ctx, node, req, false)
 	select {
 	case <-reqCtx.Done(): // after REQUEST_TIMEOUT
 		ayame.Log.Debugf("%s: request ended with %s", n, reqCtx.Err())
 	case res := <-reqCh: // request finished
+		n.Parent.(*p2p.P2PNode).Host.Peerstore().RecordLatency(node.Id(), time.Since(start))
 		ayame.Log.Debugf("%s: request ended normally", n)
 		return res
 	}
@@ -473,6 +481,8 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 		//XXX if needed
 		//time.Sleep(time.Duration(FIND_NODE_INTERVAL) * time.Second)
 		ayame.Log.Debugf("%s: join stats=%s", n.Key(), n.stats)
+		n.lastRefresh = time.Now()
+		n.lastPing = time.Now()
 	}
 	return nil
 }
@@ -484,6 +494,9 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 		closest:        []*BSNode{introducer},
 		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 	err := n.RefreshRTWait(ctx)
+	n.lastPing = time.Now()
+	n.lastRefresh = time.Now()
+
 	if err != nil {
 		return err
 	}
@@ -670,7 +683,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 
 	if response.level == 0 { // just for debug
 		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
-			ayame.SliceString(UnincludedNodes(n.stats.candidates, n.stats.queried)),
+			ayame.SliceString(ayame.Exclude(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
 
@@ -738,7 +751,7 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 
 	if response.level == 0 { // just for debug
 		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
-			ayame.SliceString(UnincludedNodes(n.stats.candidates, n.stats.queried)),
+			ayame.SliceString(ayame.Exclude(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
 
@@ -789,7 +802,7 @@ func (n *BSNode) LevelZeroNodes() []*BSNode {
 	lists := n.RoutingTable.GetNeighborLists()[0]
 	ret := lists.Neighbors[LEFT]
 	for _, n := range lists.Neighbors[RIGHT] {
-		ret = appendKeyMVIfMissing(ret, n)
+		ret = ayame.AppendIfAbsent(ret, n)
 	}
 	return ksToNs(ret)
 }
@@ -816,10 +829,10 @@ func (n *BSNode) FilledTopmostLevel() bool {
 func (n *BSNode) allQueried() bool {
 	ret := false
 	//n.statsMutex.RLock()
-	closestExceptMe := UnincludedNodes(n.stats.closest, []*BSNode{n})
-	candidatesExceptMe := UnincludedNodes(n.stats.candidates, []*BSNode{n})
-	ret = AllContained(closestExceptMe, n.stats.queried) &&
-		AllContained(candidatesExceptMe, n.stats.queried)
+	closestExceptMe := ayame.Exclude(n.stats.closest, []*BSNode{n})
+	candidatesExceptMe := ayame.Exclude(n.stats.candidates, []*BSNode{n})
+	ret = ayame.IsSubsetOf(closestExceptMe, n.stats.queried) &&
+		ayame.IsSubsetOf(candidatesExceptMe, n.stats.queried)
 	//n.statsMutex.RUnlock()
 	return ret
 }
@@ -837,9 +850,9 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 	results := []*BSNode{}
 	lookupCh := make(chan interface{})
 
-	for !AllContained(closers, queried) {
+	for !ayame.IsSubsetOf(closers, queried) {
 		reqCount := 0
-		cs := UnincludedNodes(closers, queried)
+		cs := ayame.Exclude(closers, queried)
 
 		for _, c := range cs {
 			node := c // candidate
@@ -1014,6 +1027,20 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, n
 
 func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, requestId string) {
 	ev := NewBSFindNodeReqEvent(n, requestId, n.Key(), n.MV())
+	resp := n.SendRequest(ctx, node, ev)
+	if fnr, ok := resp.(*FindNodeResponse); ok {
+		findCh <- fnr
+		return
+	}
+	if fr, ok := resp.(*FailureResponse); ok {
+		ayame.Log.Debugf("%s: FindNode ended with %s", n, fr.Err)
+		findCh <- &FindNodeResponse{sender: node, isFailure: true}
+		return
+	}
+}
+
+func (n *BSNode) findNodeOld(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, requestId string) {
+	ev := NewBSFindNodeReqEvent(n, requestId, n.Key(), n.MV())
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
 	ch := make(chan interface{}, 1)
@@ -1023,6 +1050,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	n.ProcsMutex.Unlock()
 	//ayame.Log.Infof("%s: registered msgid=%s to %s\n", n, requestId, node)
 	ayame.Log.Debugf("%s: FindNode to %s started", n, node)
+	start := time.Now()
 	n.SendEventAsync(ctx, node, ev, false) // ignore errors (detect by timeout)
 	// wait for the next event happens
 	select {
@@ -1035,6 +1063,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 			findCh <- &FindNodeResponse{}
 		}
 	case res := <-ch: // FindNode finished
+		n.Parent.(*p2p.P2PNode).Host.Peerstore().RecordLatency(node.Id(), time.Since(start))
 		response := res.(*FindNodeResponse)
 		ayame.Log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
@@ -1073,7 +1102,7 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 	ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
 	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	n.ProcsMutex.RLock()
-	proc, exists := n.Procs[ue.MessageId]
+	proc, exists := n.Procs[ue.messageId]
 	n.ProcsMutex.RUnlock()
 	if n.Key().Equals(ev.Sender().Key()) && n.Id() != ev.Sender().Id() {
 		fmt.Fprintf(os.Stderr, "Already joined key=%s exists. ID=%s", n.Key(), ev.Sender().Id().String())
@@ -1082,12 +1111,12 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 	if exists {
 		if proc.Ch != nil { // sync
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
-			proc.Ch <- &FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
+			proc.Ch <- &FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
 		} else { // async
 			if MODIFY_ROUTING_TABLE_BY_RESPONSE {
-				n.processResponse(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+				n.processResponse(&FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
 			} else {
-				n.processResponseIndirect(&FindNodeResponse{id: ue.MessageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
+				n.processResponseIndirect(&FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
 			}
 			ResponseCount += (len(ue.closers) + len(ue.candidates))
 
@@ -1100,7 +1129,7 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 			}
 		}
 	} else {
-		return fmt.Errorf("%s: unregistered response msgid=%s received from %s", n, ue.MessageId, ue.Sender().(*BSNode))
+		return fmt.Errorf("%s: unregistered response msgid=%s received from %s", n, ue.messageId, ue.Sender().(*BSNode))
 	}
 	return nil
 }
@@ -1127,7 +1156,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 			closest = ksToNs(clst)
 			level = lvl
 			if EXCLUDE_CLOSEST_IN_NEIGHBORS {
-				candidates = UnincludedNodes(candidates, closest)
+				candidates = ayame.Exclude(candidates, closest)
 			}
 		} else {
 			closest, level, candidates = n.GetNeighborsAndCandidates(ue.req.Key, ue.req.MV)

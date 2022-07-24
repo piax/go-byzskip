@@ -64,7 +64,7 @@ func (idx *TableIndex) Encode() *pb.TableIndex {
 type BSFindNodeEvent struct {
 	isResponse bool
 	req        *NeighborRequest
-	MessageId  string
+	messageId  string
 	// level in response
 	level int
 	// closest nodes in response
@@ -80,7 +80,7 @@ func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key
 		req: &NeighborRequest{Key: targetKey, MV: targetMV,
 			ClosestIndex:      sender.RoutingTable.GetClosestIndex(),
 			NeighborListIndex: sender.RoutingTable.GetTableIndex()},
-		MessageId:          requestId,
+		messageId:          requestId,
 		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.SetRequest(true)
 	return ev
@@ -89,7 +89,7 @@ func NewBSFindNodeReqEvent(sender *BSNode, requestId string, targetKey ayame.Key
 func NewBSFindNodeResEvent(sender *BSNode, request *BSFindNodeEvent, closers []*BSNode, level int, candidates []*BSNode) *BSFindNodeEvent {
 	ev := &BSFindNodeEvent{
 		isResponse:         true,
-		MessageId:          request.MessageId,
+		messageId:          request.messageId,
 		closers:            closers,
 		candidates:         candidates,
 		level:              level,
@@ -98,12 +98,16 @@ func NewBSFindNodeResEvent(sender *BSNode, request *BSFindNodeEvent, closers []*
 }
 
 func (ue *BSFindNodeEvent) String() string {
-	return fmt.Sprintf("findnode id=%s", ue.MessageId)
+	return fmt.Sprintf("findnode id=%s", ue.messageId)
+}
+
+func (ue *BSFindNodeEvent) MessageId() string {
+	return ue.messageId
 }
 
 func (ue *BSFindNodeEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
-	ret := sender.NewMessage(ue.MessageId, pb.MessageType_FIND_NODE, nil, nil, nil, nil, nil)
+	ret := sender.NewMessage(ue.messageId, pb.MessageType_FIND_NODE, nil, nil, nil, nil, nil)
 	if ue.req != nil {
 		ret.Data.Req = ue.req.Encode()
 	}

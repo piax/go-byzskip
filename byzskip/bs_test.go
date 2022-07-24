@@ -298,7 +298,7 @@ func TestUnicast(t *testing.T) {
 		}
 		peers[src].Unicast(context.Background(), ayame.IntKey(dst), peers[src].NewMessageId(), []byte("hello from "+strconv.Itoa(src)))
 	}
-	time.Sleep(time.Duration(15) * time.Second)
+	time.Sleep(time.Duration(5) * time.Second)
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 

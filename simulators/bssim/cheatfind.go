@@ -123,9 +123,9 @@ func FastLookup(key ayame.Key, source *bs.BSNode) ([]*bs.BSNode, int, int, int, 
 	}
 	queried := []*bs.BSNode{}
 
-	for !bs.AllContained(neighbors, queried) {
+	for !ayame.IsSubsetOf(neighbors, queried) {
 		// get uncontained neghbors
-		nexts := bs.UnincludedNodes(neighbors, queried)
+		nexts := ayame.Exclude(neighbors, queried)
 		hops++ // request
 		for _, next := range nexts {
 			msgs++
@@ -196,7 +196,7 @@ func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried [
 
 		//candidates = target.GetList(false, true)
 		candidates = appendNodesIfMissing(candidates, newCandidates)
-		candidates = bs.UnincludedNodes(candidates, queried)
+		candidates = ayame.Exclude(candidates, queried)
 		ayame.Log.Debugf("%s: received candidates=%s, next candidates=%s\n", target.Key(), ayame.SliceString(newCandidates), ayame.SliceString(candidates))
 		ayame.Log.Debugf("%d: next candidates %s\n", target.Key(), ayame.SliceString(candidates))
 	}
@@ -240,10 +240,10 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 		}
 	}
 
-	for !bs.AllContained(neighbors, queried) {
+	for !ayame.IsSubsetOf(neighbors, queried) {
 		ayame.Log.Debugf("neighbors: %s, queried: %s\n", ayame.SliceString(neighbors), ayame.SliceString(queried))
 		// get uncontained neighbors
-		nexts := bs.UnincludedNodes(neighbors, queried)
+		nexts := ayame.Exclude(neighbors, queried)
 		ayame.Log.Debugf("nexts: %s\n", ayame.SliceString(nexts))
 		hops++ // request
 		for _, next := range nexts {
@@ -288,7 +288,7 @@ func FastNodeLookup(target *bs.BSNode, introducer *bs.BSNode) ([]*bs.BSNode, int
 	msgs_to_lookup = msgs
 	// the nodes in the current routing table, in order of closeness. (R->L->R->L in each level)
 	if JoinType == J_ITER_P {
-		candidates = bs.UnincludedNodes(ksToNs(target.RoutingTable.AllNeighbors(false, true)), queried)
+		candidates = ayame.Exclude(ksToNs(target.RoutingTable.AllNeighbors(false, true)), queried)
 	} else {
 		candidates = rets
 		queried = []*bs.BSNode{}
@@ -315,7 +315,7 @@ func FastGetNeighbors(target *bs.BSNode, req *bs.NeighborRequest, n *bs.BSNode, 
 		clst, lvl := n.RoutingTable.KClosest(req) // GetClosestNodes(ue.req.Key)
 		knn = ksToNs(clst)
 		level = lvl
-		candidates = bs.UnincludedNodes(candidates, knn)
+		candidates = ayame.Exclude(candidates, knn)
 
 		kNeighbors, _, curCandidates := n.GetNeighborsAndCandidates(req.Key, req.MV)
 		rets := kNeighbors
@@ -352,8 +352,8 @@ func getIdx(v bs.KeyMV, lst []bs.KeyMV) int {
 }
 
 func pickAlternately(v *bs.BSNode, left []bs.KeyMV, right []bs.KeyMV, queried []*bs.BSNode, tau int) []*bs.BSNode {
-	leftUnqueried := bs.UnincludedNodes(ksToNs(left), queried)
-	rightUnqueried := bs.UnincludedNodes(ksToNs(right), queried)
+	leftUnqueried := ayame.Exclude(ksToNs(left), queried)
+	rightUnqueried := ayame.Exclude(ksToNs(right), queried)
 	ret := []*bs.BSNode{}
 
 	for i := 0; i < tau; i++ {

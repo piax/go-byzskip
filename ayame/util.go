@@ -50,6 +50,24 @@ type Equality interface {
 	Equals(any) bool
 }
 
+func IsSubsetOf[T Equality](curKNodes []T, queried []T) bool {
+	for _, n := range curKNodes {
+		contained := false
+		for _, m := range queried {
+			if n.Equals(m) {
+				//				ayame.Log.Debugf("%s is contained", n)
+				contained = true
+				break
+			}
+		}
+		if !contained {
+			//			ayame.Log.Debugf("%s is NOT contained", n)
+			return false
+		}
+	}
+	return true
+}
+
 func Exclude[T Equality](lst []T, ex []T) []T {
 	ret := []T{}
 	for _, n := range lst {
