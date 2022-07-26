@@ -17,9 +17,11 @@ import (
 
 var DefaultAuthorizer = func(cfg *Config) error {
 	if url := os.Getenv(authority.WEBAUTH_URL); len(url) != 0 { // if environment variable is set, use webauth.
+		ayame.Log.Infof("using %s as authority", url)
 		return cfg.Apply(Authorizer(authority.WebAuthAuthorize))
 	}
 	// default
+	ayame.Log.Infof("using empty authority")
 	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
 		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2

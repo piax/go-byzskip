@@ -118,8 +118,11 @@ func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
 
 func (n *BSNode) Equals(m any) bool {
 	//return m.Key().Equals(n.key)
-	if mn, ok := m.(ayame.Node); ok {
-		return mn.Id() == n.Id() && mn.Key().Equals(n.key)
+	if mn, ok := m.(*BSNode); ok {
+		if p, ok := mn.Parent.(*p2p.RemoteNode); ok {
+			return p.Id() == n.Id()
+		}
+		return mn.Key().Equals(n.key)
 	}
 	return false
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ipfs/go-datastore"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -138,7 +137,7 @@ func RecordValidator(v record.Validator) Option {
 // for IPFS
 func BSDHTOption(ctx context.Context,
 	host host.Host,
-	dstore datastore.Batching,
+	dstore ds.Batching,
 	validator record.Validator,
 	bootstrapPeers ...peer.AddrInfo,
 ) (routing.Routing, error) {
