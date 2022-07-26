@@ -37,7 +37,7 @@ Go 1.18 or higher
 
 ## License
 
-MIT License
+AGPLv3
 
 ## Acknowledgements
 
