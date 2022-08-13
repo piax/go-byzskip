@@ -30,13 +30,7 @@ import (
 
 // assertion
 var (
-	_ routing.ContentRouting = (*BSDHT)(nil)
-	_ routing.Routing        = (*BSDHT)(nil)
-	_ routing.PeerRouting    = (*BSDHT)(nil)
-	_ routing.PubKeyFetcher  = (*BSDHT)(nil)
-	_ routing.ValueStore     = (*BSDHT)(nil)
-
-//	_ ayame.Node             = (*BSDHT)(nil)
+	_ routing.Routing = (*BSDHT)(nil)
 )
 
 // many functions are imported from the FullRT in go-libp2p-kad-dht
