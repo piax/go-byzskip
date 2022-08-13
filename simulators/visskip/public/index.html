@@ -1,0 +1,380 @@
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>VisSkip</title>
+    <style type="text/css">
+        span{
+            line-height:0.3in;
+            vertical-align: middle;
+        }
+        #playButton img {
+            display: block;
+            height: 20px;
+            width: 40ps;
+        }
+        #pauseButton img {
+            display: block;
+            height: 20px;
+            width: 40ps;
+        }
+        #stepButton img {
+            display: block;
+            height: 20px;
+            width: 40ps;
+        }
+    </style>
+</head>
+<body>
+    <button id="playButton"><img src="icons/play.png"></button>
+    <button id="pauseButton"><img src="icons/pause.png"></button>
+    <button id="stepButton"><img src="icons/step.png"></button>
+    <span id="label">        layout:        </span>
+    <select name="layout" id="selectLayout">
+        <option value="cylinder">cylinder</option>
+        <option value="flat">flat</option>
+        <option value="dome">dome</option>
+    </select>
+    <span id="label">        param:        </span>
+    <select name="paramk" id="selectParamK">
+        <option value="2">k=2</option>
+        <option value="4" selected>k=4</option>
+        <option value="6">k=6</option>
+    </select>
+    
+    <div id="output">
+    </div>
+    <!--- workaround to avoid importmap issue ---> 
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script> 
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.143.0/build/three.module.js"
+            }
+        }
+    </script>
+    
+    <script src="./wasm_exec.js"></script>
+    <script type="module">
+        import * as THREE from 'three';
+        import {Nodes} from './visskip.js';
+        //import { OrbitControls } from "./jsm/controls/OrbitControls.js";
+        import {OrbitControls} from "https://unpkg.com/three@0.143.0/examples/jsm/controls/OrbitControls.js";
+        import {UnrealBloomPass} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/UnrealBloomPass.js";
+        import {EffectComposer} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/EffectComposer.js";
+        import {RenderPass} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/RenderPass.js";
+        //import { UnrealBloomPass } from './jsm/postprocessing/UnrealBloomPass.js';
+        //import { EffectComposer } from './jsm/postprocessing/EffectComposer.js';
+        //import { RenderPass } from './jsm/postprocessing/RenderPass.js';
+        
+        const params = {
+            exposure: 1,
+            bloomStrength: 3,
+            bloomThreshold: 0,
+            bloomRadius: 0,
+            scene: 'VisSkip Scene'
+        };
+        
+        let scene, camera, renderer
+        let controls, composer
+        let nodestore = new Nodes()
+        let curlinks = []
+        let animateId
+        //        let timer
+        
+        const playButton = document.getElementById( 'playButton' );
+        playButton.addEventListener( 'click', function () {
+            if (window.timer == null) {
+                window.timer = setInterval(function() {
+                    controls.autoRotate = true;
+                    doUnicast()
+                }, 1000);
+            }
+        } );
+        
+        const pauseButton = document.getElementById( 'pauseButton' );
+        pauseButton.addEventListener( 'click', function () {
+            if (window.timer != null) {
+                controls.autoRotate = false;
+                clearInterval(window.timer);
+                window.timer = null
+            }
+        } );
+        
+        const stepButton = document.getElementById( 'stepButton' );
+        stepButton.addEventListener( 'click', function () {
+            if (window.timer != null) {
+                controls.autoRotate = false;
+                clearInterval(window.timer);
+                window.timer = null
+            }
+            doUnicast();
+        } );
+        
+        let layoutSelect = document.getElementById('selectLayout');
+        
+        layoutSelect.onchange = function() {
+            if (this.value == 'cylinder') {
+                cylinderLayout(nodestore);
+            } else if (this.value == 'flat') {
+                flatLayout(nodestore);
+            } else if (this.value == 'dome') {
+                domeLayout(nodestore);
+            }
+        }
+        
+        let paramKSelect = document.getElementById('selectParamK');
+        
+        paramKSelect.onchange = function() {
+            reconstructNodes(parseInt(this.value))
+        }
+        
+        function doUnicast() {
+            curlinks.forEach((lnk) => {
+                scene.remove(lnk)
+            })
+            curlinks = []
+            let dat = unicast()
+            //console.log(dat)
+            let parsed = JSON.parse(dat);
+            parsed.forEach((path) => {
+                path.forEach((p, i) => {
+                    if (i != 0 && i < path.length) {
+                        let fl
+                        if (path[i - 1][0] == 32) {
+                            fl = p[0] + 1
+                        } else {
+                            fl = path[i - 1][0]
+                        }
+                        let link = nodestore.link(path[i - 1][1], fl, p[1], p[0])
+                        curlinks.push(link)
+                        scene.add(link)
+                    }
+                })
+            })
+        }
+        
+        function empty(elem) {
+            while (elem.lastChild) elem.removeChild(elem.lastChild);
+        }
+        
+        function reconstructNodes(k) {
+            // clear the current scene
+            nodestore = new Nodes()
+            if (animateId != null) {
+                cancelAnimationFrame(animateId);
+                renderer.domElement.addEventListener('dblclick', null, false); //remove listener to render
+                scene = null;
+                camera = null;
+                controls = null;
+                empty(document.getElementById("output"));
+            }
+            if (window.timer != null) {
+                clearInterval(window.timer);
+                window.timer = null
+            }
+            let parsed = JSON.parse(nodes(k));
+            parsed.forEach(p => {
+                nodestore.newNode(p.key, p.mv, p.nls, p.faulty)
+            })
+            init(nodestore.allNodes())
+            animate()
+            window.timer = setInterval(function() {
+                doUnicast()
+            }, 1000);
+        }
+        
+        function constructNodes(k) {
+            let parsed = JSON.parse(nodes(k));
+            parsed.forEach(p => {
+                nodestore.newNode(p.key, p.mv, p.nls, p.faulty)
+            })
+            init(nodestore.allNodes())
+            animate()
+            window.timer = setInterval(function() {
+                doUnicast()
+            }, 1000);
+        }
+
+        window.constructNodes = constructNodes
+        
+        function cylinderLayout(nodestore) {
+            curlinks.forEach((lnk) => {
+                scene.remove(lnk)
+            })
+            let nodes = nodestore.allNodes()
+            for (let i = 0; i < nodes.length; i++) {
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    let sphere = nodes[i].spheres[l]
+                    sphere.position.set(
+                    500 * Math.cos(2 * Math.PI * (i / nodes.length)),//0  + i * 10; // i = key
+                    0 + l * 50, // l = level
+                    500 * Math.sin(2 * Math.PI * (i / nodes.length)))
+                }
+            }
+            camera.position.x = 500;
+            camera.position.y = 300;
+            camera.position.z = 900;
+            controls.autoRotateSpeed = 0.2;
+            controls.target = new THREE.Vector3(0, 0, 0);
+        }
+        
+        function flatLayout(nodestore) {
+            curlinks.forEach((lnk) => {
+                scene.remove(lnk)
+            })
+            let nodes = nodestore.allNodes()
+            for (let i = 0; i < nodes.length; i++) {
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    let sphere = nodes[i].spheres[l]
+                    sphere.position.set(0 + i * 10, 0 + l * 50, 0);
+                }
+            }
+            camera.position.x = 500;
+            camera.position.y = 300;
+            camera.position.z = 900;
+            controls.autoRotateSpeed = 1.0;
+            controls.target = new THREE.Vector3(500, 300, 0);
+        }
+        
+        function domeLayout(nodestore) {
+            curlinks.forEach((lnk) => {
+                scene.remove(lnk)
+            })
+            let max = 0
+            let nodes = nodestore.allNodes()
+            for (let i = 0; i < nodes.length; i++) {
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    if (max < nodes[i].nbrs.length) {
+                        max = nodes[i].nbrs.length
+                    }
+                }
+            }
+            for (let i = 0; i < nodes.length; i++) {
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    let sphere = nodes[i].spheres[l]
+                    let x = 500 * ((max - l) / max) * Math.cos(2 * Math.PI * (i / nodes.length));
+                    let y = ((Math.log(l+1) / Math.log(100))) * 400; // l = level
+                    let z = 500 * ((max - l) / max) * Math.sin(2 * Math.PI * (i / nodes.length));
+                    sphere.position.set(x, y, z)
+                }
+            }
+            camera.position.x = 500;
+            camera.position.y = 200;
+            camera.position.z = 900;
+            controls.autoRotateSpeed = 0.2;
+            controls.target = new THREE.Vector3(0, 0, 0);
+        }
+        
+        function init(nodes) {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 50, 5000);
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
+            
+            renderer = new THREE.WebGLRenderer();
+            
+            renderer.setClearColor(new THREE.Color(0x000009));
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ReinhardToneMapping;
+            
+            let sphere
+            for (let i = 0; i < nodes.length; i++) {
+                nodes.pos = []
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    const sphereGeometry = new THREE.SphereGeometry(1, 20, 20);
+                    let sphereMaterial 
+                    if (nodes[i].faulty) {
+                        sphereMaterial = new THREE.MeshBasicMaterial({color: 0xbb1597, wireframe: true});
+                    } else {
+                        sphereMaterial = new THREE.MeshBasicMaterial({color: 0x1597bb, wireframe: true});
+                    }
+                    sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                    
+                    sphere.position.x = 500 * Math.cos(2 * Math.PI * (i / nodes.length));//0  + i * 10; // i = key
+                    sphere.position.y = 0 + l * 50; // l = level
+                    sphere.position.z = 500 * Math.sin(2 * Math.PI * (i / nodes.length));
+                    
+                    scene.add(sphere);
+                    nodes[i].spheres.push(sphere)
+                }               
+            }
+            /* show links
+            for (let i = 0; i < nodes.length; i++) {
+                for (let l = 0; l < nodes[i].nbrs.length; l++) {
+                    for (let j = 0; j < nodes[i].nbrs[l].length; j++) {
+                        if (i == 0) {
+                            let link = nodestore.link(i, nodes[i].nbrs[l][j], l)
+                            if (link != null) {
+                                scene.add(link)
+                            }
+                        }
+                    }
+                }
+            } */
+            
+            // camera
+            camera.position.x = 500;
+            camera.position.y = 300;
+            camera.position.z = 900;
+            
+            controls = new OrbitControls( camera, renderer.domElement );
+            controls.target = new THREE.Vector3(0, 0, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.2;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.2;
+            
+            controls.addEventListener('mousedown',function(evt) {
+                console.log("mouse down")
+            } ,false);
+            
+            controls.update();
+            
+            document.getElementById("output").appendChild(renderer.domElement);
+            
+            const renderScene = new RenderPass( scene, camera );
+            
+            // use effect pass instead of simple renderer.
+            const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+            bloomPass.threshold = params.bloomThreshold;
+            bloomPass.strength = params.bloomStrength;
+            bloomPass.radius = params.bloomRadius;
+            composer = new EffectComposer( renderer );
+            composer.addPass( renderScene );
+            composer.addPass( bloomPass );
+            
+            
+        }
+        function animate(time) {
+            animateId = requestAnimationFrame(animate);
+            controls.update();
+            //renderer.render(scene,camera);
+            composer.render();
+        }
+        
+    </script>
+    <script>
+        // window.onload = init;
+        function waitForModule(){
+            if(typeof window.constructNodes !== "undefined"){
+                window.constructNodes(4) // default
+            }
+            else{
+                setTimeout(waitForModule, 250);
+            }
+        }
+        
+        const go = new Go();
+        function finishMain() {
+            console.log("finished main")
+            // need to wait for modules to be loaded
+            waitForModule()
+        }
+        
+        WebAssembly.instantiateStreaming(fetch("bssim.wasm"), go.importObject).then(result => {
+            //mod = result.module;
+            //instance = WebAssembly.instantiate(mod, go.importObject);
+            go.run(result.instance);
+        });        
+        
+    </script>
+</body>
