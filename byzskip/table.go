@@ -88,7 +88,7 @@ type NeighborRequest struct {
 
 type RoutingTable interface {
 	// access entries
-
+	KeyMV() KeyMV
 	// Returns k closest and its level
 	KClosest(req *NeighborRequest) ([]KeyMV, int)
 	// Returns requested neighbor entry list
@@ -120,6 +120,7 @@ type RoutingTable interface {
 
 	// util
 	String() string
+	JSONString() string
 	Size() int
 	PureSize() int
 }
@@ -211,6 +212,10 @@ func RoutingTableDiffs(t1 RoutingTable, t2 RoutingTable) int {
 		}
 	}
 	return diffs
+}
+
+func (table *SkipRoutingTable) KeyMV() KeyMV {
+	return table.km
 }
 
 func (table *SkipRoutingTable) GetNeighborLists() []*NeighborList {
@@ -625,6 +630,27 @@ func (table *SkipRoutingTable) String() string {
 	return ret
 }
 
+func KeyMVSliceString[T KeyMV](args []T) string {
+	rval := make([]string, len(args))
+	for i, x := range args {
+		rval[i] = x.Key().String()
+	}
+	return "[" + strings.Join(rval, ",") + "]"
+}
+
+func (table *SkipRoutingTable) JSONString() string {
+	ret := fmt.Sprintf("{\"key\":%s, \"mv\": \"%s\", \"faulty\": false, \"nls\":[", table.km.Key(), table.km.MV())
+	for i, sl := range table.NeighborLists {
+		ret += sl.JSONString()
+		if i != len(table.NeighborLists)-1 {
+			ret += ",\n"
+		}
+
+	}
+	ret += "]}"
+	return ret
+}
+
 //func (km *KeyMV) equals(other *KeyMV) bool {
 //return km.key == other.key
 //}
@@ -802,6 +828,10 @@ func (rts NeighborList) String() string {
 	}).([]string), ",")
 	ret += "]"
 	return ret
+}
+
+func (rts NeighborList) JSONString() string {
+	return KeyMVSliceString(rts.concatenate(true))
 }
 
 func reverseSlice(a []KeyMV) {
