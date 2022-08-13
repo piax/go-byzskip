@@ -7,7 +7,8 @@ This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for th
 Our ByzSkip implementation codes are located in the byzskip directory.
 
 * [byzskip](byzskip) - a library for ByzSkip 
-* [ayame](byzskip) - a real & simulation abstraction library
+* [ayame](ayame) - a real & simulation abstraction library
+* [sim](sim) - simulators functions
 * [authority](authority) - a library for authority functions
 
 ## Command Line Tools
@@ -27,6 +28,7 @@ The simulators related to ByzSkip.
 
 Some experimental codes.
 
+* [visskip](simulators/visskip) - an experimental visualizer of byzskip simulations.
 * [dht](dht) - an experimental DHT implementation using ByzSkip
 * [dhtsrv](cmd/dhtsrv) - an experimental DHT node with API/web server
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)

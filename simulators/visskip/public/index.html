@@ -56,15 +56,11 @@
     <script type="module">
         import * as THREE from 'three';
         import {Nodes} from './visskip.js';
-        //import { OrbitControls } from "./jsm/controls/OrbitControls.js";
         import {OrbitControls} from "https://unpkg.com/three@0.143.0/examples/jsm/controls/OrbitControls.js";
         import {UnrealBloomPass} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/UnrealBloomPass.js";
         import {EffectComposer} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/EffectComposer.js";
         import {RenderPass} from "https://unpkg.com/three@0.143.0/examples/jsm/postprocessing/RenderPass.js";
-        //import { UnrealBloomPass } from './jsm/postprocessing/UnrealBloomPass.js';
-        //import { EffectComposer } from './jsm/postprocessing/EffectComposer.js';
-        //import { RenderPass } from './jsm/postprocessing/RenderPass.js';
-        
+
         const params = {
             exposure: 1,
             bloomStrength: 3,
@@ -77,9 +73,8 @@
         let controls, composer
         let nodestore = new Nodes()
         let curlinks = []
-        let animateId
+        let animateId, manager
         //        let timer
-        
         const playButton = document.getElementById( 'playButton' );
         playButton.addEventListener( 'click', function () {
             if (window.timer == null) {
@@ -110,6 +105,17 @@
         } );
         
         let layoutSelect = document.getElementById('selectLayout');
+        
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', onResize);
+        
+        function onResize() {
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // 
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
         
         layoutSelect.onchange = function() {
             if (this.value == 'cylinder') {
@@ -193,7 +199,7 @@
                 doUnicast()
             }, 1000);
         }
-
+        
         window.constructNodes = constructNodes
         
         function cylinderLayout(nodestore) {

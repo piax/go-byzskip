@@ -36,5 +36,4 @@ time.Sleep(time.Duration(100) * time.Millisecond)
 
 ## License
 
-MIT
-
+AGPLv3

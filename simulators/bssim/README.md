@@ -32,7 +32,7 @@ The options ``iter`` and ``recur`` (in the options ``-j (--join-type)`` and ``-r
 Simulation with parameters {number of nodes=1000, k=6, under failure=ARA}:
 
 ```sh
-bssrv -n 1000 -k 6 -u ara
+bssim -n 1000 -k 6 -u ara
 ```
 
 The above command prints the following result:
