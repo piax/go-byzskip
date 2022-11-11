@@ -299,6 +299,15 @@ func ContainsKey(key ayame.Key, nodes []*BSNode) bool {
 	return false
 }
 
+func ContainsMV(mv *ayame.MembershipVector, nodes []*BSNode) bool {
+	for _, n := range nodes {
+		if n.MV().Equals(mv) {
+			return true
+		}
+	}
+	return false
+}
+
 //func AppendIfAbsent(lst []*BSNode, nodes ...*BSNode) []*BSNode {
 //	for _, ele := range nodes {
 //	lst = ayame.AppendIfAbsent(lst, nodes...)

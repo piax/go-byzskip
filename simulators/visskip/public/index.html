@@ -51,6 +51,7 @@
             }
         }
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.2/pako.min.js"></script>
     
     <script src="./wasm_exec.js"></script>
     <script type="module">
@@ -112,6 +113,7 @@
         function onResize() {
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
             // 
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();

@@ -119,6 +119,40 @@ func calcMaxMsgsAve(msgs []*bs.BSUnicastEvent) float64 {
 	return sumMax / float64(count)
 }
 
+func expMVIterative(trials int) {
+	path_lengths := []float64{}
+	nums_msgs := []int{}
+	match_lengths := []float64{}
+	failures := 0
+
+	///trials = 1
+	for i := 1; i <= trials; i++ {
+		src := NormalList[rand.Intn(len(NormalList))]
+		dst := NormalList[rand.Intn(len(NormalList))]
+		//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
+		founds, hops, msgs, hops_to_match, failure := FastLookupMV(dst.MV(), src)
+		//founds2, hops2, msgs2, hops_to_match2, failure2 := FastLookup(src.Key(), dst)
+		ayame.Log.Debugf("%s->%s MV %s %d %d %d %v\n", src, dst, founds, hops, msgs, hops_to_match, failure)
+		//ayame.Log.Infof("%s->%s Key: %s %d %d %d %v\n", dst, src, founds2, hops2, msgs2, hops_to_match2, failure2)
+		path_lengths = append(path_lengths, float64(hops))
+		nums_msgs = append(nums_msgs, msgs)
+		if !failure {
+			match_lengths = append(match_lengths, float64(hops_to_match))
+		}
+		if failure {
+			failures++
+			ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+		}
+		ayame.Log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
+	}
+	pmean, _ := stats.Mean(path_lengths)
+	ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
+	hmean, _ := stats.Mean(match_lengths)
+	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
+}
+
 func expIterative(trials int) {
 	path_lengths := []float64{}
 	nums_msgs := []int{}

@@ -30,6 +30,11 @@ func FastFindKey(node *bs.BSNode, key ayame.Key) ([]*bs.BSNode, int) {
 	return ksToNs(nb), lv
 }
 
+func FastFindMV(node *bs.BSNode, mv *ayame.MembershipVector, src ayame.Key) ([]*bs.BSNode, bool) {
+	nb, found := node.RoutingTable.KClosestWithMV(mv, src)
+	return ksToNs(nb), found
+}
+
 func FastFindNode(node *bs.BSNode, target *bs.BSNode) ([]*bs.BSNode, int, []*bs.BSNode) {
 	nb, lv, can := node.GetNeighborsAndCandidates(target.Key(), target.MV())
 	//ayame.Log.Debugf("%s: adding %s\n", node, target)
@@ -101,6 +106,57 @@ func appendIfMissing(lst []*bs.BSNode, node *bs.BSNode) []*bs.BSNode {
 }
 
 var FailureType int
+
+func FastLookupMV(mv *ayame.MembershipVector, source *bs.BSNode) ([]*bs.BSNode, int, int, int, bool) {
+	hops := 0
+	msgs := 0
+	hops_to_match := -1
+	failure := false
+
+	hops++ // request
+	msgs++
+	neighbors, _ := FastFindMV(source, mv, source.Key())
+	ayame.Log.Debugf("cur neighbors for %s = %s\n", mv, ayame.SliceString(neighbors))
+	hops++
+	msgs++ // response
+
+	rets := []*bs.BSNode{}
+	if bs.ContainsMV(mv, neighbors) {
+		rets = neighbors //append(rets, neighbors...)
+		if hops_to_match < 0 && bs.ContainsMV(mv, rets) {
+			hops_to_match = hops
+		}
+	}
+	queried := []*bs.BSNode{}
+
+	for !ayame.IsSubsetOf(neighbors, queried) {
+		// get uncontained neghbors
+		nexts := ayame.Exclude(neighbors, queried)
+		ayame.Log.Debugf("nexts = %s\n", ayame.SliceString(nexts))
+		hops++ // request
+		for _, next := range nexts {
+			msgs++
+			curNeighbors, _ := FastFindMV(next, mv, source.Key())
+			ayame.Log.Debugf("cur neighbors for %s = %s\n", mv, ayame.SliceString(curNeighbors))
+			msgs++
+			queried = append(queried, next)
+			if bs.ContainsMV(mv, curNeighbors) {
+				rets = ayame.AppendIfAbsent(rets, curNeighbors...)
+				if hops_to_match < 0 && bs.ContainsMV(mv, rets) {
+					hops_to_match = hops
+				}
+			}
+			neighbors = appendNodesIfMissing(neighbors, curNeighbors)
+		}
+		hops++ // response
+	}
+	if hops_to_match < 0 {
+		failure = true
+	}
+	ayame.Log.Debugf("finish: target=%s found=%s queried=%s\n", mv, rets, queried)
+	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
+	return rets, hops, msgs, hops_to_match, failure
+}
 
 func FastLookup(key ayame.Key, source *bs.BSNode) ([]*bs.BSNode, int, int, int, bool) {
 	hops := 0

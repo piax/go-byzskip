@@ -2,6 +2,7 @@ package ayame_test
 
 import (
 	"container/heap"
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -15,6 +16,50 @@ func newTestEv(i int, t int64) ayame.Event {
 	ev.SetSender(ayame.NewLocalNode(ayame.IntKey(i), nil))
 	ev.SetReceiver(ayame.NewLocalNode(ayame.IntKey(0), nil))
 	return ev
+}
+
+func TestTopmost(t *testing.T) {
+	times := 10
+	num := 10000
+	length := 1
+	sum := 0
+	rand.Seed(10)
+	lens := make(map[int]int)
+	lvls := make(map[int]int)
+	lvl1times := 0
+	for j := 0; j < times; j++ {
+		mvs := make([]*ayame.MembershipVector, num)
+		for i := 0; i < num; i++ {
+			mvs[i] = ayame.NewMembershipVector(2)
+		}
+		lvl := 1
+		for {
+			count := 0
+			for i := 1; i < num; i++ {
+				if mvs[0].CommonPrefixLength((mvs[i])) >= lvl {
+					count++
+				}
+			}
+			//lens := make(map[int]int)
+			if count <= length {
+				if lvl == 1 {
+					lens[count]++
+					lvl1times++
+				}
+				lvls[lvl]++
+				sum += lvl
+				break
+			}
+			lvl++
+		}
+	}
+	for i, c := range lens {
+		fmt.Println("len", i, float64(c)/float64(lvl1times))
+	}
+	for i, c := range lvls {
+		fmt.Println(i, float64(c)/float64(times))
+	}
+	fmt.Println(float64(sum) / float64(times))
 }
 
 func TestEventQueue(t *testing.T) {

@@ -100,8 +100,9 @@ type RoutingTable interface {
 
 	HasSufficientNeighbors() bool
 
-	// Deprecated: should use KClosest with request including key
 	KClosestWithKey(key ayame.Key) ([]KeyMV, int)
+	KClosestWithMV(mv *ayame.MembershipVector, src ayame.Key) ([]KeyMV, bool)
+
 	// Deprecated: should use Neighbors with request including mv
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
@@ -239,6 +240,161 @@ func (table *SkipRoutingTable) KClosestWithKey(key ayame.Key) ([]KeyMV, int) {
 		}
 	}
 	return ret, level
+}
+
+func pickFirst(lst []KeyMV) (KeyMV, []KeyMV) {
+	return lst[0], lst[1 : len(lst)-1]
+}
+
+/*
+// returns a newly generated list
+func pickupClosestExcept(key ayame.Key, length int, lst []KeyMV, except []KeyMV) []KeyMV {
+	ayame.Log.Debugf("lst=%s, except=%s", ayame.SliceString(lst), ayame.SliceString(except))
+	ret := []KeyMV{}
+	if length == 0 {
+		return ret
+	}
+	for _, elem := range lst {
+		if !contains(except, elem) {
+			ret = append(ret, elem)
+		}
+	}
+	if len(ret) <= length {
+		return ret
+	}
+	picked := []KeyMV{}
+	SortC(key, ret)
+	rev := make([]KeyMV, len(ret))
+	copy(rev, ret)
+	reverseSlice(rev) // left
+	right := false
+	// pick altanately from left and right
+	for i := 0; i < length; i++ {
+		if right {
+			first, rest := pickFirst(ret)
+			ret = rest
+			picked = append(picked, first)
+			right = false
+		} else {
+			first, rest := pickFirst(rev)
+			rev = rest
+			picked = append(picked, first)
+			right = true
+		}
+	}
+	ayame.Log.Debugf("picked=%s, key=%s, length=%d", ayame.SliceString(picked), key, length)
+	return picked
+}
+*/
+
+func pickupMVClosestExcept(mv *ayame.MembershipVector, length int, lst []KeyMV, except []KeyMV) []KeyMV {
+	ayame.Log.Debugf("lst=%s, except=%s", ayame.SliceString(lst), ayame.SliceString(except))
+	ret := []KeyMV{}
+	if length == 0 {
+		return ret
+	}
+	for _, elem := range lst {
+		if !contains(except, elem) {
+			ret = append(ret, elem)
+		}
+	}
+	if len(ret) <= length {
+		return ret
+	}
+	picked := []KeyMV{}
+	SortCMV(mv, ret)
+	rev := make([]KeyMV, len(ret))
+	copy(rev, ret)
+	reverseSlice(rev) // left
+	right := false
+	// pick altanately from left and right
+	for i := 0; i < length; i++ {
+		if right {
+			first, rest := pickFirst(ret)
+			ret = rest
+			picked = append(picked, first)
+			right = false
+		} else {
+			first, rest := pickFirst(rev)
+			rev = rest
+			picked = append(picked, first)
+			right = true
+		}
+	}
+	ayame.Log.Debugf("picked=%s, mv=%s, length=%d", ayame.SliceString(picked), mv, length)
+	return picked
+}
+
+func MVString(nodes []KeyMV) string {
+	ret := ""
+	for _, n := range nodes {
+		ret += fmt.Sprintf("%s: key=%s\n", n.MV(), n.Key())
+	}
+	return ret
+}
+
+// Returns the k-closest (to src) MV entities in the highest level.
+// It returns the list even when matched nodes is less than k.
+func (rts *NeighborList) PickupKNodesMV(target *ayame.MembershipVector, src ayame.Key) []KeyMV {
+	nodes := rts.concatenate(true)
+
+	matchRing := []KeyMV{}
+	for _, node := range nodes {
+		if node.MV().CommonPrefixLength(target) >= rts.level+1 {
+			matchRing = ayame.AppendIfAbsent(matchRing, node)
+		}
+	}
+	nodes = matchRing
+
+	// order is sorted by the src key
+	if len(nodes) <= K {
+		//SortCMV(target, nodes)
+		ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s equals or less than k:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
+		return nodes
+	}
+
+	// k-closest nodes exists
+	for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
+		curNode := nodes[i].Key()
+		nextNode := nodes[i+1].Key()
+		if IsOrdered(curNode, true, src, nextNode, false) {
+			ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]))
+			return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1]
+		}
+	}
+	// not yet reached to k-closest
+	ayame.Log.Debugf("%s, key=%s, level=%d, src=%s target=%s: NOT k-closest\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
+	return matchRing
+}
+
+func (table *SkipRoutingTable) KClosestWithMV(mv *ayame.MembershipVector, src ayame.Key) ([]KeyMV, bool) {
+	// find the highest level
+	var kn []KeyMV
+	var highest []KeyMV
+	var lvl int
+	var ret bool
+	for _, singleLevel := range table.NeighborLists {
+		lvl = singleLevel.level
+		kn = singleLevel.PickupKNodesMV(mv, src)
+
+		if len(kn) < K { // reached to topmost level.
+			if len(highest) == 0 { // not as many as k
+				highest = kn
+				ret = false
+			} else {
+				// kn + closest fulfillment from the last highest
+				picked := pickupMVClosestExcept(mv, K-len(kn), highest, kn)
+				highest = append(kn, picked...)
+				ret = true
+				ayame.Log.Debugf("%s, key=%s, level=%d return:\n%s", table.km.MV(), table.km.Key(), lvl, MVString(highest))
+				// expected highest always updated.
+			}
+			return highest, ret
+		}
+		highest = kn
+	}
+	// never reaches here
+	return kn, false
 }
 
 func (table *SkipRoutingTable) KClosest(req *NeighborRequest) ([]KeyMV, int) {
@@ -622,6 +778,44 @@ func (table *SkipRoutingTable) Height() int {
 	return len(table.NeighborLists)
 }
 
+/*
+func (table *SkipRoutingTable) TopmostLevelOld() int {
+	for _, sl := range table.NeighborLists {
+		if sl.hasDuplicatesInLeftsAndRights() {
+			return sl.level
+		}
+	}
+	// singleton in level 1(?)
+	return 0 //len(table.NeighborLists)
+}
+
+var Counter map[int]int = make(map[int]int)
+
+func (table *SkipRoutingTable) TopmostLevel() int {
+	for _, sl := range table.NeighborLists {
+		leftMember := []KeyMV{}
+		for _, x := range sl.Neighbors[LEFT] {
+			if x.MV().CommonPrefixLength(table.km.MV()) >= sl.level+1 {
+				leftMember = append(leftMember, x)
+			}
+		}
+		rightMember := []KeyMV{}
+		for _, x := range sl.Neighbors[RIGHT] {
+			if x.MV().CommonPrefixLength(table.km.MV()) >= sl.level+1 {
+				rightMember = append(rightMember, x)
+			}
+		}
+		num := countDuplicates(leftMember, rightMember) // common
+		if num != 0 {
+			length := len(sl.Neighbors[LEFT]) + len(sl.Neighbors[RIGHT])
+			Counter[length]++
+			return sl.level
+		}
+	}
+	// singleton in level 1(?)
+	return 0 //len(table.NeighborLists)
+}*/
+
 func (table *SkipRoutingTable) String() string {
 	ret := ""
 	for _, sl := range table.NeighborLists {
@@ -674,6 +868,20 @@ func lenLessThanExists(buf [][]KeyMV) bool {
 }
 */
 
+func minMaxNodeMV(kms []KeyMV) (KeyMV, KeyMV) {
+	var max KeyMV = kms[0]
+	var min KeyMV = kms[0]
+	for _, s := range kms {
+		if max.MV().Less(s.MV()) {
+			max = s
+		}
+		if s.MV().Less(min.MV()) {
+			min = s
+		}
+	}
+	return min, max
+}
+
 func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
 	var max KeyMV = kms[0]
 	var min KeyMV = kms[0]
@@ -686,6 +894,25 @@ func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
 		}
 	}
 	return min, max
+}
+
+func lessMV(base, min, max, x, y *ayame.MembershipVector) bool {
+	if base.Less(min) {
+		min = base
+	}
+	if max.Less(base) {
+		max = base
+	}
+	if x.Equals(max) && y.Equals(min) {
+		return true
+	}
+	if (y.LessOrEquals(base)) && (base.Less(x)) {
+		return true
+	}
+	if (x.LessOrEquals(base)) && (base.Less(y)) {
+		return false
+	}
+	return x.Less(y)
 }
 
 func less(base, min, max, x, y ayame.Key) bool {
@@ -714,6 +941,21 @@ func SortC(base ayame.Key, kms []KeyMV) {
 	for i := eNum; i > 0; i-- {
 		for j := 0; j < i-1; j++ {
 			if less(base, min.Key(), max.Key(), kms[j+1].Key(), kms[j].Key()) {
+				kms[j], kms[j+1] = kms[j+1], kms[j]
+			}
+		}
+	}
+}
+
+func SortCMV(base *ayame.MembershipVector, kms []KeyMV) {
+	if len(kms) == 0 {
+		return // do nothing for empty list
+	}
+	min, max := minMaxNodeMV(kms)
+	eNum := len(kms)
+	for i := eNum; i > 0; i-- {
+		for j := 0; j < i-1; j++ {
+			if lessMV(base, min.MV(), max.MV(), kms[j+1].MV(), kms[j].MV()) {
 				kms[j], kms[j+1] = kms[j+1], kms[j]
 			}
 		}
@@ -795,6 +1037,37 @@ func IsOrdered(start ayame.Key, startInclusive bool, val ayame.Key, end ayame.Ke
 		return (startInclusive != endInclusive) || (start.Equals(val))
 	}
 	rc := isOrderedInclusive(start, val, end)
+	if rc {
+		if start.Equals(val) {
+			rc = startInclusive
+		}
+	}
+	if rc {
+		if val.Equals(end) {
+			rc = endInclusive
+		}
+	}
+	return rc
+}
+
+func isOrderedInclusiveMV(a, b, c *ayame.MembershipVector) bool {
+	if a.LessOrEquals(b) && b.LessOrEquals(c) {
+		return true
+	}
+	if b.LessOrEquals(c) && c.LessOrEquals(a) {
+		return true
+	}
+	if c.LessOrEquals(a) && a.LessOrEquals(b) {
+		return true
+	}
+	return false
+}
+
+func IsOrderedMV(start *ayame.MembershipVector, startInclusive bool, val *ayame.MembershipVector, end *ayame.MembershipVector, endInclusive bool) bool {
+	if start.Equals(end) {
+		return (startInclusive != endInclusive) || (start.Equals(val))
+	}
+	rc := isOrderedInclusiveMV(start, val, end)
 	if rc {
 		if start.Equals(val) {
 			rc = startInclusive
@@ -909,6 +1182,16 @@ func contains(nodes []KeyMV, node KeyMV) bool {
 		}
 	}
 	return false
+}
+
+func countDuplicates(a, b []KeyMV) int {
+	count := 0
+	for _, v := range a {
+		if contains(b, v) {
+			count++
+		}
+	}
+	return count
 }
 
 func isDisjoint(a, b []KeyMV) bool {

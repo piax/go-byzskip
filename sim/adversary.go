@@ -33,6 +33,14 @@ func (table *AdversaryRoutingTable) KClosestWithKey(k ayame.Key) ([]bs.KeyMV, in
 	}
 }
 
+func (table *AdversaryRoutingTable) KClosestWithMV(mv *ayame.MembershipVector, k ayame.Key) ([]bs.KeyMV, bool) {
+	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.
+		return table.normal.KClosestWithMV(mv, k)
+	} else {
+		return table.adversarial.KClosestWithMV(mv, k)
+	}
+}
+
 // get k neighbors and its level
 func (table *AdversaryRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
 	if FailureType == F_NONE { // Only in F_COLLAB_AFTER, join time.

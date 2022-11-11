@@ -611,16 +611,16 @@ var (
 
 func DoSim() {
 	alpha = flag.IntP("alpha", "a", 2, "the alphabet size of the membership vector")
-	experiment = flag.StringP("exp-type", "e", "uni", "experiment type {uni|uni-max}")
-	failureRatio = flag.Float64P("failure-ratio", "f", 0.2, "failure ratio")
+	experiment = flag.StringP("exp-type", "e", "uni", "experiment type {uni|uni-max|uni-mv|join}")
+	failureRatio = flag.Float64P("failure-ratio", "f", 0.0, "failure ratio")
 	//issuerType = flag.StringP("issuer-type", "i", "none", "issuer type {shuffle|random|asis|none}")
 	joinType = flag.StringP("join-type", "j", "iter", "join type {recur|iter|iter-fast|cheat}")
-	kValue = flag.IntP("k", "k", 4, "the redundancy parameter")
-	numberOfNodes = flag.IntP("nodes", "n", 100, "number of nodes")
+	kValue = flag.IntP("k", "k", 1, "the redundancy parameter")
+	numberOfNodes = flag.IntP("nodes", "n", 1000, "number of nodes")
 	optimizeRouting = flag.StringP("optimize-type", "o", "opt", "unicast routing type {normal|opt}")
 	pollutePrevRatioCalc = flag.BoolP("enable-pollution-calc", "p", false, "calculate the pollution prevention ratio")
-	routingOfUnicastType = flag.StringP("unicast-routing-type", "r", "recur", "unicast routing type {recur|iter}")
-	seed = flag.Int64P("seed", "s", 4, "give a random seed")
+	routingOfUnicastType = flag.StringP("unicast-routing-type", "r", "iter", "unicast routing type {recur|iter}")
+	seed = flag.Int64P("seed", "s", 0, "give a random seed")
 	trialNumber = flag.IntP("trials", "t", -1, "number of search trials (-1 means same as nodes)")
 	underAttackType = flag.StringP("attack-type", "u", "cea", "runs under attacks {none|ara|cea|calc|stop}")
 	verbose = flag.BoolP("verbose", "v", false, "verbose output")
@@ -778,12 +778,29 @@ func DoSim() {
 		}
 	} else {
 		switch *experiment {
+		case "uni-mv":
+			expMVIterative(trials)
 		case "uni":
 			expIterative(trials)
 		case "uni-max":
 			expEachIterative()
 		}
 	}
+	//if *experiment == "join" {
+	/*		// no search.
+			topmosts := []int{}
+			for _, node := range NormalList {
+				topmosts = append(topmosts, node.RoutingTable.(*bs.SkipRoutingTable).TopmostLevel())
+			}
+			ayame.Log.Infof("avg-table-height: %s %f\n", paramsString, meanOfInt(topmosts))
+			sum := 0
+			for i, x := range byzskip.Counter {
+				sum += i * x
+				fmt.Println(i, x)
+			}
+			ayame.Log.Infof("avg-num-nodes-in-topmost: %s %f\n", paramsString, float64(sum)/float64(*numberOfNodes)) */
+	//}
+
 	table_sizes := []int{}
 	for _, node := range NormalList {
 		//ayame.Log.Infof("%v\n", node.Id())

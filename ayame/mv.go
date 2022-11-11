@@ -87,3 +87,58 @@ func (mv *MembershipVector) String() string {
 	}
 	return r
 }
+
+func (mv *MembershipVector) Equals(other *MembershipVector) bool {
+	for i := 0; i < MembershipVectorSize; i++ {
+		if mv.Val[i] != other.Val[i] {
+			return false
+		}
+	}
+	return true
+}
+
+/*
+func (mv *MembershipVector) LessOrEquals(other *MembershipVector) bool {
+	val1 := 0.0
+	val2 := 0.0
+	for i := 0; i < MembershipVectorSize; i++ {
+		val1 += math.Pow(float64(mv.Alpha), float64(i)) * float64(mv.Val[i])
+		val2 += math.Pow(float64(other.Alpha), float64(i)) * float64(other.Val[i])
+	}
+	return val1 <= val2
+}
+
+func (mv *MembershipVector) Less(other *MembershipVector) bool {
+	val1 := 0.0
+	val2 := 0.0
+	for i := 0; i < MembershipVectorSize; i++ {
+		val1 += math.Pow(float64(mv.Alpha), float64(i)) * float64(mv.Val[i])
+		val2 += math.Pow(float64(other.Alpha), float64(i)) * float64(other.Val[i])
+	}
+	return val1 < val2
+}
+*/
+
+func (mv *MembershipVector) LessOrEquals(other *MembershipVector) bool {
+	for i := MembershipVectorSize - 1; i >= 0; i-- {
+		if mv.Val[i] > other.Val[i] {
+			return false
+		} else if mv.Val[i] < other.Val[i] {
+			return true
+		}
+		// equals, continue
+	}
+	return true // equals
+}
+
+func (mv *MembershipVector) Less(other *MembershipVector) bool {
+	for i := MembershipVectorSize - 1; i >= 0; i-- {
+		if mv.Val[i] > other.Val[i] {
+			return false
+		} else if mv.Val[i] < other.Val[i] {
+			return true
+		}
+		// equals, continue
+	}
+	return false // equals
+}

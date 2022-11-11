@@ -24,6 +24,10 @@ func (table *StopRoutingTable) KClosestWithKey(k ayame.Key) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }
 
+func (table *StopRoutingTable) KClosestWithMV(mv *ayame.MembershipVector, key ayame.Key) ([]bs.KeyMV, bool) {
+	return []bs.KeyMV{}, false
+}
+
 func (table *StopRoutingTable) KClosest(req *bs.NeighborRequest) ([]bs.KeyMV, int) {
 	return []bs.KeyMV{}, 0
 }

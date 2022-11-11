@@ -57,6 +57,53 @@ func TestSortCircular(t *testing.T) {
 	fmt.Println(ayame.SliceString(lst2))
 }
 
+func TestK(t *testing.T) {
+	InitK(3)
+	ast.Equal(t, LEFT_HALF_K, 2, "expected 2")
+	ast.Equal(t, RIGHT_HALF_K, 1, "expected 1")
+	InitK(1)
+	ast.Equal(t, LEFT_HALF_K, 1, "expected 1")
+	ast.Equal(t, RIGHT_HALF_K, 0, "expected 0")
+}
+
+func TestSortMV(t *testing.T) {
+	InitK(4)
+	lst := []KeyMV{}
+	lst = append(lst, &IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 22, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 1})})
+	lst = append(lst, &IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
+	lst = append(lst, &IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
+	target := ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})
+	//fmt.Println(target.Less(lst[1].MV()))
+	//fmt.Println(MVString(lst))
+	SortCMV(target, lst)
+	ast.Equal(t, ayame.SliceString(lst), "[6,14,22,1,2,3,4]", "expected [6,14,22,1,2,3,4]")
+	//fmt.Println(MVString(lst))
+	//fmt.Println(target.LessOrEquals(lst[1].MV()))
+	//found := closestMV(target, lst)
+	//fmt.Println(ayame.SliceString(found))
+}
+
+func TestSortKey(t *testing.T) {
+	InitK(4)
+	lst := []KeyMV{}
+	lst = append(lst, &IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 22, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 1})})
+	lst = append(lst, &IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
+	lst = append(lst, &IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
+	lst = append(lst, &IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
+	fmt.Println(ayame.SliceString(lst))
+	SortC(ayame.IntKey(7), lst)
+	fmt.Println(ayame.SliceString(lst))
+	//found := closestMV(target, lst)
+	//fmt.Println(ayame.SliceString(found))
+}
+
 func TestSorted(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
