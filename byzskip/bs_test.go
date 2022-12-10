@@ -73,9 +73,9 @@ func TestSortMV(t *testing.T) {
 	lst = append(lst, &IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})})
 	lst = append(lst, &IntKeyMV{key: 22, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 1})})
 	lst = append(lst, &IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
-	lst = append(lst, &IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
+	lst = append(lst, IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
 	target := ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})
 	//fmt.Println(target.Less(lst[1].MV()))
 	//fmt.Println(MVString(lst))
@@ -90,13 +90,13 @@ func TestSortMV(t *testing.T) {
 func TestSortKey(t *testing.T) {
 	InitK(4)
 	lst := []KeyMV{}
-	lst = append(lst, &IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 22, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 1})})
-	lst = append(lst, &IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
-	lst = append(lst, &IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
-	lst = append(lst, &IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 22, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 1})})
+	lst = append(lst, IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 14, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 1, 0})})
+	lst = append(lst, IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0})})
+	lst = append(lst, IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0})})
 	fmt.Println(ayame.SliceString(lst))
 	SortC(ayame.IntKey(7), lst)
 	fmt.Println(ayame.SliceString(lst))
@@ -107,13 +107,13 @@ func TestSortKey(t *testing.T) {
 func TestSorted(t *testing.T) {
 	InitK(2)
 	rt := NewSkipRoutingTable(&IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 0})})
-	rt.Add(&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})}, true)
-	rt.Add(&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})}, true)
-	rt.Add(&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})}, true)
-	rt.Add(&IntKeyMV{key: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})}, true)
-	rt.Add(&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})}, true)
-	rt.Add(&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})}, true)
-	rt.Add(&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
+	rt.Add(IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})}, true)
+	rt.Add(IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0})}, true)
+	rt.Add(IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})}, true)
+	rt.Add(IntKeyMV{key: 5, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})}, true)
+	rt.Add(IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})}, true)
+	rt.Add(IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})}, true)
+	rt.Add(IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})}, true)
 	rslt := rt.(*SkipRoutingTable).GetCloserCandidates()
 	ast.Equal(t, ayame.SliceString(rslt), "[2,8,3,7,5]", "expected [2,8,3,7,5]")
 	fmt.Println(ayame.SliceString(rslt))
@@ -150,6 +150,54 @@ func TestNeighbors(t *testing.T) {
 	kcls, lv := rt.KClosest(&NeighborRequest{Key: ayame.IntKey(4), MV: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 0, 1})})
 	fmt.Println(ayame.SliceString(kcls))
 	fmt.Println(lv)
+}
+
+func TestLongest(t *testing.T) {
+	K = 2
+	lst := []KeyMV{
+		&IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0})},
+		&IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})},
+		&IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0})},
+		&IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0})},
+		&IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0})},
+		&IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0})},
+		&IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0})},
+	}
+	lngst := longestMVMatches(lst, ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0}))
+	fmt.Println(ayame.SliceString(lngst))
+}
+
+func TestKClosestMV(t *testing.T) {
+	mv := ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 0})
+	lst := []KeyMV{
+		IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 0, 0, 0})},
+		IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 1, 0, 0})},
+		IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 1})},
+		IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0, 1})},
+		IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0, 1})},
+		IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 1, 0, 1})},
+		IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 0})},
+	}
+	SortCMV(mv, lst)
+	fmt.Println(ayame.SliceString(lst))
+	K = 4
+	closest := kMVClosest(ayame.IntKey(4), lst, mv)
+	fmt.Println(ayame.SliceString(closest))
+	mv2 := ayame.NewMembershipVectorLiteral(2, []int{1, 1, 1, 1, 1, 0})
+	closest = kMVClosest(ayame.IntKey(4), lst, mv2)
+	fmt.Println(ayame.SliceString(closest))
+
+	lst = []KeyMV{
+		IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 0})},
+		IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 1, 0, 0})},
+		IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 1})},
+		IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 1, 0})},
+		IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 1, 1, 0})},
+		IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0, 1})},
+		IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 0})},
+	}
+	closest = kMVClosest(ayame.IntKey(4), lst, mv2)
+	fmt.Println(ayame.SliceString(closest))
 }
 
 func TestSufficient(t *testing.T) {
@@ -211,9 +259,8 @@ func addr(port int, quic bool) string {
 	}
 }
 
-func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
+func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
-	InitK(4)
 	numberOfPeers := num
 	keys := []int{}
 	for i := 0; i < numberOfPeers; i++ {
@@ -236,7 +283,7 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 	if err != nil {
 		panic(err)
 	}
-	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -272,13 +319,13 @@ func setupNodes(num int, shuffle bool, useQuic bool) []*BSNode {
 
 func TestJoin(t *testing.T) {
 	numberOfPeers := 32
-	setupNodes(numberOfPeers, true, true)
+	setupNodes(4, numberOfPeers, true, true)
 }
 
 func TestFix(t *testing.T) { // 30 sec long test
 	numberOfPeers := 32
 	periodicBootstrapInterval = 20 * time.Second
-	peers := setupNodes(numberOfPeers, false, true)
+	peers := setupNodes(4, numberOfPeers, false, true)
 	time.Sleep(10 * time.Second)
 	peers[2].Close()
 	peers[20].Close()
@@ -288,7 +335,7 @@ func TestFix(t *testing.T) { // 30 sec long test
 
 func TestLookup(t *testing.T) {
 	numberOfPeers := 32
-	peers := setupNodes(numberOfPeers, true, true)
+	peers := setupNodes(4, numberOfPeers, true, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -311,10 +358,40 @@ func TestLookup(t *testing.T) {
 	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
 }
 
+func TestLookupMV(t *testing.T) {
+	numberOfPeers := 32
+	peers := setupNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
+	for i := 0; i < numberOfPeers; i++ { // RESET
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+	numberOfLookups := numberOfPeers
+	for i := 0; i < numberOfLookups; i++ {
+		src := rand.Intn(numberOfPeers)
+		dst := rand.Intn(numberOfPeers)
+		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
+		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV(), ayame.IntKey(src))
+		ayame.Log.Debugf("src=%d, dst=%s, searched=%d", src, peers[dst].MV(), ayame.SliceString(nodes))
+		ast.Equal(t, true, Contains(peers[dst], nodes))
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < numberOfPeers; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
 func TestUnicast(t *testing.T) {
 	numberOfPeers := 100
 	useQuic := true
-	peers := setupNodes(numberOfPeers, true, useQuic)
+	peers := setupNodes(4, numberOfPeers, true, useQuic)
 	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
@@ -364,7 +441,7 @@ func TestUnicast(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	numberOfPeers := 16
-	peers := setupNodes(numberOfPeers, true, true)
+	peers := setupNodes(4, numberOfPeers, true, true)
 	ayame.Log.Debugf("------- Closing nodes ---------")
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
@@ -400,5 +477,5 @@ func Example() {
 
 func TestTCP(t *testing.T) {
 	numberOfPeers := 100
-	setupNodes(numberOfPeers, true, false)
+	setupNodes(4, numberOfPeers, true, false)
 }

@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
+
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 const (
@@ -32,6 +34,10 @@ func NewMembershipVectorLiteral(alpha int, literal []int) *MembershipVector {
 	//		v[i] = literal[i]
 	//	}
 	return &MembershipVector{Val: v, Alpha: alpha}
+}
+
+func NewMembershipVectorFromId(id peer.ID) *MembershipVector {
+	return NewMembershipVectorFromBinary([]byte(id))
 }
 
 func NewMembershipVectorFromBinary(bin []byte) *MembershipVector {

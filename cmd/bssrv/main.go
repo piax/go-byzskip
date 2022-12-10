@@ -198,7 +198,7 @@ func main() {
 	keystore = flag.String("ks", "keystore", "the path name of the keystore")
 	srvPort = flag.Int("s", 8000, "the web api server port to listen to")
 	authURL = flag.String("auth", "http://localhost:7001", "the authenticator web URL")
-	pubKeyString = flag.String("apub", "BABBEIIDM7V3FR4RWNGVXYRSHOCL6SYWLNIJLP4ONDGNB25HS7PKE6C56M2Q", "the public key of the authority")
+	pubKeyString = flag.String("apub", "", "the public key of the authority")
 
 	resMap = make(map[string]chan *bs.BSUnicastResEvent)
 
@@ -219,11 +219,12 @@ func main() {
 		ayame.InitLogger(logging.INFO)
 	}
 
-	fmt.Printf("authority url: %s\nauthority pub: %s\n", *authURL, *pubKeyString)
-
 	if len(*pubKeyString) == 0 {
-		panic("need public key")
+		fmt.Fprintln(os.Stderr, "No public key is specified. Use -apub option to specify the public key provided by the authority.")
+		os.Exit(1)
 	}
+
+	fmt.Printf("authority url: %s\nauthority pub: %s\n", *authURL, *pubKeyString)
 
 	p, err := authority.UnmarshalStringToPubKey(*pubKeyString)
 	if err != nil {

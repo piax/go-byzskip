@@ -61,6 +61,80 @@ func (idx *TableIndex) Encode() *pb.TableIndex {
 	}
 }
 
+type BSFindNodeMVEvent struct {
+	isResponse bool
+	mv         *ayame.MembershipVector
+	src        ayame.Key
+	messageId  string
+	isTopmost  bool
+	// closest nodes in response
+	neighbors []*BSNode
+	ayame.AbstractSchedEvent
+}
+
+func NewBSFindNodeMVReqEvent(sender *BSNode, requestId string, targetMV *ayame.MembershipVector, src ayame.Key) *BSFindNodeMVEvent {
+	ev := &BSFindNodeMVEvent{
+		isResponse:         false,
+		mv:                 targetMV,
+		src:                src,
+		messageId:          requestId,
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
+	ev.SetRequest(true)
+	return ev
+}
+
+func NewBSFindNodeMVResEvent(sender *BSNode, request *BSFindNodeMVEvent, neighbors []*BSNode, isTopmost bool) *BSFindNodeMVEvent {
+	ev := &BSFindNodeMVEvent{
+		isResponse:         true,
+		mv:                 request.mv,
+		src:                request.src,
+		messageId:          request.messageId,
+		neighbors:          neighbors,
+		isTopmost:          isTopmost,
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
+	return ev
+}
+
+func (ue *BSFindNodeMVEvent) String() string {
+	return fmt.Sprintf("findnode id=%s", ue.messageId)
+}
+
+func (ue *BSFindNodeMVEvent) MessageId() string {
+	return ue.messageId
+}
+
+func (ue *BSFindNodeMVEvent) Encode() *pb.Message {
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
+	ret := sender.NewMessage(ue.messageId, pb.MessageType_FIND_MV, nil, nil, nil, ue.src, ue.mv)
+	ret.IsResponse = ue.isResponse
+	ret.IsRequest = ue.IsRequest()
+	var lpeers []*pb.Peer
+	for _, n := range ue.neighbors {
+		lpeers = append(lpeers, n.Parent.Encode())
+	}
+	ret.Data.CloserPeers = lpeers
+	if ue.isTopmost {
+		ret.Data.SenderAppData = "t"
+	} else {
+		ret.Data.SenderAppData = "f"
+	}
+	return ret
+}
+
+func (ue *BSFindNodeMVEvent) Run(ctx context.Context, node ayame.Node) error {
+	n := node.(*BSNode)
+	return n.handleFindNodeMV(ctx, ue)
+}
+
+func (ue *BSFindNodeMVEvent) IsResponse() bool {
+	return ue.isResponse
+}
+
+func (ue *BSFindNodeMVEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
+	n := node.(*BSNode)
+	return n.handleFindNodeMVRequest(ctx, ue)
+}
+
 type BSFindNodeEvent struct {
 	isResponse bool
 	req        *NeighborRequest

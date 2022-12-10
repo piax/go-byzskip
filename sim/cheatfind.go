@@ -207,8 +207,8 @@ func FastLookup(key ayame.Key, source *bs.BSNode) ([]*bs.BSNode, int, int, int, 
 	return rets, hops, msgs, hops_to_match, failure
 }
 
-//length, _ := maxPathLength(msg.paths)
-//hops = int(length)
+// length, _ := maxPathLength(msg.paths)
+// hops = int(length)
 func FastUpdateNeighbors(target *bs.BSNode, initialNodes []*bs.BSNode, queried []*bs.BSNode) (int, bool, int) {
 	hijacked := false
 	if !target.IsFailure && isFaultySet(initialNodes) {

@@ -100,3 +100,26 @@ func TestAppendAbsent(t *testing.T) {
 	lst = ayame.AppendIfAbsent(lst, ayame.IntKey(2))
 	ast.Equal(t, len(lst), 2, "expected 2")
 }
+
+func TestUnifiedKey(t *testing.T) {
+	key := ayame.NewUnifiedKeyFromString("test.example.com", ayame.RandomID())
+	fmt.Println(key.String())
+	key = ayame.NewUnifiedKeyFromString("test.example.com:8080", ayame.RandomID())
+	fmt.Println(key.String())
+	key = ayame.NewUnifiedKeyFromStringWithJitter("test2.example.com")
+	fmt.Println(key.String())
+	key = ayame.NewUnifiedKeyFromStringWithJitter("foo.example.com")
+	fmt.Println(key.String())
+	k1 := ayame.NewUnifiedKeyFromString("bar.example.com", ayame.RandomID()).(ayame.UnifiedKey)
+	k2 := ayame.NewUnifiedKeyFromString("baz.example.co.jp", ayame.RandomID()).(ayame.UnifiedKey)
+	key = ayame.NewUnifiedKeyBetween(k1, k2)
+	fmt.Println(key.String())
+	fmt.Println(k1.Less(key))
+	ast.Equal(t, true, k1.Less(key), "expected less")
+	ast.Equal(t, true, key.Less(k2), "expected less")
+	k3 := ayame.NewUnifiedKeyFromString("foo.example.com", ayame.RandomID()).(ayame.UnifiedKey)
+	pk := k3.Encode()
+	k4dash := ayame.NewUnifiedKeyFromBytes(pk.Body)
+	ast.Equal(t, k3, k4dash, "expected to be equal")
+
+}

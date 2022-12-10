@@ -157,6 +157,22 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		p, _ := ConvertPeer(self, mes.Sender)
 		ev.SetSender(p)
 		ev.SetVerified(!self.VerifyIntegrity || valid) // verification conscious
+	case pb.MessageType_FIND_MV:
+		tm := mes.Data.SenderAppData == "t"
+		ev = &BSFindNodeMVEvent{
+			isResponse:         mes.IsResponse,
+			isTopmost:          tm,
+			src:                p2p.NewKey(mes.Data.Key),
+			mv:                 ayame.NewMembershipVectorFromBinary(mes.Data.Mv),
+			messageId:          mes.Data.Id,
+			neighbors:          ConvertPeers(self, mes.Data.CloserPeers),
+			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
+		p, err := ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetRequest(mes.IsRequest)
+		ev.SetSender(p)
 	case pb.MessageType_FIND_NODE:
 		var req *NeighborRequest = nil
 		if mes.Data.Req != nil {

@@ -14,6 +14,7 @@ enum KeyType {
 	STRING = 2;
     ID = 3;
     RANGE = 4;
+    UNIFIED = 5;
 }
 
 message Key {
@@ -42,8 +43,9 @@ enum MessageType {
     ADD_PROVIDER = 2;
     GET_PROVIDERS = 3;
 	FIND_NODE = 4;
-	PING = 5;
-    DEL_NODE = 6;
+    FIND_MV = 5;
+	PING = 6;
+    DEL_NODE = 7;
     UNICAST = 8;
     MULTICAST = 9;
 }

@@ -278,6 +278,9 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	}
 	ev := n.converter(mes, n, valid)
 	// XXX should be TempAddrTTL
+	if ev.Sender() == nil {
+		panic("sender is nil")
+	}
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	if mes.IsRequest {
 		resp := ev.ProcessRequest(context.TODO(), n.child)
