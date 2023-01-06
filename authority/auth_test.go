@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/ayame"
 )
 

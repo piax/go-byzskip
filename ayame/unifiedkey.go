@@ -32,8 +32,12 @@ func randomBytes(len int) []byte {
 	return ret
 }
 
-func ZeroID() peer.ID {
+func ZeroID() peer.ID { // the smallest byte
 	return peer.ID([]byte{0})
+}
+
+func MaxID() peer.ID { // zero length byte means max ID
+	return peer.ID([]byte{})
 }
 
 func RandomID() peer.ID {
@@ -47,18 +51,24 @@ func (t UnifiedKey) Less(elem interface{}) bool {
 	if v, ok := elem.(UnifiedKey); ok {
 		cmp := t.val.Cmp(v.val)
 		if cmp == 0 {
+			if len(v.id) == 0 { // max
+				return true
+			} else if len(t.id) == 0 { // max
+				return false
+			}
 			return bytes.Compare([]byte(t.id), []byte(v.id)) < 0
 		} else {
 			return cmp < 0
 		}
 	}
-	return false
+	panic("not a unified key comparison")
 }
 
 func (t UnifiedKey) Equals(elem any) bool {
 	if v, ok := elem.(UnifiedKey); ok {
 		return t.val.Cmp(v.val) == 0 && bytes.Equal([]byte(t.id), []byte(v.id))
 	}
+	//panic(fmt.Sprintf("not a unified key comparison %s and %v", t, elem))
 	return false
 }
 
@@ -66,12 +76,17 @@ func (t UnifiedKey) LessOrEquals(elem interface{}) bool {
 	if v, ok := elem.(UnifiedKey); ok {
 		cmp := t.val.Cmp(v.val)
 		if cmp == 0 {
+			if len(v.id) == 0 { // max
+				return true
+			} else if len(t.id) == 0 { // max
+				return false
+			}
 			return bytes.Compare([]byte(t.id), []byte(v.id)) <= 0
 		} else {
 			return t.val.Cmp(v.val) <= 0
 		}
 	}
-	return false
+	panic(fmt.Sprintf("not a unified key comparison %s and %v", t, elem))
 }
 
 func (t UnifiedKey) String() string {
@@ -102,6 +117,14 @@ func (t UnifiedKey) Encode() *p2p.Key {
 		Type: p2p.KeyType_UNIFIED,
 		Body: val,
 	}
+}
+
+func (t UnifiedKey) Value() []byte {
+	return t.val.Bytes()
+}
+
+func (t UnifiedKey) ID() peer.ID {
+	return t.id
 }
 
 //func DecodeUnifiedKey(pk *p2p.Key) Key {
@@ -157,8 +180,8 @@ func NewUnifiedKeyBetween(start, end UnifiedKey) Key {
 	diff := eint.Sub(eint, sint)
 	r, _ := crand.Int(crand.Reader, diff)
 	added := sint.Add(sint, r)
-	ret := sint.Cmp(added)
-	fmt.Println(ret)
+	//	ret := sint.Cmp(added)
+	//	fmt.Println(ret)
 	return NewUnifiedKey(added, RandomID())
 }
 
@@ -192,6 +215,12 @@ func NewUnifiedKeyFromBytes(arr []byte) Key {
 	z.SetBytes(keypart)
 	i := peer.ID(idpart)
 	return NewUnifiedKey(z, i)
+}
+
+func NewUnifiedKeyFromByteValue(value []byte, id peer.ID) Key {
+	z := new(big.Int)
+	z.SetBytes(value)
+	return NewUnifiedKey(z, id)
 }
 
 func NewUnifiedKeyFromString(str string, id peer.ID) Key {

@@ -1,7 +1,7 @@
 package dht
 
 import (
-	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p/core/routing"
 )
 
 type QuorumOptionKey struct{}

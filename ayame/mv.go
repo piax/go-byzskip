@@ -1,12 +1,11 @@
 package ayame
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
-
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 const (
@@ -36,8 +35,10 @@ func NewMembershipVectorLiteral(alpha int, literal []int) *MembershipVector {
 	return &MembershipVector{Val: v, Alpha: alpha}
 }
 
-func NewMembershipVectorFromId(id peer.ID) *MembershipVector {
-	return NewMembershipVectorFromBinary([]byte(id))
+// Requires MembershipVectorSize = 320
+func NewMembershipVectorFromId(id string) *MembershipVector {
+	hash := sha256.Sum256([]byte(id))
+	return NewMembershipVectorFromBinary(hash[:])
 }
 
 func NewMembershipVectorFromBinary(bin []byte) *MembershipVector {

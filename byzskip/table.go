@@ -45,6 +45,30 @@ type KeyMV interface {
 	fmt.Stringer
 }
 
+type KeyMVData struct {
+	key    ayame.Key
+	Mvdata *ayame.MembershipVector
+}
+
+func (km KeyMVData) Key() ayame.Key {
+	return km.key
+}
+
+func (km KeyMVData) MV() *ayame.MembershipVector {
+	return km.Mvdata
+}
+
+func (km KeyMVData) Equals(other any) bool {
+	if o, ok := other.(KeyMV); ok {
+		return km.key.Equals(o.Key())
+	}
+	return false
+}
+
+func (km KeyMVData) String() string {
+	return km.key.String()
+}
+
 type IntKeyMV struct {
 	key    ayame.IntKey
 	Mvdata *ayame.MembershipVector
@@ -415,6 +439,38 @@ func MVString(nodes []KeyMV) string {
 	ret := ""
 	for _, n := range nodes {
 		ret += fmt.Sprintf("%s: key=%s\n", n.MV(), n.Key())
+	}
+	return ret
+}
+
+func hasExtraRight(src, max ayame.Key, nodes []KeyMV) bool {
+	// RIGHT_HALF_K
+	count := 0
+	for _, n := range nodes {
+		if IsOrdered(src, false, max, n.Key(), false) {
+			ayame.Log.Debugf("is ordered %s, %s, %s", src, max, n.Key())
+			count++
+		}
+	}
+	return count >= RIGHT_HALF_K
+}
+
+func pickRangeFrom(src, max ayame.Key, nodes []KeyMV, withExtra bool) []KeyMV {
+	ret := []KeyMV{}
+	count := 0
+L:
+	for _, n := range nodes {
+		if IsOrdered(src, false, n.Key(), max, false) {
+			ret = append(ret, n)
+		} else if withExtra && IsOrdered(src, false, max, n.Key(), false) {
+			ret = append(ret, n)
+			count++
+			if count >= RIGHT_HALF_K {
+				break L
+			}
+		} else if !withExtra { // finish.
+			break L
+		}
 	}
 	return ret
 }

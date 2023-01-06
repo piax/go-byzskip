@@ -44,10 +44,11 @@ enum MessageType {
     GET_PROVIDERS = 3;
 	FIND_NODE = 4;
     FIND_MV = 5;
-	PING = 6;
-    DEL_NODE = 7;
-    UNICAST = 8;
-    MULTICAST = 9;
+    FIND_RANGE = 6;
+	PING = 7;
+    DEL_NODE = 8;
+    UNICAST = 9;
+    MULTICAST = 10;
 }
 
 // Sender information
@@ -133,7 +134,7 @@ message MessageData {
     repeated Peer path = 15;
 
     // the record used to deliver in this message
-    Record record = 16;
+    repeated Record record = 16;
 }
 
 message Message {

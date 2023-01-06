@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"

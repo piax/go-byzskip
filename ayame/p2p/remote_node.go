@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
@@ -139,7 +139,7 @@ func Connectedness(c pb.ConnectionType) network.Connectedness {
 func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 	// store to peerstore on self.
 	id, _ := peer.Decode(p.Id)
-	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.ProviderAddrTTL)
+	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.AddressTTL)
 	return &RemoteNode{
 		self:  self,
 		id:    id,
@@ -152,7 +152,7 @@ func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 
 func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *RemoteNode {
 	// store to peerstore on self.
-	self.Peerstore().AddAddrs(id, addrs, peerstore.ProviderAddrTTL)
+	self.Peerstore().AddAddrs(id, addrs, peerstore.AddressTTL)
 	return &RemoteNode{
 		self: self,
 		id:   id,

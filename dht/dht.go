@@ -36,6 +36,16 @@ var (
 
 // many functions are imported from the FullRT in go-libp2p-kad-dht
 
+type AppDHT interface {
+	HandlePutProviderEvent(ctx context.Context, ev *BSPutProviderEvent) error
+	HandleGetProvidersRequest(ctx context.Context, ev *BSGetProvidersEvent) ayame.SchedEvent
+	HandleGetProvidersResEvent(ctx context.Context, ev *BSGetProvidersEvent) error
+	HandlePutRequest(ctx context.Context, ev *BSPutEvent) ayame.SchedEvent
+	HandlePutResEvent(ctx context.Context, ev *BSPutEvent) error
+	HandleGetRequest(ctx context.Context, ev *BSGetEvent) ayame.SchedEvent
+	HandleGetResEvent(ctx context.Context, ev *BSGetEvent) error
+}
+
 type BSDHT struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -61,7 +71,7 @@ func NewWithoutDefaults(h host.Host, options ...Option) (*BSDHT, error) {
 	return cfg.NewDHT(h)
 }
 
-func handlePutProviderEvent(ctx context.Context, dht *BSDHT, ev *BSPutProviderEvent) error {
+func (dht *BSDHT) HandlePutProviderEvent(ctx context.Context, ev *BSPutProviderEvent) error {
 	ayame.Log.Debugf("put provider from=%v\n", ev.Sender())
 	for _, p := range ev.Providers {
 		mh, err := multihash.FromB58String(ev.Key)
@@ -75,7 +85,7 @@ func handlePutProviderEvent(ctx context.Context, dht *BSDHT, ev *BSPutProviderEv
 	return nil
 }
 
-func handleGetProvidersResEvent(ctx context.Context, dht *BSDHT, ev *BSGetProvidersEvent) error {
+func (dht *BSDHT) HandleGetProvidersResEvent(ctx context.Context, ev *BSGetProvidersEvent) error {
 	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	dht.Node.ProcsMutex.RLock()
 	proc, exists := dht.Node.Procs[ev.MessageId()]
@@ -88,7 +98,7 @@ func handleGetProvidersResEvent(ctx context.Context, dht *BSDHT, ev *BSGetProvid
 	return fmt.Errorf("%v: unregistered response msgid=%s received from %s", dht, ev.MessageId(), ev.Sender())
 }
 
-func handleGetProvidersRequest(ctx context.Context, dht *BSDHT, ev *BSGetProvidersEvent) ayame.SchedEvent {
+func (dht *BSDHT) HandleGetProvidersRequest(ctx context.Context, ev *BSGetProvidersEvent) ayame.SchedEvent {
 	mh, err := multihash.FromB58String(ev.Key)
 	if err != nil {
 		ayame.Log.Debugf("failed to make multihash %s \n", ev.Key)
@@ -111,20 +121,20 @@ func handleGetProvidersRequest(ctx context.Context, dht *BSDHT, ev *BSGetProvide
 	return NewBSGetProvidersEvent(dht.Node, ev.messageId, false, ev.Key, peers)
 }
 
-func handleGetRequest(ctx context.Context, dht *BSDHT, ev *BSGetEvent) ayame.SchedEvent {
-	ayame.Log.Debugf("get from=%v, key=%s\n", ev.Sender(), string(ev.Record.GetKey()))
-	rec, err := dht.getRecordFromDatastore(ctx, mkDsKey(string(ev.Record.GetKey())))
+func (dht *BSDHT) HandleGetRequest(ctx context.Context, ev *BSGetEvent) ayame.SchedEvent {
+	ayame.Log.Debugf("get from=%v, key=%s\n", ev.Sender(), string(ev.Record[0].GetKey()))
+	rec, err := dht.getRecordFromDatastore(ctx, mkDsKey(string(ev.Record[0].GetKey())))
 
 	if err != nil { // XXX ignore
 		rec = nil
 	}
 
 	ayame.Log.Debugf("got rec=%v", rec)
-	ret := NewBSGetEvent(dht.Node, ev.MessageId(), false, rec)
+	ret := NewBSGetEvent(dht.Node, ev.MessageId(), false, []*pb.Record{rec})
 	return ret
 }
 
-func handleGetResEvent(ctx context.Context, dht *BSDHT, ev *BSGetEvent) error {
+func (dht *BSDHT) HandleGetResEvent(ctx context.Context, ev *BSGetEvent) error {
 	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	dht.Node.ProcsMutex.RLock()
 	proc, exists := dht.Node.Procs[ev.MessageId()]
@@ -137,7 +147,7 @@ func handleGetResEvent(ctx context.Context, dht *BSDHT, ev *BSGetEvent) error {
 	return fmt.Errorf("%v: unregistered response msgid=%s received from %s", dht, ev.MessageId(), ev.Sender())
 }
 
-func handlePutResEvent(ctx context.Context, dht *BSDHT, ev *BSPutEvent) error {
+func (dht *BSDHT) HandlePutResEvent(ctx context.Context, ev *BSPutEvent) error {
 	//strKey := base32.RawStdEncoding.EncodeToString(ev.Key.(ayame.IdKey))
 	dht.Node.ProcsMutex.RLock()
 	proc, exists := dht.Node.Procs[ev.MessageId()]
@@ -150,7 +160,7 @@ func handlePutResEvent(ctx context.Context, dht *BSDHT, ev *BSPutEvent) error {
 	return nil
 }
 
-func handlePutRequest(ctx context.Context, dht *BSDHT, ev *BSPutEvent) ayame.SchedEvent {
+func (dht *BSDHT) HandlePutRequest(ctx context.Context, ev *BSPutEvent) ayame.SchedEvent {
 	//strKey := base32.RawStdEncoding.EncodeToString(ev.Key.(ayame.IdKey))
 	dht.putLocal(ctx, string(ev.Record.GetKey()), ev.Record) // why key?
 	ayame.Log.Debugf("put finished on %v from=%v, key=%s, len=%d\n", dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
@@ -287,7 +297,7 @@ func (dht *BSDHT) sendGetProviders(ctx context.Context, p ayame.Node, key multih
 	resp := dht.Node.SendRequest(ctx, p, mes)
 	if ev, ok := resp.(*BSGetProvidersEvent); ok {
 		addrs := []*peer.AddrInfo{}
-		for _, p := range ev.providers {
+		for _, p := range ev.Providers {
 			pid, err := peer.Decode(p.Id)
 			if err != nil {
 				return nil, err
@@ -337,10 +347,10 @@ func (dht *BSDHT) sendGetValue(ctx context.Context, p ayame.Node, key string) (*
 	if dht.Node.Id() == p.Id() { // put to self.
 		return dht.getRecordFromDatastore(ctx, mkDsKey(key))
 	}
-	mes := NewBSGetEvent(dht.Node, dht.Node.NewMessageId(), true, &pb.Record{Key: []byte(key)})
+	mes := NewBSGetEvent(dht.Node, dht.Node.NewMessageId(), true, []*pb.Record{&pb.Record{Key: []byte(key)}})
 	resp := dht.Node.SendRequest(ctx, p, mes)
 	if ev, ok := resp.(*BSGetEvent); ok {
-		return ev.Record, nil
+		return ev.Record[0], nil
 	}
 	if ev, ok := resp.(*bs.FailureResponse); ok {
 		return nil, ev.Err
@@ -879,7 +889,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetVerified(true) // always verified
 		return ev
 	case pb.MessageType_PUT_VALUE:
-		ev = NewBSPutEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record)
+		ev = NewBSPutEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record[0])
 		p, err := bs.ConvertPeer(self, mes.Sender)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))

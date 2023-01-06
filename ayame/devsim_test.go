@@ -122,4 +122,13 @@ func TestUnifiedKey(t *testing.T) {
 	k4dash := ayame.NewUnifiedKeyFromBytes(pk.Body)
 	ast.Equal(t, k3, k4dash, "expected to be equal")
 
+	key0 := ayame.NewUnifiedKeyFromString("test.example.com", ayame.ZeroID())
+	key2 := ayame.NewUnifiedKeyFromString("test.example.com", ayame.RandomID())
+	ast.Equal(t, true, key0.Less(key2), "expected less")
+
+	key3 := ayame.NewUnifiedKeyFromString("test.example.com", ayame.MaxID())
+	ast.Equal(t, true, key2.Less(key3), "expected less")
+	ast.Equal(t, true, key0.Less(key3), "expected less")
+	ast.Equal(t, true, key0.LessOrEquals(key3), "expected less or equals")
+	ast.Equal(t, true, key2.LessOrEquals(key3), "expected less or equals")
 }

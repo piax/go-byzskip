@@ -218,3 +218,66 @@ func (ue *BSFindNodeEvent) ProcessRequest(ctx context.Context, node ayame.Node) 
 	n := node.(*BSNode)
 	return n.handleFindNodeRequest(ctx, ue)
 }
+
+type BSFindRangeEvent struct {
+	isResponse bool
+	max        ayame.Key
+	messageId  string
+	targets    []*BSNode
+	ayame.AbstractSchedEvent
+}
+
+func NewBSFindRangeReqEvent(sender *BSNode, requestId string, max ayame.Key) *BSFindRangeEvent {
+	ev := &BSFindRangeEvent{
+		isResponse:         false,
+		max:                max,
+		messageId:          requestId,
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
+	ev.SetRequest(true)
+	return ev
+}
+
+func NewBSFindRangeResEvent(sender *BSNode, request *BSFindRangeEvent, targets []*BSNode) *BSFindRangeEvent {
+	ev := &BSFindRangeEvent{
+		isResponse:         true,
+		max:                request.max,
+		messageId:          request.messageId,
+		targets:            targets,
+		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
+	return ev
+}
+
+func (ue *BSFindRangeEvent) String() string {
+	return fmt.Sprintf("findrange id=%s", ue.messageId)
+}
+
+func (ue *BSFindRangeEvent) MessageId() string {
+	return ue.messageId
+}
+
+func (ue *BSFindRangeEvent) Encode() *pb.Message {
+	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
+	ret := sender.NewMessage(ue.messageId, pb.MessageType_FIND_RANGE, nil, nil, nil, ue.max, nil)
+	ret.IsResponse = ue.isResponse
+	ret.IsRequest = ue.IsRequest()
+	var lpeers []*pb.Peer
+	for _, n := range ue.targets {
+		lpeers = append(lpeers, n.Parent.Encode())
+	}
+	ret.Data.CloserPeers = lpeers
+	return ret
+}
+
+func (ue *BSFindRangeEvent) Run(ctx context.Context, node ayame.Node) error {
+	n := node.(*BSNode)
+	return n.handleFindRange(ctx, ue)
+}
+
+func (ue *BSFindRangeEvent) IsResponse() bool {
+	return ue.isResponse
+}
+
+func (ue *BSFindRangeEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
+	n := node.(*BSNode)
+	return n.handleFindRangeRequest(ctx, ue)
+}

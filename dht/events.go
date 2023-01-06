@@ -22,7 +22,7 @@ type BSPutEvent struct {
 
 type BSGetEvent struct {
 	messageId string
-	Record    *pb.Record
+	Record    []*pb.Record
 	Timestamp int64
 	Request   bool // true if request
 	ayame.AbstractSchedEvent
@@ -51,14 +51,14 @@ func (ue *BSPutEvent) Encode() *pb.Message {
 		ue.Receiver().Key(), nil)
 	ret.IsRequest = ue.Request
 	ret.IsResponse = !ue.Request
-	ret.Data.Record = ue.Record
+	ret.Data.Record = []*pb.Record{ue.Record}
 	return ret
 }
 
 func (ue *BSPutEvent) Run(ctx context.Context, node ayame.Node) error {
 	ayame.Log.Debugf("running put response handler.")
 	if ue.IsResponse() {
-		if err := handlePutResEvent(ctx, node.App().(*BSDHT), ue); err != nil {
+		if err := node.App().(AppDHT).HandlePutResEvent(ctx, ue); err != nil {
 			return err
 		}
 		return nil
@@ -80,10 +80,10 @@ func (ue *BSPutEvent) MessageId() string {
 
 func (ev *BSPutEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
 	ayame.Log.Debugf("running put request handler.")
-	return handlePutRequest(ctx, node.App().(*BSDHT), ev)
+	return node.App().(AppDHT).HandlePutRequest(ctx, ev)
 }
 
-func NewBSGetEvent(sender ayame.Node, messageId string, isRequest bool, rec *pb.Record) *BSGetEvent {
+func NewBSGetEvent(sender ayame.Node, messageId string, isRequest bool, rec []*pb.Record) *BSGetEvent {
 	ev := &BSGetEvent{
 		messageId:          messageId,
 		Record:             rec,
@@ -96,7 +96,7 @@ func NewBSGetEvent(sender ayame.Node, messageId string, isRequest bool, rec *pb.
 }
 
 func (ue *BSGetEvent) String() string {
-	return ue.Sender().String() + "<GET " + string(ue.Record.GetKey()) + ">"
+	return ue.Sender().String() + "<GET " + string(ue.Record[0].GetKey()) + ">"
 }
 
 func (ue *BSGetEvent) Encode() *pb.Message {
@@ -113,7 +113,7 @@ func (ue *BSGetEvent) Encode() *pb.Message {
 func (ue *BSGetEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
 		ayame.Log.Debugf("running get response handler.")
-		if err := handleGetResEvent(ctx, node.App().(*BSDHT), ue); err != nil {
+		if err := node.App().(AppDHT).HandleGetResEvent(ctx, ue); err != nil {
 			return err
 		}
 		return nil
@@ -135,7 +135,7 @@ func (ue *BSGetEvent) MessageId() string {
 
 func (ev *BSGetEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
 	ayame.Log.Debugf("running get request handler.")
-	return handleGetRequest(ctx, node.App().(*BSDHT), ev)
+	return node.App().(AppDHT).HandleGetRequest(ctx, ev)
 }
 
 type BSPutProviderEvent struct {
@@ -175,7 +175,7 @@ func (ue *BSPutProviderEvent) IsResponse() bool {
 }
 
 func (ue *BSPutProviderEvent) Run(ctx context.Context, node ayame.Node) error {
-	return handlePutProviderEvent(ctx, node.App().(*BSDHT), ue)
+	return node.App().(AppDHT).HandlePutProviderEvent(ctx, ue)
 }
 
 func (ue *BSPutProviderEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
@@ -185,7 +185,7 @@ func (ue *BSPutProviderEvent) ProcessRequest(ctx context.Context, node ayame.Nod
 type BSGetProvidersEvent struct {
 	messageId string
 	Key       string
-	providers []*pb.Peer
+	Providers []*pb.Peer
 	Request   bool // true if request
 	ayame.AbstractSchedEvent
 }
@@ -194,7 +194,7 @@ func NewBSGetProvidersEvent(sender ayame.Node, messageId string, isRequest bool,
 	ev := &BSGetProvidersEvent{
 		messageId:          messageId,
 		Key:                key,
-		providers:          providers,
+		Providers:          providers,
 		Request:            isRequest,
 		AbstractSchedEvent: *ayame.NewSchedEvent(sender, nil, nil)}
 	ev.SetSender(sender)
@@ -214,14 +214,14 @@ func (ue *BSGetProvidersEvent) Encode() *pb.Message {
 	ret.IsRequest = ue.Request
 	ret.IsResponse = !ue.Request
 	ret.Data.SenderAppData = ue.Key
-	ret.Data.CandidatePeers = ue.providers
+	ret.Data.CandidatePeers = ue.Providers
 	return ret
 }
 
 func (ue *BSGetProvidersEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
 		ayame.Log.Debugf("running get providers response handler.")
-		if err := handleGetProvidersResEvent(ctx, node.App().(*BSDHT), ue); err != nil {
+		if err := node.App().(AppDHT).HandleGetProvidersResEvent(ctx, ue); err != nil {
 			return err
 		}
 		return nil
@@ -243,5 +243,5 @@ func (ue *BSGetProvidersEvent) MessageId() string {
 
 func (ev *BSGetProvidersEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
 	ayame.Log.Debugf("running get providers request handler.")
-	return handleGetProvidersRequest(ctx, node.App().(*BSDHT), ev)
+	return node.App().(AppDHT).HandleGetProvidersRequest(ctx, ev)
 }

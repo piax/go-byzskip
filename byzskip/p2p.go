@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p/core/peer"
+	peerstore "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
@@ -148,10 +148,10 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
 		if mes.IsResponse {
-			ev = NewBSUnicastResEvent(author, mes.Data.Id, mes.Data.Record.Value)
+			ev = NewBSUnicastResEvent(author, mes.Data.Id, mes.Data.Record[0].Value)
 			ev.(*BSUnicastResEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		} else {
-			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record.Value)
+			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
 			ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		}
 		p, _ := ConvertPeer(self, mes.Sender)
@@ -166,6 +166,19 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			mv:                 ayame.NewMembershipVectorFromBinary(mes.Data.Mv),
 			messageId:          mes.Data.Id,
 			neighbors:          ConvertPeers(self, mes.Data.CloserPeers),
+			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
+		p, err := ConvertPeer(self, mes.Sender)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+		}
+		ev.SetRequest(mes.IsRequest)
+		ev.SetSender(p)
+	case pb.MessageType_FIND_RANGE:
+		ev = &BSFindRangeEvent{
+			isResponse:         mes.IsResponse,
+			max:                p2p.NewKey(mes.Data.Key),
+			messageId:          mes.Data.Id,
+			targets:            ConvertPeers(self, mes.Data.CloserPeers),
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {

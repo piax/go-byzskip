@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-base32"
 	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 )

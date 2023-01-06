@@ -5,7 +5,7 @@ package byzskip
 import (
 	"github.com/piax/go-byzskip/ayame"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var DefaultAuthorizer = func(cfg *Config) error {

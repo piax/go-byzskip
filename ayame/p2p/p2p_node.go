@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	//libp2pquic "github.com/libp2p/go-libp2p-quic-transport"
 
@@ -234,6 +234,8 @@ func NewKey(key *p2p.Key) ayame.Key {
 		return ayame.NewStringKeyFromBytes(key.Body)
 	case p2p.KeyType_ID:
 		return ayame.NewIdKeyFromBytes(key.Body)
+	case p2p.KeyType_UNIFIED:
+		return ayame.NewUnifiedKeyFromBytes(key.Body)
 	}
 	return nil
 }

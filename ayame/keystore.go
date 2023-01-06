@@ -11,7 +11,7 @@ import (
 
 	base32 "encoding/base32"
 
-	ci "github.com/libp2p/go-libp2p-core/crypto"
+	ci "github.com/libp2p/go-libp2p/core/crypto"
 )
 
 var codec = base32.StdEncoding.WithPadding(base32.NoPadding)

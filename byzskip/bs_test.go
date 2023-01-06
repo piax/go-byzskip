@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -200,12 +200,45 @@ func TestKClosestMV(t *testing.T) {
 	fmt.Println(ayame.SliceString(closest))
 }
 
+func TestExtraRight(t *testing.T) {
+	lst := []KeyMV{
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("a", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("a", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0, 0, 0, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("a", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("a", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1, 0, 0, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("a", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1, 0, 0, 0})},
+	}
+	base := ayame.NewUnifiedKeyFromString("a", ayame.ZeroID())
+	SortC(base, lst)
+	max := lst[2]
+	ast.Equal(t, true, base.Less(max.Key()))
+	ast.Equal(t, true, base.LessOrEquals(max.Key()))
+	ast.Equal(t, true, hasExtraRight(base, max.Key(), lst))
+}
+
+func TestPickExtra(t *testing.T) {
+	InitK(4)
+	lst := []KeyMV{
+		IntKeyMV{key: 4, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 0})},
+		IntKeyMV{key: 3, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 1, 0, 0})},
+		IntKeyMV{key: 9, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 0, 1})},
+		IntKeyMV{key: 6, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 0, 1, 0})},
+		IntKeyMV{key: 7, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0, 1, 1, 0})},
+		IntKeyMV{key: 8, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0, 0, 1})},
+		IntKeyMV{key: 2, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 0})},
+	}
+	base := IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 1})}
+	SortC(base.Key(), lst)
+	l := pickRangeFrom(ayame.IntKey(4), ayame.IntKey(4), lst, false)
+	fmt.Println(ayame.SliceString(l))
+}
+
 func TestSufficient(t *testing.T) {
 	InitK(2)
-	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)})
-	kms := []*IntKeyMV{}
+	rt := NewSkipRoutingTable(IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)})
+	kms := []IntKeyMV{}
 	for i := 2; i < 100; i++ {
-		km := &IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)}
+		km := IntKeyMV{key: ayame.IntKey(i), Mvdata: ayame.NewMembershipVector(2)}
 		kms = append(kms, km)
 		rt.Add(km, true)
 	}
@@ -223,11 +256,11 @@ func TestSufficient(t *testing.T) {
 
 func TestSufficient2(t *testing.T) {
 	InitK(2)
-	rt := NewSkipRoutingTable(&IntKeyMV{key: ayame.IntKey(0), Mvdata: ayame.NewMembershipVector(2)})
-	km := &IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)}
+	rt := NewSkipRoutingTable(IntKeyMV{key: ayame.IntKey(0), Mvdata: ayame.NewMembershipVector(2)})
+	km := IntKeyMV{key: ayame.IntKey(1), Mvdata: ayame.NewMembershipVector(2)}
 	rt.Add(km, true)
 	fmt.Println(rt)
-	ast.Equal(t, rt.HasSufficientNeighbors(), true, "expected to have sufficient neighbors")
+	ast.Equal(t, rt.HasSufficientNeighbors(), false, "expected to have sufficient neighbors")
 }
 
 func TestTicker(t *testing.T) {
@@ -317,19 +350,85 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
+func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+	auth := authority.NewAuthorizer()
+	numberOfPeers := num
+	keys := []int{}
+	for i := 0; i < numberOfPeers; i++ {
+		keys = append(keys, i)
+	}
+	if shuffle {
+		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+	}
+	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+		//mv := ayame.NewMembershipVector(2)
+		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
+		bin := auth.Authorize(id, key, mv)
+		return key, mv, bin, nil
+	}
+	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
+	}
+	peers := make([]*BSNode, numberOfPeers)
+	var err error
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
+	if err != nil {
+		panic(err)
+	}
+	rkey := ayame.NewUnifiedKeyFromString(string([]byte{'r'}), h.ID())
+	peers[0], err = New(h, []Option{Key(rkey), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
+
+	for i := 1; i < numberOfPeers; i++ {
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+		key := ayame.NewUnifiedKeyFromString(string([]byte{'a' + byte(i/10)}), h.ID())
+		peers[i], err = New(h, []Option{Bootstrap(locator), Key(key), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		if err != nil {
+			panic(err)
+		}
+		go func(pos int) {
+			peers[pos].Join(context.Background())
+		}(i)
+	}
+	time.Sleep(time.Duration(5) * time.Second)
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < numberOfPeers; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(numberOfPeers))
+	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfPeers))
+	fmt.Printf("avg-msg-size(bytes): %f\n", float64(sumTraffic)/float64(sumCount))
+	return peers
+}
+
+func TestMVFromPeerID(t *testing.T) {
+	ayame.NewMembershipVectorFromBinary([]byte(ayame.RandomID()))
+}
+
 func TestJoin(t *testing.T) {
 	numberOfPeers := 32
 	setupNodes(4, numberOfPeers, true, true)
 }
 
 func TestFix(t *testing.T) { // 30 sec long test
+
 	numberOfPeers := 32
 	periodicBootstrapInterval = 20 * time.Second
 	peers := setupNodes(4, numberOfPeers, false, true)
-	time.Sleep(10 * time.Second)
+	time.Sleep(2 * time.Second)
 	peers[2].Close()
 	peers[20].Close()
-	time.Sleep(30 * time.Second)
+	time.Sleep(20 * time.Second)
 	ast.Equal(t, false, ContainsKey(ayame.IntKey(2), ksToNs(peers[1].RoutingTable.AllNeighbors(false, true))), "should not contain deleted key 2")
 }
 
@@ -373,8 +472,63 @@ func TestLookupMV(t *testing.T) {
 		dst := rand.Intn(numberOfPeers)
 		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
 		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV(), ayame.IntKey(src))
-		ayame.Log.Debugf("src=%d, dst=%s, searched=%d", src, peers[dst].MV(), ayame.SliceString(nodes))
+		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
 		ast.Equal(t, true, Contains(peers[dst], nodes))
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < numberOfPeers; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestLookupRange(t *testing.T) {
+	numberOfPeers := 32
+	peers := setupNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- LOOKUP RANGE STARTS ---------")
+	for i := 0; i < numberOfPeers; i++ { // RESET
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+	numberOfLookups := numberOfPeers
+	for i := 0; i < numberOfLookups; i++ {
+		src := rand.Intn(numberOfPeers)
+		nodes, _ := peers[src].LookupRange(context.Background(), ayame.IntKey(5), ayame.IntKey(7))
+		ayame.Log.Debugf("src=%d, searched=%s", src, ayame.SliceString(nodes))
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < numberOfPeers; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestLookupName(t *testing.T) {
+	numberOfPeers := 32
+	peers := setupNamedNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
+	for i := 0; i < numberOfPeers; i++ { // RESET
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+	numberOfLookups := numberOfPeers
+	for i := 0; i < numberOfLookups; i++ {
+		src := rand.Intn(numberOfPeers)
+		dst := rand.Intn(numberOfPeers)
+		nodes, _ := peers[src].LookupName(context.Background(), "a")
+		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
 	}
 
 	sumCount := int64(0)

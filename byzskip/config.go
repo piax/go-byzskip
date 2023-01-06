@@ -3,8 +3,8 @@ package byzskip
 import (
 	"fmt"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 )
