@@ -22,6 +22,15 @@ message Key {
     bytes body = 2;
 }
 
+message Range {
+    Key start = 1;
+    bool start_inclusive = 2;
+    Key startExtent = 3;
+    Key end = 4;
+    bool end_inclusive = 5;
+    Key endExtent = 6;
+}
+
 enum ConnectionType { // 
 	// sender does not have a connection to peer, and no extra information (default)
 	NOT_CONNECTED = 0;
