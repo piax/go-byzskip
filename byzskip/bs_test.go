@@ -11,6 +11,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -213,7 +214,7 @@ func TestExtraRight(t *testing.T) {
 	max := lst[2]
 	ast.Equal(t, true, base.Less(max.Key()))
 	ast.Equal(t, true, base.LessOrEquals(max.Key()))
-	ast.Equal(t, true, hasExtraRight(base, max.Key(), lst))
+	ast.NotEqual(t, nil, EndExtentIn(ayame.NewRangeKey(base, true, max.Key(), true), lst))
 }
 
 func TestPickExtra(t *testing.T) {
@@ -229,8 +230,10 @@ func TestPickExtra(t *testing.T) {
 	}
 	base := IntKeyMV{key: 1, Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0, 0, 0, 1})}
 	SortC(base.Key(), lst)
-	l := pickRangeFrom(ayame.IntKey(4), ayame.IntKey(4), lst, false)
+	l := pickRangeFrom(ayame.IntKey(2), ayame.NewRangeKey(ayame.IntKey(4), true, ayame.IntKey(5), true), lst)
 	fmt.Println(ayame.SliceString(l))
+	l2 := pickRangeFrom(ayame.IntKey(2), ayame.NewRangeKey(ayame.IntKey(4), true, ayame.IntKey(5), true), lst)
+	fmt.Println(ayame.SliceString(l2))
 }
 
 func TestSufficient(t *testing.T) {
@@ -488,6 +491,7 @@ func TestLookupMV(t *testing.T) {
 }
 
 func TestLookupRange(t *testing.T) {
+	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, false, true)
 	ayame.Log.Debugf("------- LOOKUP RANGE STARTS ---------")
@@ -499,8 +503,8 @@ func TestLookupRange(t *testing.T) {
 	numberOfLookups := numberOfPeers
 	for i := 0; i < numberOfLookups; i++ {
 		src := rand.Intn(numberOfPeers)
-		nodes, _ := peers[src].LookupRange(context.Background(), ayame.IntKey(5), ayame.IntKey(7))
-		ayame.Log.Debugf("src=%d, searched=%s", src, ayame.SliceString(nodes))
+		nodes, _ := peers[src].LookupRange(context.Background(), ayame.NewRangeKey(ayame.IntKey(5), true, ayame.IntKey(7), true))
+		fmt.Printf("src=%d, searched=%s\n", src, ayame.SliceString(nodes))
 	}
 
 	sumCount := int64(0)
@@ -515,6 +519,7 @@ func TestLookupRange(t *testing.T) {
 }
 
 func TestLookupName(t *testing.T) {
+	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	peers := setupNamedNodes(4, numberOfPeers, false, true)
 	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
@@ -522,13 +527,14 @@ func TestLookupName(t *testing.T) {
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+
 	}
 	numberOfLookups := numberOfPeers
 	for i := 0; i < numberOfLookups; i++ {
 		src := rand.Intn(numberOfPeers)
-		dst := rand.Intn(numberOfPeers)
 		nodes, _ := peers[src].LookupName(context.Background(), "a")
-		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
+		fmt.Printf("src=%d, searched=%s\n, len=%d", src, ayame.SliceString(nodes), len(nodes))
+		ast.Equal(t, 13, len(nodes), "expected 13")
 	}
 
 	sumCount := int64(0)
