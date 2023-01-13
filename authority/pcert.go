@@ -7,7 +7,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-base32"
 	"github.com/piax/go-byzskip/ayame"
-	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
@@ -35,7 +34,7 @@ func UnmarshalStringToKey(keyStr string) (ayame.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p2p.NewKey(key), nil
+	return ayame.NewKey(key), nil
 }
 
 func MarshalPubKeyToString(pub ci.PubKey) (string, error) {
@@ -92,7 +91,7 @@ func (r *PCert) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	r.id, _ = peer.Decode(aux.AliasId)
-	r.Key = p2p.NewKey(aux.AliasKey)
+	r.Key = ayame.NewKey(aux.AliasKey)
 	r.Mv = ayame.NewMembershipVectorFromBinary(aux.AliasMv)
 	return nil
 }
