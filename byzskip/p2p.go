@@ -102,11 +102,11 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 func ConvertTableIndex(idx *pb.TableIndex) *TableIndex {
 	var minKey ayame.Key = nil
 	if idx.Min != nil {
-		minKey = p2p.NewKey(idx.Min)
+		minKey = ayame.NewKey(idx.Min)
 	}
 	var maxKey ayame.Key = nil
 	if idx.Max != nil {
-		maxKey = p2p.NewKey(idx.Max)
+		maxKey = ayame.NewKey(idx.Max)
 	}
 	return &TableIndex{
 		Min:   minKey,
@@ -126,14 +126,14 @@ func ConvertTableIndexList(idxs []*pb.TableIndex) []*TableIndex {
 func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
 	if req.ClosestIndex == nil { // Lookup
 		return &NeighborRequest{
-			Key:               p2p.NewKey(req.Key),
+			Key:               ayame.NewKey(req.Key),
 			MV:                ayame.NewMembershipVectorFromBinary(req.MV),
 			ClosestIndex:      nil,
 			NeighborListIndex: nil,
 		}
 	}
 	return &NeighborRequest{
-		Key:               p2p.NewKey(req.Key),
+		Key:               ayame.NewKey(req.Key),
 		MV:                ayame.NewMembershipVectorFromBinary(req.MV),
 		ClosestIndex:      ConvertTableIndex(req.ClosestIndex),
 		NeighborListIndex: ConvertTableIndexList(req.NeighborListIndex),
@@ -151,7 +151,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			ev = NewBSUnicastResEvent(author, mes.Data.Id, mes.Data.Record[0].Value)
 			ev.(*BSUnicastResEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		} else {
-			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, p2p.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
+			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, ayame.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
 			ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		}
 		p, _ := ConvertPeer(self, mes.Sender)
@@ -162,7 +162,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev = &BSFindNodeMVEvent{
 			isResponse:         mes.IsResponse,
 			isTopmost:          tm,
-			src:                p2p.NewKey(mes.Data.Key),
+			src:                ayame.NewKey(mes.Data.Key),
 			mv:                 ayame.NewMembershipVectorFromBinary(mes.Data.Mv),
 			messageId:          mes.Data.Id,
 			neighbors:          ConvertPeers(self, mes.Data.CloserPeers),
@@ -176,7 +176,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	case pb.MessageType_FIND_RANGE:
 		ev = &BSFindRangeEvent{
 			isResponse:         mes.IsResponse,
-			max:                p2p.NewKey(mes.Data.Key),
+			rng:                ayame.NewKey(mes.Data.Key),
 			messageId:          mes.Data.Id,
 			targets:            ConvertPeers(self, mes.Data.CloserPeers),
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
@@ -208,7 +208,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	case pb.MessageType_DEL_NODE:
 		ev = &BSDelNodeEvent{
 			MessageId: mes.Data.Id,
-			TargetKey: p2p.NewKey(mes.Data.Key),
+			TargetKey: ayame.NewKey(mes.Data.Key),
 		}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
