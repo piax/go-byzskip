@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	MembershipVectorSize = 32
-	DefaultAlpha         = 2
+	DefaultAlpha = 2
 )
+
+var MembershipVectorSize = 32
 
 type MembershipVector struct {
 	Alpha int
