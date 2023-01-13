@@ -1010,23 +1010,22 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 func (n *BSNode) LookupName(ctx context.Context, name string) ([]*BSNode, error) {
 	start := ayame.NewUnifiedKeyFromString(name, ayame.ZeroID())
 	end := ayame.NewUnifiedKeyFromString(name, ayame.MaxID())
-	return n.LookupRange(ctx, start, end)
+	return n.LookupRange(ctx, ayame.NewRangeKey(start, false, end, false))
 }
 
-func (n *BSNode) LookupRange(ctx context.Context, start, end ayame.Key) ([]*BSNode, error) {
-	closests, err := n.Lookup(ctx, start)
+func (n *BSNode) LookupRange(ctx context.Context, rng *ayame.RangeKey) ([]*BSNode, error) {
+	closests, err := n.Lookup(ctx, rng.Start())
 	if err != nil {
 		return nil, err
 	}
 	cl := nsToKs(closests)
-	ayame.Log.Debugf("start=%s obtained : %s", start, ayame.SliceString(cl))
 	//	SortC(start, cl)
 	//	ayame.ReverseSlice(cl)
-	ayame.Log.Debugf("scan starts from: %s to: %s", cl[0].Key(), end)
-	return n.Scan(ctx, closests, cl[0].Key(), end)
+	ayame.Log.Debugf("scan starts from: %s to: %s", cl[0].Key(), rng.End())
+	return n.Scan(ctx, closests, rng)
 }
 
-func (n *BSNode) Scan(ctx context.Context, start []*BSNode, min, max ayame.Key) ([]*BSNode, error) {
+func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey) ([]*BSNode, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, time.Duration(LOOKUP_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
 
@@ -1034,22 +1033,25 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, min, max ayame.Key) 
 		if err != nil {
 			return nil, err
 		} */
+
+	curRange := ayame.NewRangeKey(start[0].Key(), true, rng.End(), rng.EndInclusive())
 	targets := start
 	results := make([]*BSNode, len(start))
 	copy(results, start)
 	queried := []*BSNode{}
 	lookupCh := make(chan interface{})
+	var endExtent ayame.Key
 
 	for !ayame.IsSubsetOf(targets, queried) {
 		reqCount := 0
 		nexts := ayame.Exclude(targets, queried)
-
+		curRange.SetEndExtent(endExtent)
 		for _, c := range nexts {
 			node := c
 			reqCount++
 			id := NextId()
-			ayame.Log.Debugf("sending FindRange to %s", node)
-			go func() { n.findRange(lookupCtx, lookupCh, node, max, id) }()
+			ayame.Log.Debugf("sending FindRange to %s, with range %s", node, curRange)
+			go func() { n.findRange(lookupCtx, lookupCh, node, curRange, id) }()
 		}
 
 	L:
@@ -1073,18 +1075,25 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, min, max ayame.Key) 
 					continue L
 				}
 				ayame.Log.Debugf("%s: got response from %s: %s", n.Key(), response.sender.Key(), ayame.SliceString(response.targets))
-				t := nsToKs(response.targets)
-				if hasExtraRight(min, max, t) { // finished the search
-					results = ayame.AppendIfAbsent(results, response.targets...)
-					ayame.Log.Debugf("got enough response: %s", ayame.SliceString(results))
+
+				// XXX need a filter?
+				filtered := response.targets
+
+				//if rng.ContainsKey(response.sender.Key()) {
+				results = ayame.AppendIfAbsent(results, response.sender)
+
+				et := EndExtentIn(curRange, results)
+				if et != nil {
+					endExtent = et
+					ayame.Log.Debugf("got end extent %s: %s", et, ayame.SliceString(results))
 				}
-				filtered := pickRangeFrom(min, max, t, false)
+				//}
 				//if ContainsMV(mv, response.neighbors) {
 				//	results = ayame.AppendIfAbsent(results, response.neighbors...)
 				//}
 				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
 				queried = ayame.AppendIfAbsent(queried, response.sender)
-				targets = ayame.AppendIfAbsent(targets, ksToNs(filtered)...)
+				targets = ayame.AppendIfAbsent(targets, filtered...)
 			}
 		}
 	}
@@ -1253,8 +1262,8 @@ func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev aya
 	//}()
 }
 
-func (n *BSNode) findRange(ctx context.Context, findCh chan interface{}, node *BSNode, max ayame.Key, requestId string) {
-	ev := NewBSFindRangeReqEvent(n, requestId, max)
+func (n *BSNode) findRange(ctx context.Context, findCh chan interface{}, node *BSNode, rng *ayame.RangeKey, requestId string) {
+	ev := NewBSFindRangeReqEvent(n, requestId, rng)
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
 	ch := make(chan interface{}, 1)
@@ -1489,10 +1498,11 @@ func (n *BSNode) handleFindRangeRequest(ctx context.Context, ev ayame.SchedEvent
 	n.rtMutex.RLock()
 	targets := n.RoutingTable.GetNeighborLists()[0].Neighbors[0] // Right
 	// CASE1: start, ... end, ... key
-	// CASE2: key=max ... end
-	targets = pickRangeFrom(n.Key(), ue.max, targets, true)
+	// CASE2: end, ... key
+	rng := ue.rng.(*ayame.RangeKey)
+	//ayame.Log.Infof("%s: rng=%s right neighbors=%s\n", n.key, ue.rng, ayame.SliceString(targets))
+	targets = pickRangeFrom(n.Key(), rng, targets)
 	n.rtMutex.RUnlock()
-	ayame.Log.Debugf("%s: max=%s returns targets=%s\n", n.key, ue.max, ayame.SliceString(targets))
 	res := NewBSFindRangeResEvent(n, ue, ksToNs(targets))
 	res.SetSender(n)
 	return res
