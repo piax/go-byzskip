@@ -166,7 +166,7 @@ func (ue *BSUnicastEvent) Encode() *pb.Message {
 	ret.IsResponse = false
 	ret.Data.Path = peers
 	ret.Data.SenderAppData = strconv.Itoa(ue.level)
-	ret.Data.Record = []*pb.Record{&pb.Record{Value: ue.Payload}}
+	ret.Data.Record = []*pb.Record{{Value: ue.Payload}}
 	return ret
 }
 
@@ -329,7 +329,7 @@ func (ue *BSUnicastResEvent) Encode() *pb.Message {
 	ret.IsResponse = true
 	ret.Data.Path = peers
 	ret.Data.SenderAppData = ""
-	ret.Data.Record = []*pb.Record{&pb.Record{Value: ue.Payload}}
+	ret.Data.Record = []*pb.Record{{Value: ue.Payload}}
 	return ret
 }
 
