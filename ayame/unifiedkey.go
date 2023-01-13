@@ -101,7 +101,15 @@ func (t UnifiedKey) String() string {
 	n := make([]byte, last+1)
 	copy(n, b)
 	str := url.QueryEscape(string(n))
-	str = str + UNIFIED_KEY_SEP + t.id.Pretty()
+	str = str + UNIFIED_KEY_SEP
+
+	if t.id == peer.ID([]byte{0}) {
+		str += "<MIN_ID>"
+	} else if t.id == peer.ID([]byte{}) {
+		str += "<MAX_ID>"
+	} else {
+		str += t.id.Pretty()
+	}
 	//return "<" + str[0:15] + ">" // for readability
 	return str
 }
