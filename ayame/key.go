@@ -11,7 +11,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-base32"
-	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
 
 type Key interface {
@@ -22,7 +22,28 @@ type Key interface {
 	// Suger.
 	LessOrEquals(elem interface{}) bool
 	String() string
-	Encode() *p2p.Key
+	Encode() *pb.Key
+}
+
+func NewKey(key *pb.Key) Key {
+	if key == nil {
+		return nil
+	}
+	switch key.Type {
+	case pb.KeyType_FLOAT:
+		return NewFloatKeyFromBytes(key.Body)
+	case pb.KeyType_INT:
+		return NewIntKeyFromBytes(key.Body)
+	case pb.KeyType_STRING:
+		return NewStringKeyFromBytes(key.Body)
+	case pb.KeyType_ID:
+		return NewIdKeyFromBytes(key.Body)
+	case pb.KeyType_UNIFIED:
+		return NewUnifiedKeyFromBytes(key.Body)
+	case pb.KeyType_RANGE:
+		return NewRangeKeyFromBytes(key.Body)
+	}
+	return nil
 }
 
 // Integer Key
@@ -53,9 +74,9 @@ func (t IntKey) String() string {
 	return strconv.Itoa(int(t))
 }
 
-func (t IntKey) Encode() *p2p.Key {
-	return &p2p.Key{
-		Type: p2p.KeyType_INT,
+func (t IntKey) Encode() *pb.Key {
+	return &pb.Key{
+		Type: pb.KeyType_INT,
 		Body: IntToByteArray(int(t))}
 }
 
@@ -105,12 +126,12 @@ func (t FloatKey) String() string {
 	return fmt.Sprintf("%f", float64(t))
 }
 
-func (t FloatKey) Encode() *p2p.Key {
+func (t FloatKey) Encode() *pb.Key {
 	bits := math.Float64bits(float64(t))
 	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, bits)
-	return &p2p.Key{
-		Type: p2p.KeyType_FLOAT,
+	return &pb.Key{
+		Type: pb.KeyType_FLOAT,
 		Body: bytes}
 }
 
@@ -147,10 +168,10 @@ func (t StringKey) String() string {
 	return string(t)
 }
 
-func (t StringKey) Encode() *p2p.Key {
+func (t StringKey) Encode() *pb.Key {
 	bytes := []byte(t)
-	return &p2p.Key{
-		Type: p2p.KeyType_STRING,
+	return &pb.Key{
+		Type: pb.KeyType_STRING,
 		Body: bytes}
 }
 
@@ -196,10 +217,10 @@ func (t IdKey) String() string {
 	return "<" + str[0:15] + ">" // for readability
 }
 
-func (t IdKey) Encode() *p2p.Key {
+func (t IdKey) Encode() *pb.Key {
 	bytes := []byte(t)
-	return &p2p.Key{
-		Type: p2p.KeyType_ID,
+	return &pb.Key{
+		Type: pb.KeyType_ID,
 		Body: bytes}
 }
 
