@@ -443,32 +443,48 @@ func MVString(nodes []KeyMV) string {
 	return ret
 }
 
-func hasExtraRight(src, max ayame.Key, nodes []KeyMV) bool {
+// returns end-extent in nodes for range rng (without extent)
+func EndExtentIn[T KeyMV](rng *ayame.RangeKey, nodes []T) ayame.Key {
 	// RIGHT_HALF_K
 	count := 0
+	var ret ayame.Key
 	for _, n := range nodes {
-		if IsOrdered(src, false, max, n.Key(), false) {
-			ayame.Log.Debugf("is ordered %s, %s, %s", src, max, n.Key())
+		if ayame.IsOrdered(rng.Start(), rng.StartInclusive(), rng.End(), n.Key(), rng.EndInclusive()) {
+			ayame.Log.Debugf("is ordered %s, %s", rng, n.Key())
 			count++
+			if count >= RIGHT_HALF_K {
+				ret = n.Key()
+			}
 		}
 	}
-	return count >= RIGHT_HALF_K
+	return ret
 }
 
-func pickRangeFrom(src, max ayame.Key, nodes []KeyMV, withExtra bool) []KeyMV {
+func pickRangeFrom[T KeyMV](src ayame.Key, rng *ayame.RangeKey, nodes []T) []KeyMV {
 	ret := []KeyMV{}
+	endExtent := rng.EndExtent()
 	count := 0
+	ayame.Log.Infof("start:%s end:%s, nodes: %s, endExtent: %s\n", rng.Start(), rng.End(), ayame.SliceString(nodes), endExtent)
 L:
 	for _, n := range nodes {
-		if IsOrdered(src, false, n.Key(), max, false) {
+		if ayame.IsOrdered(src, true, n.Key(), rng.End(), rng.EndInclusive()) &&
+			!ayame.IsOrdered(rng.Start(), rng.StartInclusive(), rng.End(), n.Key(), rng.EndInclusive()) {
+			ayame.Log.Infof("ORDERED: src:%s n: %s, max:%s, count=%d\n", rng.Start(), n, rng.End(), count)
 			ret = append(ret, n)
-		} else if withExtra && IsOrdered(src, false, max, n.Key(), false) {
+		} else if endExtent != nil && n.Key().Less(endExtent) {
 			ret = append(ret, n)
+		} else if ayame.IsOrdered(src, true, rng.End(), n.Key(), rng.EndInclusive()) {
 			count++
+			if endExtent != nil && !n.Key().LessOrEquals(endExtent) {
+				ayame.Log.Infof("EXEED (NO USE): rng: %s, n: %s, count=%d\n", rng, n.Key(), count)
+			} else {
+				ayame.Log.Infof("EXEED AND NEW: rng:%s, n: %s, count=%d\n", rng, n.Key(), count)
+				ret = append(ret, n)
+			}
 			if count >= RIGHT_HALF_K {
 				break L
 			}
-		} else if !withExtra { // finish.
+		} else { // finish.
 			break L
 		}
 	}
@@ -512,7 +528,7 @@ func (rts *NeighborList) pickupKNodesMV(target *ayame.MembershipVector, src ayam
 	for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
 		curNode := nodes[i].Key()
 		nextNode := nodes[i+1].Key()
-		if IsOrdered(curNode, true, src, nextNode, false) {
+		if ayame.IsOrdered(curNode, true, src, nextNode, false) {
 			ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]))
 			return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], false
 		}
@@ -1222,6 +1238,7 @@ func isOrderedSimple(a, b, c ayame.Key) bool {
 	return false
 }
 
+/* moved to ayame
 func isOrderedInclusive(a, b, c ayame.Key) bool {
 	if a.LessOrEquals(b) && b.LessOrEquals(c) {
 		return true
@@ -1251,7 +1268,7 @@ func IsOrdered(start ayame.Key, startInclusive bool, val ayame.Key, end ayame.Ke
 		}
 	}
 	return rc
-}
+}*/
 
 func isOrderedInclusiveMV(a, b, c *ayame.MembershipVector) bool {
 	if a.LessOrEquals(b) && b.LessOrEquals(c) {
@@ -1461,7 +1478,7 @@ func (rts *NeighborList) PickupKNodes(target ayame.Key) ([]KeyMV, bool) {
 			curNode := nodes[i].Key()
 			nextNode := nodes[i+1].Key()
 			//ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
-			if IsOrdered(curNode, true, target, nextNode, false) {
+			if ayame.IsOrdered(curNode, true, target, nextNode, false) {
 				return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], true
 			}
 		}
