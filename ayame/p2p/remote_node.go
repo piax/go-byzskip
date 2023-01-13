@@ -143,7 +143,7 @@ func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 	return &RemoteNode{
 		self:  self,
 		id:    id,
-		key:   NewKey(p.Key),
+		key:   ayame.NewKey(p.Key),
 		addrs: Addresses(p.Addrs),
 		cert:  p.Cert,
 		mv:    ayame.NewMembershipVectorFromBinary(p.Mv),
