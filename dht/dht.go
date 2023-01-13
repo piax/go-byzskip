@@ -114,7 +114,7 @@ func (dht *BSDHT) HandleGetProvidersRequest(ctx context.Context, ev *BSGetProvid
 	peers := []*pb.Peer{}
 	for _, p := range provs {
 		peers = append(peers, &pb.Peer{
-			Id:    peer.Encode(p.ID),
+			Id:    p.ID.String(),
 			Addrs: p2p.EncodeAddrs(p.Addrs),
 		})
 	}
@@ -347,7 +347,7 @@ func (dht *BSDHT) sendGetValue(ctx context.Context, p ayame.Node, key string) (*
 	if dht.Node.Id() == p.Id() { // put to self.
 		return dht.getRecordFromDatastore(ctx, mkDsKey(key))
 	}
-	mes := NewBSGetEvent(dht.Node, dht.Node.NewMessageId(), true, []*pb.Record{&pb.Record{Key: []byte(key)}})
+	mes := NewBSGetEvent(dht.Node, dht.Node.NewMessageId(), true, []*pb.Record{{Key: []byte(key)}})
 	resp := dht.Node.SendRequest(ctx, p, mes)
 	if ev, ok := resp.(*BSGetEvent); ok {
 		return ev.Record[0], nil
