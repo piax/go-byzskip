@@ -20,7 +20,7 @@ import (
 
 	"github.com/libp2p/go-msgio"
 	"github.com/libp2p/go-msgio/protoio"
-	"github.com/piax/go-byzskip/ayame"
+	ayame "github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
 
 	"github.com/gogo/protobuf/proto"
@@ -222,22 +222,6 @@ func (n *P2PNode) Equals(o ayame.Node) bool {
 
 func (n *P2PNode) SetChild(c ayame.Node) {
 	n.child = c
-}
-
-func NewKey(key *p2p.Key) ayame.Key {
-	switch key.Type {
-	case p2p.KeyType_FLOAT:
-		return ayame.NewFloatKeyFromBytes(key.Body)
-	case p2p.KeyType_INT:
-		return ayame.NewIntKeyFromBytes(key.Body)
-	case p2p.KeyType_STRING:
-		return ayame.NewStringKeyFromBytes(key.Body)
-	case p2p.KeyType_ID:
-		return ayame.NewIdKeyFromBytes(key.Body)
-	case p2p.KeyType_UNIFIED:
-		return ayame.NewUnifiedKeyFromBytes(key.Body)
-	}
-	return nil
 }
 
 // a stream handler
