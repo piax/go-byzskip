@@ -115,11 +115,11 @@ func fastJoinAllSub(d int, nodes []bs.KeyMV) error {
 						last := buf[p.MV().Val[level]][bs.K-2]
 						if d == bs.RIGHT {
 							merged = funk.Filter(merged, func(x bs.KeyMV) bool {
-								return bs.IsOrdered(p.Key(), false, x.Key(), last.Key(), true)
+								return ayame.IsOrdered(p.Key(), false, x.Key(), last.Key(), true)
 							}).([]bs.KeyMV)
 						} else { // LEFT
 							merged = funk.Filter(merged, func(x bs.KeyMV) bool {
-								return bs.IsOrdered(last.Key(), true, x.Key(), p.Key(), false)
+								return ayame.IsOrdered(last.Key(), true, x.Key(), p.Key(), false)
 							}).([]bs.KeyMV)
 						}
 					}
