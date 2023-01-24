@@ -162,6 +162,9 @@ func (n *BSNode) Close() error {
 	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
 	n.Parent.Close()
 	// process close
+	if n.proc == nil {
+		panic("implementation error?")
+	}
 	return n.proc.Close()
 }
 
@@ -1281,9 +1284,9 @@ func (n *BSNode) findRange(ctx context.Context, findCh chan interface{}, node *B
 		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
-			findCh <- &FindNodeMVResponse{sender: node, isFailure: true}
+			findCh <- &FindRangeResponse{sender: node, isFailure: true}
 		} else {
-			findCh <- &FindNodeMVResponse{}
+			findCh <- &FindRangeResponse{}
 		}
 	case response := <-ch: // FindNode finished
 		ayame.Log.Debugf("%s: FindNode ended normally", n)

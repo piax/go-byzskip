@@ -85,8 +85,9 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
 	if self.VerifyIntegrity {
 		if self.Validator != nil {
-			ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
+			//ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
 			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
+				ayame.Log.Debugf("remote peer %s validated", parent.Id()) // XXX should be cached for performance.
 				return NewWithParent(parent, NewSkipRoutingTable, false), nil
 			}
 			ayame.Log.Debugf("validation failed")
@@ -169,7 +170,8 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
 		ev.SetSender(p)
@@ -182,7 +184,8 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
 		ev.SetSender(p)
@@ -201,7 +204,8 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
 		ev.SetSender(p)
@@ -212,7 +216,8 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		}
 		p, err := ConvertPeer(self, mes.Sender)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
+			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			return nil
 		}
 		ev.SetSender(p)
 	}

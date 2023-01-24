@@ -110,14 +110,14 @@ func TestUnifiedKey(t *testing.T) {
 	fmt.Println(key.String())
 	key = ayame.NewUnifiedKeyFromStringWithJitter("foo.example.com")
 	fmt.Println(key.String())
-	k1 := ayame.NewUnifiedKeyFromString("bar.example.com", ayame.RandomID()).(ayame.UnifiedKey)
-	k2 := ayame.NewUnifiedKeyFromString("baz.example.co.jp", ayame.RandomID()).(ayame.UnifiedKey)
+	k1 := ayame.NewUnifiedKeyFromString("bar.example.com", ayame.RandomID()).(*ayame.UnifiedKey)
+	k2 := ayame.NewUnifiedKeyFromString("baz.example.co.jp", ayame.RandomID()).(*ayame.UnifiedKey)
 	key = ayame.NewUnifiedKeyBetween(k1, k2)
 	fmt.Println(key.String())
 	fmt.Println(k1.Less(key))
 	ast.Equal(t, true, k1.Less(key), "expected less")
 	ast.Equal(t, true, key.Less(k2), "expected less")
-	k3 := ayame.NewUnifiedKeyFromString("foo.example.com", ayame.RandomID()).(ayame.UnifiedKey)
+	k3 := ayame.NewUnifiedKeyFromString("foo.example.com", ayame.RandomID()).(*ayame.UnifiedKey)
 	pk := k3.Encode()
 	k4dash := ayame.NewUnifiedKeyFromBytes(pk.Body)
 	ast.Equal(t, k3, k4dash, "expected to be equal")
@@ -131,4 +131,16 @@ func TestUnifiedKey(t *testing.T) {
 	ast.Equal(t, true, key0.Less(key3), "expected less")
 	ast.Equal(t, true, key0.LessOrEquals(key3), "expected less or equals")
 	ast.Equal(t, true, key2.LessOrEquals(key3), "expected less or equals")
+
+	key4 := ayame.NewUnifiedRangeKeyForPrefix("www")
+
+	ast.Equal(t, true, key4.ContainsKey(ayame.NewUnifiedKeyFromString("www.example.com", ayame.MaxID())))
+	ast.Equal(t, false, key4.ContainsKey(ayame.NewUnifiedKeyFromString("ww.example.com", ayame.MaxID())))
+	ast.Equal(t, true, key4.ContainsKey(ayame.NewUnifiedKeyFromString("www", ayame.MaxID())))
+
+	key5 := ayame.NewUnifiedRangeKeyForPrefix("あい")
+
+	ast.Equal(t, true, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あいうえお", ayame.MaxID())))
+	ast.Equal(t, false, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あきすての", ayame.MaxID())))
+	ast.Equal(t, true, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あいちけん", ayame.MaxID())))
 }

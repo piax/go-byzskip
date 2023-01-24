@@ -46,9 +46,15 @@ func WebAuthValidate(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert
 }
 
 func authWeb(url string, id peer.ID, key ayame.Key) (*PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", MarshalKeyToString(key), id.Pretty()))
+	var keyStr string
+	if key == nil {
+		keyStr = ""
+	} else {
+		keyStr = MarshalKeyToString(key)
+	}
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", keyStr, id.Pretty()))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("authority error: %s", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
@@ -58,7 +64,7 @@ func authWeb(url string, id peer.ID, key ayame.Key) (*PCert, error) {
 	var c PCert
 	err = json.Unmarshal(body, &c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("participation certificate error: %s", err)
 	}
 	return &c, nil
 }

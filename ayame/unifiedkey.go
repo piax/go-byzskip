@@ -47,8 +47,8 @@ func RandomID() peer.ID {
 	return peer.ID(hash)
 }
 
-func (t UnifiedKey) Less(elem interface{}) bool {
-	if v, ok := elem.(UnifiedKey); ok {
+func (t *UnifiedKey) Less(elem interface{}) bool {
+	if v, ok := elem.(*UnifiedKey); ok {
 		cmp := t.val.Cmp(v.val)
 		if cmp == 0 {
 			if len(v.id) == 0 { // max
@@ -64,16 +64,16 @@ func (t UnifiedKey) Less(elem interface{}) bool {
 	panic("not a unified key comparison")
 }
 
-func (t UnifiedKey) Equals(elem any) bool {
-	if v, ok := elem.(UnifiedKey); ok {
+func (t *UnifiedKey) Equals(elem any) bool {
+	if v, ok := elem.(*UnifiedKey); ok {
 		return t.val.Cmp(v.val) == 0 && bytes.Equal([]byte(t.id), []byte(v.id))
 	}
 	//panic(fmt.Sprintf("not a unified key comparison %s and %v", t, elem))
 	return false
 }
 
-func (t UnifiedKey) LessOrEquals(elem interface{}) bool {
-	if v, ok := elem.(UnifiedKey); ok {
+func (t *UnifiedKey) LessOrEquals(elem interface{}) bool {
+	if v, ok := elem.(*UnifiedKey); ok {
 		cmp := t.val.Cmp(v.val)
 		if cmp == 0 {
 			if len(v.id) == 0 { // max
@@ -89,7 +89,30 @@ func (t UnifiedKey) LessOrEquals(elem interface{}) bool {
 	panic(fmt.Sprintf("not a unified key comparison %s and %v", t, elem))
 }
 
-func (t UnifiedKey) String() string {
+func (t *UnifiedKey) UnescapedString() string {
+	b := t.val.Bytes()
+	last := 0
+	for i := 0; i < len(b); i++ {
+		if b[i] != 0 {
+			last = i
+		}
+	}
+	n := make([]byte, last+1)
+	copy(n, b)
+	str := string(n)
+	str = str + UNIFIED_KEY_SEP
+
+	if t.id == peer.ID([]byte{0}) {
+		str += "<MIN_ID>"
+	} else if t.id == peer.ID([]byte{}) {
+		str += "<MAX_ID>"
+	} else {
+		str += t.id.Pretty()
+	}
+	return str
+}
+
+func (t *UnifiedKey) String() string {
 	//str := base32.RawStdEncoding.EncodeToString(t.val.Bytes())
 	b := t.val.Bytes()
 	last := 0
@@ -114,7 +137,7 @@ func (t UnifiedKey) String() string {
 	return str
 }
 
-func (t UnifiedKey) Encode() *p2p.Key {
+func (t *UnifiedKey) Encode() *p2p.Key {
 	val := make([]byte, UNIFIED_KEY_LENGTH/8+len(t.id))
 	kb := t.val.Bytes()
 	copy(val, kb)
@@ -127,12 +150,16 @@ func (t UnifiedKey) Encode() *p2p.Key {
 	}
 }
 
-func (t UnifiedKey) Value() []byte {
+func (t *UnifiedKey) Value() []byte {
 	return t.val.Bytes()
 }
 
-func (t UnifiedKey) ID() peer.ID {
+func (t *UnifiedKey) ID() peer.ID {
 	return t.id
+}
+
+func (t *UnifiedKey) SetID(i peer.ID) {
+	t.id = i
 }
 
 //func DecodeUnifiedKey(pk *p2p.Key) Key {
@@ -172,7 +199,19 @@ func adjustBytes(b []byte) ([]byte, error) {
 	return ret, nil
 }
 
-func NewUnifiedKeyBetween(start, end UnifiedKey) Key {
+func NewUnifiedRangeKeyForPrefix(prefix string) *RangeKey {
+	s := NewUnifiedKeyFromString(prefix, ZeroID())
+	eBytes := make([]byte, UNIFIED_KEY_LENGTH/8)
+	p := []byte(prefix)
+	copy(eBytes, p)
+	for i := len(p); i < UNIFIED_KEY_LENGTH/8; i++ {
+		eBytes[i] = 0xff
+	}
+	e := NewUnifiedKeyFromByteValue(eBytes, MaxID())
+	return NewRangeKey(s, true, e, true)
+}
+
+func NewUnifiedKeyBetween(start, end *UnifiedKey) Key {
 	// need to copy the big integer struct because Sub and Add are destructive
 	sint := new(big.Int)
 	sint = sint.Set(start.val)
@@ -213,7 +252,7 @@ func NewRandomUnifiedKey() Key {
 }
 
 func NewUnifiedKey(v *big.Int, id peer.ID) Key {
-	return UnifiedKey{val: v, id: id}
+	return &UnifiedKey{val: v, id: id}
 }
 
 func NewUnifiedKeyFromBytes(arr []byte) Key {

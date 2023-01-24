@@ -190,12 +190,12 @@ func IfNeededSign(verifyIntegrity bool, cert []byte) []byte {
 
 func (n *P2PNode) Encode() *p2p.Peer {
 	return &p2p.Peer{
-		Id:         peer.Encode(n.ID()),
+		Id:         n.ID().String(),
 		Addrs:      EncodeAddrs(n.Addrs()),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
-		Cert:       IfNeededSign(n.VerifyIntegrity, n.Cert), // XXX not yet
-		Connection: p2p.ConnectionType_CONNECTED,            // myself is always connected
+		Cert:       IfNeededSign(n.VerifyIntegrity, n.Cert),
+		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
 }
 
@@ -263,10 +263,14 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		valid = n.authenticateMessage(mes, s)
 	}
 	ev := n.converter(mes, n, valid)
-	// XXX should be TempAddrTTL
-	if ev.Sender() == nil {
-		panic("sender is nil")
+	if ev == nil {
+		return // Failed to convert message. Ignore.
 	}
+	if ev.Sender() == nil {
+		return // Failed to convert message. Ignore.
+		//panic("sender is nil")
+	}
+	// XXX should be TempAddrTTL
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.PermanentAddrTTL)
 	if mes.IsRequest {
 		resp := ev.ProcessRequest(context.TODO(), n.child)

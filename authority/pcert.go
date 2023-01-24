@@ -25,6 +25,9 @@ func MarshalKeyToString(key ayame.Key) string {
 }
 
 func UnmarshalStringToKey(keyStr string) (ayame.Key, error) {
+	if len(keyStr) == 0 {
+		return nil, nil // empty key
+	}
 	key := &pb.Key{}
 	buf, err := codec.DecodeString(keyStr)
 	if err != nil {
