@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/montanaflynn/stats"
 	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
@@ -145,7 +145,8 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 	index := 0 // introducer index
 	prev := 0
 	count := 0
-	for _, n := range nodes {
+	lastOne := float64(0)
+	for i, n := range nodes {
 		if n.isFailure {
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
 		}
@@ -161,10 +162,17 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 		}
 		count++
 		prev = percent / 10
+		if i+1 == len(nodes) {
+			lastOne = float64(msgs)
+		}
 	}
+	refreshNum := 0
 	for _, n := range nodes {
-		sumMsgs += FastDoRefresh(n, alpha, k, d)
+		refreshNum += FastDoRefresh(n, alpha, k, d)
 	}
+	sumMsgs += refreshNum
+	lastOne += float64(refreshNum) / float64(len(nodes))
+	ayame.Log.Infof("last-join-msgs: %d %s %f\n", len(nodes), paramsString, lastOne)
 	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 
 	count = 0

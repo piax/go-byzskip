@@ -28,13 +28,14 @@ var failureRatio *float64
 var joinType *string
 var routingOfUnicastType *string
 var optimizeRouting *string
+var printJoinMsgs *bool
 var experiment *string
 var pollutePrevRatioCalc *bool
 var seed *int64
 var verbose *bool
 var web *bool
 
-//var AdversaryList = []*bs.BSNode{}
+// var AdversaryList = []*bs.BSNode{}
 var JoinedAdversaryList = []*bs.BSNode{}
 var NormalList = []*bs.BSNode{}
 
@@ -296,6 +297,7 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 	index := 0 // introducer index
 	count := 0
 	prev := 0
+	var before int
 	//ayame.SecureKeyMV = false // no authentication
 	bs.ResponseCount = 0
 	for i, n := range nodes {
@@ -320,7 +322,6 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 						}
 					}
 				}
-
 				localn.JoinAsync(context.TODO(), nodes[index])
 				// need to wait until function end or channel waiting status
 				count++
@@ -329,6 +330,15 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 					ayame.Log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
 				}
 				prev = percent / 10
+				if *printJoinMsgs {
+					joinTick := (len(nodes) / 10)
+					if (locali+1)%joinTick == 0 {
+						ayame.Log.Infof("join-msgs: %d %s %d\n", locali+1, paramsString, ayame.GlobalEventExecutor.EventCount-before)
+					}
+					if (locali+1)%joinTick == joinTick-1 {
+						before = ayame.GlobalEventExecutor.EventCount
+					}
+				}
 			}), int64(locali*1000))
 		}
 	}
@@ -486,6 +496,9 @@ func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 					faultyCount++
 				}
 				ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
+				if (i+1)%1000 == 0 {
+					ayame.Log.Infof("exact-join-msgs: %d %s %d\n", i+1, paramsString, msgs)
+				}
 				sumMsgs += msgs
 				sumLMsgs += lmsgs
 				sumCandidates += candidateLen
@@ -612,12 +625,13 @@ var (
 func DoSim() {
 	alpha = flag.IntP("alpha", "a", 2, "the alphabet size of the membership vector")
 	experiment = flag.StringP("exp-type", "e", "uni", "experiment type {uni|uni-max|uni-mv|join}")
-	failureRatio = flag.Float64P("failure-ratio", "f", 0.0, "failure ratio")
+	failureRatio = flag.Float64P("failure-ratio", "f", 0.00, "failure ratio")
 	//issuerType = flag.StringP("issuer-type", "i", "none", "issuer type {shuffle|random|asis|none}")
 	joinType = flag.StringP("join-type", "j", "iter", "join type {recur|iter|iter-fast|cheat}")
 	kValue = flag.IntP("k", "k", 4, "the redundancy parameter")
 	numberOfNodes = flag.IntP("nodes", "n", 100, "number of nodes")
-	optimizeRouting = flag.StringP("optimize-type", "o", "opt", "unicast routing type {normal|opt}")
+	printJoinMsgs = flag.BoolP("print-join-msgs", "m", false, "print number of messages during join")
+	optimizeRouting = flag.StringP("optimize-type", "o", "opt", "unicast routing type {normal|opt|sg}")
 	pollutePrevRatioCalc = flag.BoolP("enable-pollution-calc", "p", false, "calculate the pollution prevention ratio")
 	routingOfUnicastType = flag.StringP("unicast-routing-type", "r", "recur", "unicast routing type {recur|iter}")
 	seed = flag.Int64P("seed", "s", 0, "give a random seed")
@@ -677,6 +691,8 @@ func DoSim() {
 		bs.RoutingType = bs.SINGLE
 	case "opt":
 		bs.RoutingType = bs.PRUNE_OPT2
+	case "sg":
+		bs.RoutingType = bs.SKIP_GRAPH
 		/*case "prune-opt1":
 			bs.RoutingType = bs.PRUNE_OPT1
 		case "prune-opt2":
@@ -685,7 +701,7 @@ func DoSim() {
 			bs.RoutingType = bs.PRUNE_OPT3*/
 	}
 
-	bs.MODIFY_ROUTING_TABLE_BY_RESPONSE = false //*modifyRoutingTableDirectly
+	//	bs.MODIFY_ROUTING_TABLE_BY_RESPONSE = false //*modifyRoutingTableDirectly
 
 	bs.SYMMETRIC_ROUTING_TABLE = true //*useSymmetricRoutingTable
 

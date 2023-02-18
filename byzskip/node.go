@@ -24,6 +24,33 @@ import (
 	"github.com/thoas/go-funk"
 )
 
+const (
+	JOIN_TIMEOUT          = 30
+	LOOKUP_TIMEOUT        = 30
+	DELNODE_TIMEOUT       = 30
+	REQUEST_TIMEOUT       = 10
+	FIND_NODE_TIMEOUT     = 10
+	FIND_NODE_PARALLELISM = 5
+	FIND_NODE_INTERVAL    = 1
+	UNICAST_SEND_TIMEOUT  = 1
+	DELNODE_SEND_TIMEOUT  = 300 // millisecond
+	DURATION_BEFORE_CLOSE = 100 // millisecond
+
+	// Flags for implementation choices.
+
+	// If true, modify the routing table without checking.
+	// Setting this to true is not recommended.
+	MODIFY_ROUTING_TABLE_BY_RESPONSE = false
+
+	// If false, redundancy occurs in neighbors and closest.
+	// Setting this to false is not recommended.
+	EXCLUDE_CLOSEST_IN_NEIGHBORS = true
+
+	// If false, table index is not used.
+	// Setting this to false is not recommended.
+	USE_TABLE_INDEX = true
+)
+
 type JoinStats struct {
 	runningQueries int       // running queries
 	closest        []*BSNode // the current closest nodes
@@ -198,13 +225,13 @@ func ksToNs(lst []KeyMV) []*BSNode {
 	return ret
 }
 
-func nsToKs(lst []*BSNode) []KeyMV {
+/*func nsToKs(lst []*BSNode) []KeyMV {
 	ret := []KeyMV{}
 	for _, ele := range lst {
 		ret = append(ret, ele)
 	}
 	return ret
-}
+}*/
 
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
 func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.MembershipVector) ([]*BSNode, int, []*BSNode) {
@@ -304,6 +331,7 @@ func AllContained2(curKNodes []*BSNode, queried []*BSNode) bool {
 	return true
 }
 
+/*
 func Contains(node *BSNode, nodes []*BSNode) bool {
 	for _, n := range nodes {
 		if n.Equals(node) {
@@ -311,7 +339,7 @@ func Contains(node *BSNode, nodes []*BSNode) bool {
 		}
 	}
 	return false
-}
+}*/
 
 func ContainsKey(key ayame.Key, nodes []*BSNode) bool {
 	for _, n := range nodes {
@@ -368,19 +396,6 @@ func (pe PathEntry) String() string {
 	return pe.Node.String()
 }
 
-const (
-	JOIN_TIMEOUT          = 30
-	LOOKUP_TIMEOUT        = 30
-	DELNODE_TIMEOUT       = 30
-	REQUEST_TIMEOUT       = 10
-	FIND_NODE_TIMEOUT     = 10
-	FIND_NODE_PARALLELISM = 5
-	FIND_NODE_INTERVAL    = 1
-	UNICAST_SEND_TIMEOUT  = 1
-	DELNODE_SEND_TIMEOUT  = 300 // millisecond
-	DURATION_BEFORE_CLOSE = 100 // millisecond
-)
-
 var seqNo int = 0
 
 func NextId() string {
@@ -395,7 +410,7 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
 			ret = ayame.AppendIfAbsent(ret, c)
 			ret = ayame.Exclude(ret, stat.queried)
 			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
@@ -406,7 +421,7 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		if MODIFY_ROUTING_TABLE_BY_RESPONSE || n.RoutingTable.PossiblyBeAdded(c) {
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
 			ret = ayame.AppendIfAbsent(ret, c)
 			ret = ayame.Exclude(ret, stat.queried)
 			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
@@ -593,6 +608,7 @@ func (n *BSNode) sendNextParalellRequest(ctx context.Context, parallel int) int 
 	return reqCount
 }
 
+/*
 func (n *BSNode) sendNextParalellMVRequest(ctx context.Context, parallel int) int {
 	reqCount := 0
 	cs := n.pickCandidates(n.stats, parallel)
@@ -613,7 +629,7 @@ func (n *BSNode) sendNextParalellMVRequest(ctx context.Context, parallel int) in
 		n.SendEventAsync(ctx, node, ev, false)
 	}
 	return reqCount
-}
+}*/
 
 func isFaultySet(nodes []*BSNode) bool {
 	if len(nodes) == 0 {
@@ -632,13 +648,13 @@ func sortByCloseness(key ayame.Key, nodes []*BSNode) []*BSNode {
 	if len(nodes) == 0 {
 		return nodes
 	}
-	ks := nsToKs(nodes)
+	ks := nodes
 	SortC(key, ks)
 	ret := []*BSNode{}
 
 	for i, j := 0, len(ks)-1; i < j; i, j = i+1, j-1 {
-		ret = append(ret, ks[i].(*BSNode))
-		ret = append(ret, ks[j].(*BSNode))
+		ret = append(ret, ks[i])
+		ret = append(ret, ks[j])
 	}
 	return ret
 }
@@ -1021,10 +1037,10 @@ func (n *BSNode) LookupRange(ctx context.Context, rng *ayame.RangeKey) ([]*BSNod
 	if err != nil {
 		return nil, err
 	}
-	cl := nsToKs(closests)
+	//cl := nsToKs(closests)
 	//	SortC(start, cl)
 	//	ayame.ReverseSlice(cl)
-	ayame.Log.Debugf("scan starts from: %s to: %s", cl[0].Key(), rng.End())
+	ayame.Log.Debugf("scan starts from: %s to: %s", closests[0].Key(), rng.End())
 	return n.Scan(ctx, closests, rng)
 }
 
@@ -1367,7 +1383,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	}
 }
 
-func (n *BSNode) findNodeOld(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, requestId string) {
+/* func (n *BSNode) findNodeOld(ctx context.Context, findCh chan *FindNodeResponse, node *BSNode, requestId string) {
 	ev := NewBSFindNodeReqEvent(n, requestId, n.Key(), n.MV())
 	findCtx, cancel := context.WithTimeout(ctx, time.Duration(FIND_NODE_TIMEOUT)*time.Second)
 	defer cancel()
@@ -1396,9 +1412,7 @@ func (n *BSNode) findNodeOld(ctx context.Context, findCh chan *FindNodeResponse,
 		ayame.Log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
-}
-
-var USE_TABLE_INDEX = true
+} */
 
 func (n *BSNode) handleFindNode(ctx context.Context, ev ayame.SchedEvent) error {
 	if ev.IsResponse() {
@@ -1575,10 +1589,6 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 	return nil
 }
 
-var MODIFY_ROUTING_TABLE_BY_RESPONSE bool = true
-
-var EXCLUDE_CLOSEST_IN_NEIGHBORS bool = true
-
 func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent) ayame.SchedEvent {
 	ue := ev.(*BSFindNodeEvent)
 	//kmv := ue.Sender().(*BSNode)
@@ -1629,7 +1639,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		ayame.Log.Debugf("called already seen handler on %s, seen=%s\n", n, msg.MessageId)
 		return nil
 	}
-	if msg.level == 0 { // level 0 means destination
+	if (RoutingType != SKIP_GRAPH && msg.level == 0) || (RoutingType == SKIP_GRAPH && msg.level < 0) { // level 0 means destination
 		msg.SetAlreadySeen(n)
 		//ayame.Log.Debugf("node: %d, m: %s\n", n, msg)
 		if n.unicastHandler != nil {

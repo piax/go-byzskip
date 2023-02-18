@@ -14,7 +14,6 @@ require (
 	github.com/libp2p/go-libp2p-core v0.20.0
 	github.com/libp2p/go-libp2p-kad-dht v0.20.0
 	github.com/libp2p/go-libp2p-kbucket v0.5.0
-	github.com/libp2p/go-libp2p-peerstore v0.8.0
 	github.com/libp2p/go-libp2p-record v0.2.0
 	github.com/libp2p/go-msgio v0.2.0
 	github.com/montanaflynn/stats v0.6.6

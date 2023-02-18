@@ -372,25 +372,25 @@ func FastGetNeighbors(target *bs.BSNode, req *bs.NeighborRequest, n *bs.BSNode, 
 		knn = ksToNs(clst)
 		level = lvl
 		candidates = ayame.Exclude(candidates, knn)
+		/*
+			kNeighbors, _, curCandidates := n.GetNeighborsAndCandidates(req.Key, req.MV)
+			rets := kNeighbors
+			rets = appendNodesIfMissing(rets, curCandidates)
+			r := delNode(nsToKs(rets), n)
 
-		kNeighbors, _, curCandidates := n.GetNeighborsAndCandidates(req.Key, req.MV)
-		rets := kNeighbors
-		rets = appendNodesIfMissing(rets, curCandidates)
-		r := delNode(nsToKs(rets), n)
-
-		ayame.Log.Debugf("%d: %s can return %s\n", target.Key(), n, ayame.SliceString(r))
-		for _, n := range r {
-			// first appearance
-			if _, exist := hopRecord[n.Key()]; !exist {
-				hopRecord[n.Key()] = hops
-			}
-			maxHopRecord[n.Key()] = hops
-			if _, exist := returnRecord[n.Key()]; !exist {
-				returnRecord[n.Key()] = 1
-			} else {
-				returnRecord[n.Key()] = returnRecord[n.Key()] + 1
-			}
-		}
+			ayame.Log.Debugf("%d: %s can return %s\n", target.Key(), n, ayame.SliceString(r))
+			for _, n := range r {
+				// first appearance
+				if _, exist := hopRecord[n.Key()]; !exist {
+					hopRecord[n.Key()] = hops
+				}
+				maxHopRecord[n.Key()] = hops
+				if _, exist := returnRecord[n.Key()]; !exist {
+					returnRecord[n.Key()] = 1
+				} else {
+					returnRecord[n.Key()] = returnRecord[n.Key()] + 1
+				}
+			}*/
 	} else {
 		knn, level, candidates = n.GetNeighborsAndCandidates(req.Key, req.MV)
 	}
@@ -479,6 +479,24 @@ func FastRefresh(target *bs.BSNode, introducers []*bs.BSNode) ([]*bs.BSNode, int
 			msgs++
 			kNeighbors, curLevel, curCandidates = FastGetNeighbors(target, req, next, hops, hopRecord, maxHopRecord, returnRecord)
 			msgs++
+
+			// filter only possibly be added from here
+			newKNeighbors := []*bs.BSNode{}
+			newCandidates := []*bs.BSNode{}
+			for _, c := range kNeighbors {
+				if target.RoutingTable.PossiblyBeAdded(c) {
+					newKNeighbors = append(newKNeighbors, c)
+				}
+			}
+			for _, c := range curCandidates {
+				if target.RoutingTable.PossiblyBeAdded(c) {
+					newCandidates = append(newCandidates, c)
+				}
+			}
+			kNeighbors = newKNeighbors
+			curCandidates = newCandidates
+			// to here
+
 			respCount += len(kNeighbors)
 			respCount += len(curCandidates)
 
@@ -494,6 +512,7 @@ func FastRefresh(target *bs.BSNode, introducers []*bs.BSNode) ([]*bs.BSNode, int
 				}
 				if hops_to_match < 0 {
 					hops_to_match = hops
+					msgs_to_lookup = msgs
 					ayame.Log.Debugf("found %d's k-closest: %s by %s\n", target.Key(), ayame.SliceString(kNeighbors), next)
 				}
 			}
@@ -513,7 +532,7 @@ func FastRefresh(target *bs.BSNode, introducers []*bs.BSNode) ([]*bs.BSNode, int
 		hops++ // response
 		nexts = pickAlternately(target, leftCandidates, copyReverseSlice(leftCandidates), queried, tau)
 	}
-	ayame.Log.Debugf("%d: join-msgs %d\n", target.Key(), msgs)
+	ayame.Log.Infof("%d: join-msgs %d\n", target.Key(), msgs)
 
 	hopsSum := 0
 	maxHops := 0

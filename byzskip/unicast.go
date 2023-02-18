@@ -185,6 +185,8 @@ func (ev *BSUnicastEvent) findNextHops(myNode *BSNode) []*BSUnicastEvent {
 	switch RoutingType {
 	case SINGLE:
 		ret, _ = ev.findNextHopsSingle(myNode)
+	case SKIP_GRAPH:
+		ret, _ = ev.findNextHopsSkipGraph(myNode)
 	case PRUNE:
 		fallthrough
 	case PRUNE_OPT1:
@@ -215,12 +217,60 @@ func (ev *BSUnicastEvent) findNextHopsSingle(myNode *BSNode) ([]*BSUnicastEvent,
 	return nextMsgs, nil
 }
 
+func closestNode(target ayame.Key, nodes []KeyMV) KeyMV {
+	var sortedNodes = []KeyMV{}
+	sortedNodes = append(sortedNodes, nodes...)
+	SortC(target, sortedNodes)
+	return sortedNodes[len(sortedNodes)-1]
+	//return sortedNodes[0]
+}
+
+func (node *BSNode) findNextNode(msg *BSUnicastEvent) (*BSNode, int) {
+	nodes := node.RoutingTable.AllNeighbors(true, false)
+	nextNode := closestNode(msg.TargetKey, nodes).(*BSNode)
+	level := node.highestLevelInRoutingTable(nextNode)
+	return nextNode, level
+}
+
+func (sg *BSNode) highestLevelInRoutingTable(node KeyMV) int {
+	rt := append([]*NeighborList{}, sg.RoutingTable.GetNeighborLists()...)
+	ayame.ReverseSlice(rt)
+	for _, t := range rt {
+		if Contains(node, t.Neighbors[RIGHT]) || Contains(node, t.Neighbors[LEFT]) {
+			return t.level
+		}
+	}
+	return 0
+}
+
+func (ev *BSUnicastEvent) findNextHopsSkipGraph(myNode *BSNode) ([]*BSUnicastEvent, error) {
+	//	myNode := ev.Receiver().(*BSNode)
+	level := -1
+
+	var kNodes []*BSNode
+	nextMsgs := []*BSUnicastEvent{}
+
+	ks, lv := myNode.findNextNode(ev) //myNode.GetClosestNodes(ev.TargetKey) // XXX not yet implemented
+	kNodes = []*BSNode{ks}
+	level = lv
+	if ks.Key().Equals(ev.TargetKey) || ks.Key().Equals(myNode.Key()) {
+		level = -1 // finish.
+	}
+	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
+	for _, n := range kNodes {
+		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
+	}
+	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
+	return nextMsgs, nil
+}
+
 const (
 	SINGLE int = iota
 	PRUNE
 	PRUNE_OPT1
 	PRUNE_OPT2
 	PRUNE_OPT3
+	SKIP_GRAPH
 )
 
 func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, error) {

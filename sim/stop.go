@@ -4,6 +4,8 @@ import (
 
 	// "go mod tidy" is needed on go 1.16
 
+	"fmt"
+
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip" // "go mod tidy" is needed on go 1.16
 	//
@@ -90,7 +92,17 @@ func (table *StopRoutingTable) String() string {
 }
 
 func (table *StopRoutingTable) JSONString() string {
-	return table.JSONString()
+	ret := fmt.Sprintf("{\"key\":%s, \"mv\": \"%s\", \"faulty\": true, \"nls\":[", table.KeyMV().Key(), table.KeyMV().MV())
+	nbrs := table.GetNeighborLists()
+	for i, sl := range nbrs {
+		ret += sl.JSONString()
+		if i != len(nbrs)-1 {
+			ret += ",\n"
+		}
+
+	}
+	ret += "]}"
+	return ret
 }
 
 func (table *StopRoutingTable) Size() int {

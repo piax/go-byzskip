@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	"github.com/libp2p/go-libp2p/core/peer"
+	pstore "github.com/libp2p/go-libp2p/p2p/host/peerstore"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/piax/go-byzskip/ayame" // "go mod tidy" is needed on go 1.16
 	"github.com/thoas/go-funk"

@@ -133,7 +133,7 @@ type RoutingTable interface {
 	KClosestWithKey(key ayame.Key) ([]KeyMV, int)
 	KClosestWithMV(mv *ayame.MembershipVector, src ayame.Key) ([]KeyMV, bool)
 
-	// Deprecated: should use Neighbors with request including mv
+	// Utility but should use Neighbors
 	GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV // get neighbors which have common prefix with kmv
 
 	GetTableIndex() []*TableIndex
@@ -327,7 +327,7 @@ func pickupMVClosestExcept(key ayame.Key, mv *ayame.MembershipVector, length int
 		return ret
 	}
 	for _, elem := range lst {
-		if !contains(except, elem) {
+		if !Contains(elem, except) {
 			ret = append(ret, elem)
 		}
 	}
@@ -1090,9 +1090,9 @@ func minMaxNodeMV(kms []KeyMV) (KeyMV, KeyMV) {
 	return min, max
 }
 
-func minMaxNode(kms []KeyMV) (KeyMV, KeyMV) {
-	var max KeyMV = kms[0]
-	var min KeyMV = kms[0]
+func minMaxNode[T KeyMV](kms []T) (T, T) {
+	var max T = kms[0]
+	var min T = kms[0]
 	for _, s := range kms {
 		if max.Key().Less(s.Key()) {
 			max = s
@@ -1143,7 +1143,7 @@ func less(base, min, max, x, y ayame.Key) bool {
 }
 
 // much faster version of SortCircular
-func SortC(base ayame.Key, kms []KeyMV) {
+func SortC[T KeyMV](base ayame.Key, kms []T) {
 	min, max := minMaxNode(kms)
 	eNum := len(kms)
 	for i := eNum; i > 0; i-- {
@@ -1376,9 +1376,14 @@ func (rts *NeighborList) Add(d int, u KeyMV, truncate bool) {
 	if truncate {
 		i := rts.satisfactionIndex(d)
 		//		ayame.Log.Debugf("satisfaction index dir=%d %s=%d\n", d, ayame.SliceString(rts.Neighbors[d]), i)
+		//before := len(rts.Neighbors[d])
 		if i >= 0 {
 			rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
 		}
+		//after := len(rts.Neighbors[d])
+		//if after < before {
+		//	ayame.Log.Infof("%d truncated", before-after)
+		//}
 	}
 }
 
@@ -1395,7 +1400,7 @@ func (rts *NeighborList) concatenate(includeSelf bool) []KeyMV {
 	return ret
 }
 
-func contains(nodes []KeyMV, node KeyMV) bool {
+func Contains[T KeyMV](node T, nodes []T) bool {
 	for _, n := range nodes {
 		if node.Equals(n) {
 			return true
@@ -1404,19 +1409,19 @@ func contains(nodes []KeyMV, node KeyMV) bool {
 	return false
 }
 
-func countDuplicates(a, b []KeyMV) int {
+/*func countDuplicates(a, b []KeyMV) int {
 	count := 0
 	for _, v := range a {
-		if contains(b, v) {
+		if ContainsKeyMV(b, v) {
 			count++
 		}
 	}
 	return count
-}
+}*/
 
 func isDisjoint(a, b []KeyMV) bool {
 	for _, v := range a {
-		if contains(b, v) {
+		if Contains(v, b) {
 			return false
 		}
 	}
@@ -1471,7 +1476,7 @@ func (rts *NeighborList) PickupKNodes(target ayame.Key) ([]KeyMV, bool) {
 		return closestKNodesDisjoint(target, nodes), true
 	} else {
 		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
-		if len(nodes) < K { // if number of nodes is less than K, return all
+		if len(nodes) < K || K == 1 { // if number of nodes is less than K, return all
 			return nodes, true
 		}
 		for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
