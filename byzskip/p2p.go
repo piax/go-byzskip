@@ -88,15 +88,15 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
 			//ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
 			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
 				ayame.Log.Debugf("remote peer %s validated", parent.Id()) // XXX should be cached for performance.
-				return NewWithParent(parent, NewSkipRoutingTable, false), nil
+				return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 			}
 			ayame.Log.Debugf("validation failed")
 		} else { // no validator case
-			return NewWithParent(parent, NewSkipRoutingTable, false), nil
+			return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 		}
 		return nil, fmt.Errorf("invalid join certificate")
 	} else {
-		return NewWithParent(parent, NewSkipRoutingTable, false), nil
+		return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 	}
 }
 

@@ -119,7 +119,19 @@ func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	myNode.seenMutex.RLock()
 	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
 	myNode.seenMutex.RUnlock()
-	if exists && msgLevel <= seenLevel {
+
+	var filterWithLevel bool
+	if IGNORE_LEVEL_IN_OPT {
+		if RoutingType == SINGLE {
+			filterWithLevel = (msgLevel <= seenLevel) // if higher level, don't filter
+		} else {
+			filterWithLevel = true //  always
+		}
+	} else {
+		filterWithLevel = (msgLevel <= seenLevel) // if higher level, don't filter
+	}
+
+	if exists && filterWithLevel {
 		ayame.Log.Debugf("already seen: %s at %d on %s\n", ev.MessageId, seenLevel, myNode.Key())
 		return true
 	}

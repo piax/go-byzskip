@@ -49,6 +49,10 @@ const (
 	// If false, table index is not used.
 	// Setting this to false is not recommended.
 	USE_TABLE_INDEX = true
+
+	// If false, PRUNE_OPT2 forwards messages in the higher level even if the message is already seen.
+	// Setting this to false is not recommended.
+	IGNORE_LEVEL_IN_OPT = true
 )
 
 type JoinStats struct {
@@ -102,8 +106,10 @@ type BSNode struct {
 	stats *JoinStats
 
 	RoutingTable RoutingTable
-	IsFailure    bool
-	QuerySeen    map[string]int
+
+	EventForwarder func(context.Context, *BSNode, *BSNode, ayame.SchedEvent, bool)
+	IsFailure      bool
+	QuerySeen      map[string]int
 
 	Procs            map[string]*RequestProcess
 	ProcsMutex       sync.RWMutex                               // for r/w procs status
@@ -161,6 +167,9 @@ func (n *BSNode) SetMV(mv *ayame.MembershipVector) {
 func (n *BSNode) Equals(m any) bool {
 	//return m.Key().Equals(n.key)
 	if mn, ok := m.(*BSNode); ok {
+		if n.isIntroducer() {
+			return mn.isIntroducer()
+		}
 		if p, ok := mn.Parent.(*p2p.RemoteNode); ok {
 			return p.Id() == n.Id()
 		}
@@ -255,7 +264,9 @@ func NewWithoutDefaults(h host.Host, options ...Option) (*BSNode, error) {
 	return cfg.NewNode(h)
 }
 
-func NewWithParent(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailure bool) *BSNode {
+func NewWithParent(parent ayame.Node, rtMaker func(KeyMV) RoutingTable,
+	eventForwarder func(context.Context, *BSNode, *BSNode, ayame.SchedEvent, bool),
+	isFailure bool) *BSNode {
 	ret := &BSNode{key: parent.Key(), mv: parent.MV(),
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
 		Parent: parent,
@@ -266,6 +277,11 @@ func NewWithParent(parent ayame.Node, rtMaker func(KeyMV) RoutingTable, isFailur
 		DisableFixLowPeers: false,
 	}
 	ret.RoutingTable = rtMaker(ret)
+	if eventForwarder == nil {
+		ret.EventForwarder = NodeEventForwarder
+	} else {
+		ret.EventForwarder = eventForwarder
+	}
 
 	return ret
 }
@@ -438,7 +454,7 @@ func (n *BSNode) isIntroducer() bool {
 
 // New simulation node
 func NewSimNode(key ayame.Key, mv *ayame.MembershipVector) *BSNode {
-	return NewWithParent(ayame.NewLocalNode(key, mv), NewSkipRoutingTable, false)
+	return NewWithParent(ayame.NewLocalNode(key, mv), NewSkipRoutingTable, nil, false)
 }
 
 // Join a node join to the network.
@@ -1267,6 +1283,11 @@ func (n *BSNode) SendEventAsyncSim(ctx context.Context, receiver ayame.Node, ev 
 	//}()
 }
 
+// normal behavior
+func NodeEventForwarder(ctx context.Context, sender *BSNode, receiver *BSNode, ev ayame.SchedEvent, sign bool) {
+	sender.SendEventAsync(ctx, receiver, ev, sign)
+}
+
 func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
 	// XXX run asynchronously? it should be ended in a short time.
 	//go func() {
@@ -1669,7 +1690,8 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
 					//fmt.Printf("sent event %s from=%s,to=%s %s\n", next.MessageId, n.Key(), node.Key(), time.Now().String())
-					n.SendEventAsync(ctx, node, next, true)
+					//n.SendEventAsync(ctx, node, next, true)
+					n.EventForwarder(ctx, n, node, next, true)
 				}
 			}
 		}

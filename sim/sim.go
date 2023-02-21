@@ -150,6 +150,10 @@ func ComputeProbabilityMonteCarlo(msg *bs.BSUnicastEvent, failureRatio float64, 
 	return float64(failures) / float64(count)
 }
 
+func StopEventForwarder(ctx context.Context, sender *bs.BSNode, receiver *bs.BSNode, ev ayame.SchedEvent, sign bool) {
+	// DO NOTHING
+}
+
 func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 	JoinedAdversaryList = []*bs.BSNode{}
 	NormalList = []*bs.BSNode{}
@@ -168,7 +172,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, false)
+			n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -176,9 +180,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewStopRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, StopEventForwarder, f)
 			} else {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -190,9 +194,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, nil, f)
 			} else {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -665,6 +669,8 @@ func DoSim() {
 		FailureType = F_COLLAB_AFTER
 	case "calc":
 		FailureType = F_CALC
+	default:
+		panic(fmt.Sprintf("No such failure model: %s", *underAttackType))
 	}
 
 	switch *joinType {
@@ -755,7 +761,7 @@ func DoSim() {
 	if *pollutePrevRatioCalc {
 		testPeers := make([]*bs.BSNode, *numberOfNodes)
 		for i := 0; i < *numberOfNodes; i++ {
-			testPeers[i] = bs.NewWithParent(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, false)
+			testPeers[i] = bs.NewWithParent(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, nil, false)
 		}
 		FastJoinAllByCheat(testPeers)
 		diffs := 0

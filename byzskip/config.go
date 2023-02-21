@@ -67,6 +67,7 @@ func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 		DisableFixLowPeers: false,
 	}
 	ret.RoutingTable = c.RoutingTableMaker(ret)
+	ret.EventForwarder = NodeEventForwarder
 	parent.SetChild(ret)
 	return ret, nil
 }

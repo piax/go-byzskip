@@ -280,7 +280,8 @@ func recursiveUnicastExperiment(msgs []*bs.BSUnicastEvent, trials int) {
 		ayame.Log.Debugf("%s->%s: min. path length: %f\n", msg.Root.Sender(), msg.TargetKey, min)
 		return min
 	}).([]float64))
-	counts := ayame.GlobalEventExecutor.EventCount
+	// len(msgs) should be ignored because unicasts are initiated autonomously
+	counts := ayame.GlobalEventExecutor.EventCount - len(msgs)
 
 	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, ave)
 	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, float64(counts)/float64(trials))
