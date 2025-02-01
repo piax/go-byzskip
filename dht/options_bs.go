@@ -77,7 +77,7 @@ func Bootstrap(bns ...string) Option {
 	}
 }
 
-func BootstrapAddrs(infos ...peer.AddrInfo) Option {
+func BootstrapAddrs(infos []peer.AddrInfo) Option {
 	return func(c *Config) error {
 		c.BootstrapAddrs = infos
 		return nil
