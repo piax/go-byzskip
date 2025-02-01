@@ -85,6 +85,16 @@ func Exclude[T Equality](lst []T, ex []T) []T {
 	return ret
 }
 
+func ExcludeIf[T Equality](lst []T, vfunc func(v T) bool) []T {
+	ret := []T{}
+	for _, n := range lst {
+		if !vfunc(n) {
+			ret = append(ret, n)
+		}
+	}
+	return ret
+}
+
 // Deprecated: Use AppendIfAbsent
 /*func AppendIfMissing[T Equality](slice []T, i T) []T {
 	for _, ele := range slice {

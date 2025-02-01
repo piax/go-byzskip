@@ -107,7 +107,7 @@ func (t *UnifiedKey) UnescapedString() string {
 	} else if t.id == peer.ID([]byte{}) {
 		str += "<MAX_ID>"
 	} else {
-		str += t.id.Pretty()
+		str += t.id.String()
 	}
 	return str
 }
@@ -131,7 +131,7 @@ func (t *UnifiedKey) String() string {
 	} else if t.id == peer.ID([]byte{}) {
 		str += "<MAX_ID>"
 	} else {
-		str += t.id.Pretty()
+		str += t.id.String()
 	}
 	//return "<" + str[0:15] + ">" // for readability
 	return str
