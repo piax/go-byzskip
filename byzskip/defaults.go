@@ -41,14 +41,15 @@ var defaults = []struct {
 		fallback: func(cfg *Config) bool { return cfg.RoutingTableMaker == nil },
 		opt:      RoutingTableMaker(NewSkipRoutingTable),
 	},
-	{
-		fallback: func(cfg *Config) bool { return cfg.Authorizer == nil },
-		opt:      DefaultAuthorizer,
-	},
-	{
-		fallback: func(cfg *Config) bool { return cfg.AuthValidator == nil },
-		opt:      DefaultAuthValidator,
-	},
+	/*	2023/10/28: nil means skipping authorizer.
+		    {
+				fallback: func(cfg *Config) bool { return cfg.Authorizer == nil },
+				opt:      DefaultAuthorizer,
+			},
+			{
+				fallback: func(cfg *Config) bool { return cfg.AuthValidator == nil },
+				opt:      DefaultAuthValidator,
+			},*/
 	{
 		fallback: func(cfg *Config) bool { return cfg.VerifyIntegrity == nil },
 		opt:      VerifyIntegrity(true),
@@ -56,6 +57,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.DetailedStatistics == nil },
 		opt:      DetailedStatistics(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.DisableFixLowPeers == nil },
+		opt:      DisableFixLowPeers(false),
 	},
 }
 
