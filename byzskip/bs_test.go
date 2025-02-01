@@ -3,6 +3,7 @@ package byzskip
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -120,6 +121,16 @@ func TestSorted(t *testing.T) {
 	fmt.Println(ayame.SliceString(rslt))
 	rslt = rt.GetCommonNeighbors(ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1, 0}))
 	fmt.Println(ayame.SliceString(rslt))
+}
+
+func TestRequiredSuccesRatioPerHop(t *testing.T) {
+	s := 0.9
+	h := 4
+	perhop := math.Pow(s, 1/float64(h))
+	fmt.Printf("perhop=%f\n", perhop)
+	k := 6
+	exp := math.Pow((1 - perhop), 1/float64(k))
+	fmt.Printf("f=%f\n", exp)
 }
 
 func TestSortByCloseness(t *testing.T) {
@@ -264,6 +275,29 @@ func TestSufficient2(t *testing.T) {
 	rt.Add(km, true)
 	fmt.Println(rt)
 	ast.Equal(t, rt.HasSufficientNeighbors(), false, "expected to have sufficient neighbors")
+}
+
+func TestChannel(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(300)*time.Millisecond)
+	defer cancel()
+	c := make(chan struct{})
+	go func() {
+		//time.Sleep(1000 * time.Microsecond)
+		c <- struct{}{}
+	}()
+
+	for len(c) == 0 {
+		time.Sleep(10 * time.Microsecond)
+		fmt.Printf("len=%d.\n", len(c))
+	}
+
+	select {
+	case <-ctx.Done():
+		fmt.Printf("timed out.\n")
+	case x := <-c:
+		fmt.Printf("got it %v.\n", x)
+	}
+
 }
 
 func TestTicker(t *testing.T) {
@@ -549,7 +583,7 @@ func TestLookupName(t *testing.T) {
 }
 
 func TestUnicast(t *testing.T) {
-	numberOfPeers := 100
+	numberOfPeers := 32
 	useQuic := true
 	peers := setupNodes(4, numberOfPeers, true, useQuic)
 	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)

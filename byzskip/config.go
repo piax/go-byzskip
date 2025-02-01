@@ -21,6 +21,7 @@ type Config struct {
 	IsFailure          *bool
 	VerifyIntegrity    *bool
 	DetailedStatistics *bool
+	DisableFixLowPeers *bool
 }
 
 // Apply applies the given options to this Option
@@ -52,10 +53,24 @@ const (
 )
 
 func (c *Config) NewNode(h host.Host) (*BSNode, error) {
-	assignedKey, mv, cert, err := c.Authorizer(h.ID(), c.Key)
-	if err != nil {
-		return nil, err
+	var assignedKey ayame.Key
+	var mv *ayame.MembershipVector
+	var cert []byte
+	var err error
+
+	if c.Authorizer != nil {
+		assignedKey, mv, cert, err = c.Authorizer(h.ID(), c.Key)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// skipping authorizations.
+		assignedKey = c.Key
+		mv = ayame.NewMembershipVector(2)
+		cert = nil
+		err = nil
 	}
+
 	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
@@ -64,7 +79,7 @@ func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 		Parent:             parent,
 		QuerySeen:          make(map[string]int),
 		Procs:              make(map[string]*RequestProcess),
-		DisableFixLowPeers: false,
+		DisableFixLowPeers: *c.DisableFixLowPeers,
 	}
 	ret.RoutingTable = c.RoutingTableMaker(ret)
 	ret.EventForwarder = NodeEventForwarder
