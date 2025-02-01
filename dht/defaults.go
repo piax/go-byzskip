@@ -3,6 +3,7 @@ package dht
 // This file contains all the default configuration options.
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -20,6 +21,21 @@ var DefaultAuthorizer = func(cfg *Config) error {
 		ayame.Log.Infof("using %s as authority", url)
 		return cfg.Apply(Authorizer(authority.WebAuthAuthorize))
 	}
+	if filename := os.Getenv(authority.CERT_FILE); len(filename) != 0 { // if environment variable is set, use cert file.
+		// file exists
+		if _, err := os.Stat(filename); err == nil {
+			ayame.Log.Infof("using %s as the cert file", filename)
+			return cfg.Apply(Authorizer(authority.FileAuthAuthorize))
+		} else {
+			if *cfg.VerifyIntegrity {
+				panic(fmt.Errorf("failed to determine authorization method: %w", err))
+			}
+		}
+	} else {
+		if *cfg.VerifyIntegrity {
+			panic(fmt.Sprintf("failed to determine authorization method: please check %s", authority.CERT_FILE))
+		}
+	}
 	// default
 	ayame.Log.Infof("using empty authority")
 	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
@@ -29,8 +45,9 @@ var DefaultAuthorizer = func(cfg *Config) error {
 }
 
 var DefaultAuthValidator = func(cfg *Config) error {
-	if pk := os.Getenv(authority.WEBAUTH_PUBKEY); len(pk) != 0 { // if environment variable is set, use webauth.
-		return cfg.Apply(AuthValidator(authority.WebAuthValidate))
+	if pk := os.Getenv(authority.AUTH_PUBKEY); len(pk) != 0 { // if environment variable is set, use the publickey
+		ayame.Log.Infof("using authority public key: %s", pk)
+		return cfg.Apply(AuthValidator(authority.AuthValidate))
 	}
 	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
 		return true
@@ -58,16 +75,16 @@ var defaults = []struct {
 		opt:      RoutingTableMaker(bs.NewSkipRoutingTable),
 	},
 	{
+		fallback: func(cfg *Config) bool { return cfg.VerifyIntegrity == nil },
+		opt:      VerifyIntegrity(true),
+	},
+	{
 		fallback: func(cfg *Config) bool { return cfg.Authorizer == nil },
 		opt:      DefaultAuthorizer,
 	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.AuthValidator == nil },
 		opt:      DefaultAuthValidator,
-	},
-	{
-		fallback: func(cfg *Config) bool { return cfg.VerifyIntegrity == nil },
-		opt:      VerifyIntegrity(true),
 	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.Datastore == nil },
