@@ -876,12 +876,12 @@ func (dht *BSDHT) GetPublicKey(ctx context.Context, p peer.ID) (crypto.PubKey, e
 
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	var ev ayame.SchedEvent
-	author, _ := bs.ConvertPeer(self, mes.Data.Author)
+	author, _ := bs.ConvertPeer(self, mes.Data.Author, self.VerifyIntegrity)
 	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_GET_VALUE:
 		ev = NewBSGetEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record)
-		p, err := bs.ConvertPeer(self, mes.Sender)
+		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
 		}
@@ -890,7 +890,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		return ev
 	case pb.MessageType_PUT_VALUE:
 		ev = NewBSPutEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record[0])
-		p, err := bs.ConvertPeer(self, mes.Sender)
+		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
 		}
@@ -900,7 +900,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	case pb.MessageType_ADD_PROVIDER:
 		ev = NewBSPutProviderEvent(author, mes.Data.Id, mes.Data.SenderAppData,
 			bs.ConvertPeers(self, mes.Data.CandidatePeers))
-		p, err := bs.ConvertPeer(self, mes.Sender)
+		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
 		}
@@ -910,7 +910,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	case pb.MessageType_GET_PROVIDERS:
 		ev = NewBSGetProvidersEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.SenderAppData,
 			mes.Data.CandidatePeers)
-		p, err := bs.ConvertPeer(self, mes.Sender)
+		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
 		}
