@@ -57,7 +57,7 @@ func EncodeAddrs(maddrs []ma.Multiaddr) [][]byte {
 
 func (n *RemoteNode) Encode() *pb.Peer {
 	return &pb.Peer{
-		Id:         peer.Encode(n.id),
+		Id:         n.id.String(),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),

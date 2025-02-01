@@ -321,23 +321,24 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 
 // Node API
 func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) error {
-	//ayame.Log.Debugf("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
+	ayame.Log.Debugf("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 
 	id := ev.Receiver().Id()
 
 	s, err := n.NewStream(ctx, id, n.protocol)
 	if err != nil {
-		//	ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
+		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return err
 	}
+	ayame.Log.Debugf("%s NewStream to %s\n", n.Key(), id)
 	if err := n.sendMsgToStream(ctx, s, n.sign(ev, sign)); err != nil {
-		//	ayame.Log.Errorf("%s send to %s: %s\n", n.Key(), id, err)
+		ayame.Log.Errorf("%s send to %s: %s\n", n.Key(), id, err)
 		return err
 	}
 	if ev.IsRequest() {
 		n.onReceiveMessage(s)
 	}
-	//ayame.Log.Debugf("sent mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
+	ayame.Log.Debugf("sent mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 	return nil
 }
 
@@ -540,7 +541,10 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType,
 
 func (n *P2PNode) sendMsgToStream(ctx context.Context, s network.Stream, msg proto.Message) error {
 	writer := protoio.NewDelimitedWriter(s)
+	ayame.Log.Debugf("%s: writing msg", n)
+	//fmt.Printf("%s: writing msg %s\n", n, msg)
 	err := writer.WriteMsg(msg)
+	ayame.Log.Debugf("%s: written msg", n)
 	if err != nil {
 		ayame.Log.Errorf("%s: write msg %s", n, err)
 		s.Reset()
@@ -555,7 +559,7 @@ func (n *P2PNode) sendMsgToStream(ctx context.Context, s network.Stream, msg pro
 	length := int64(len(data))
 	n.OutBytes += length
 	n.OutCount++
-	//	ayame.Log.Infof("%s: written msg %s", n, msg)
+	//fmt.Printf("%s: written msg %s\n", n, msg)
 
 	return nil
 }
