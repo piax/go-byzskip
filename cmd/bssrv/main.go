@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	ci "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	ci "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
@@ -31,7 +31,7 @@ var key *int
 var k *int
 var iAddr *string
 
-//var addr *string
+// var addr *string
 var port *int
 var srvPort *int
 var keystore *string
@@ -144,7 +144,7 @@ func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []b
 }
 
 func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.Pretty()))
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.String()))
 	if err != nil {
 		return nil, err
 	}
