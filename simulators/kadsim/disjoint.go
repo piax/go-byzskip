@@ -28,9 +28,9 @@ func (dq *DisjointQuery) Add(node *KADNode) {
 }
 
 func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int, k int, queried []*KADNode) []*KADNode {
-
 	if matchNode(id, dq.curKNodes) != nil {
 		if dq.hops_to_match < 0 {
+			ayame.Log.Debugf("found!! matched hops=%d", dq.hops)
 			dq.hops_to_match = dq.hops // actually, +1 is needed to reach the node.
 		}
 	}
@@ -71,7 +71,14 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 	dq.hops++
 	dq.curKNodes = dq.queryTable.getNearestNodes(id, k)
 	dq.updateFinished(queried)
-	ayame.Log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops_to_match, len(curNodes), ayame.SliceString(curNodes))
+
+	ayame.Log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops, len(curNodes), ayame.SliceString(curNodes))
+	if matchNode(id, dq.curKNodes) != nil {
+		if dq.hops_to_match < 0 {
+			ayame.Log.Debugf("found!! matched hops=%d", dq.hops)
+			dq.hops_to_match = dq.hops // actually, +1 is needed to reach the node.
+		}
+	}
 	return queried
 }
 
@@ -89,7 +96,7 @@ func allFinished(contexts []*DisjointQuery, queried []*KADNode) bool {
 	return true
 }
 
-func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d int) ([]*KADNode, float64, int, float64, bool) {
+func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d int, initSrc bool) ([]*KADNode, float64, int, float64, bool) {
 	contexts := make([]*DisjointQuery, d)
 	for i := 0; i < d; i++ {
 		contexts[i] = NewDisjointQuery(id, k, i)
@@ -108,6 +115,11 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	initialKNodes := source.FastFindNode(id, source, k)
 	imsgs++
 	ihops++
+
+	if initSrc && matchNode(id, initialKNodes) != nil {
+		//ayame.Log.Infof("src contains dst ret=%s\n", initialKNodes)
+		return initialKNodes, 0, 0, 0, false
+	}
 
 	pos := 0
 	// distribute to d query contexts.
@@ -129,11 +141,12 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 
 	minHopsToMatch := math.MaxFloat64
 	maxHops := float64(-1)
+
 	for _, dq := range contexts {
-		if dq.hops_to_match > 0 {
+		if matchNode(id, dq.curKNodes) != nil {
 			success = true
 		}
-		if dq.hops_to_match > 0 {
+		if dq.hops_to_match >= 0 {
 			minHopsToMatch = math.Min(float64(dq.hops_to_match), minHopsToMatch)
 		}
 		maxHops = math.Max(float64(dq.hops), float64(maxHops))
@@ -154,9 +167,12 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	ayame.Log.Debugf("result=%s\n", ayame.SliceString(ret))
 
 	// initial FIND_NODE
-	maxHops += float64(ihops)
-	msgs += imsgs
+	if !initSrc {
+		maxHops += float64(ihops)
+		msgs += imsgs
+	}
 
 	source.routingTable.table.ResetCplRefreshedAtForID(id, time.Now())
+
 	return ret, maxHops, msgs, minHopsToMatch, !success
 }

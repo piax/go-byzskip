@@ -99,7 +99,7 @@ func FastRefreshCpl(node *KADNode, cpl uint, alpha int, k int, d int) int {
 
 	targetKadID := kbucket.ConvertPeerID(peer.ID(key)) //kbucket.ConvertKey(key)
 	//fmt.Printf("query: %x\n", key)
-	_, _, msgs, _, _ := FastNodeLookupDisjoint(targetKadID, node, alpha, k, d)
+	_, _, msgs, _, _ := FastNodeLookupDisjoint(targetKadID, node, alpha, k, d, false)
 
 	return msgs
 }
@@ -154,7 +154,7 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 			n.routingTable.Add(nodes[index])
 		}
 		// query for self
-		_, _, msgs, _, _ := FastNodeLookupDisjoint(n.routingTable.dhtId, n, alpha, k, d)
+		_, _, msgs, _, _ := FastNodeLookupDisjoint(n.routingTable.dhtId, n, alpha, k, d, false)
 		sumMsgs += msgs
 		percent := 100 * count / len(nodes)
 		if percent/10 != prev {
@@ -203,7 +203,7 @@ func expIterative(trials int) {
 		src := rand.Intn(len(NormalList))
 		dst := rand.Intn(len(NormalList))
 		//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
-		founds, hops, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue)
+		founds, hops, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue, true)
 		path_lengths = append(path_lengths, hops)
 		nums_msgs = append(nums_msgs, msgs)
 		if !failure {
@@ -236,7 +236,7 @@ func expEachIterative() {
 		for j := 1; j <= EACH_UNICAST_TIMES; j++ {
 			count++
 			dst := rand.Intn(len(NormalList))
-			founds, _, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue)
+			founds, _, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue, true)
 			if max_hops < hops_to_match {
 				max_hops = hops_to_match
 			}
@@ -263,18 +263,45 @@ func expEachIterative() {
 	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(EACH_UNICAST_TRIALS*EACH_UNICAST_TIMES))
 }
 
+func expTenToOne(trials int) {
+	match_lengths := []float64{}
+	failures := 0
+	count := 0
+	nums_msgs := []int{}
+	for i := 0; i < trials; i++ {
+		src := i //((*numberOfNodes - 1) / trials * i)
+		count++
+		dst := len(NormalList) - 1 // max identifier
+		ayame.Log.Debugf("%d th query: src=%d, dst=%d\n", int64(count), src, dst)
+		founds, _, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue, true)
+		nums_msgs = append(nums_msgs, msgs)
+		if !failure {
+			match_lengths = append(match_lengths, float64(hops_to_match))
+		} else {
+			failures++
+			ayame.Log.Infof("%d->%d: FAILURE!!! %s, hops=%.1f\n", src, dst, ayame.SliceString(founds), hops_to_match)
+		}
+		ayame.Log.Debugf("%d th query: nodes=%d, src=%d, dst=%d, hops_to_match=%f\n", int64(count), len(NormalList), src, dst, hops_to_match)
+
+	}
+	hmean, _ := stats.Mean(match_lengths)
+	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(count))
+}
+
 var paramsString string
 
 func main() {
-	alpha = flag.IntP("alpha", "a", 3, "the parallelism parameter")
+	alpha = flag.IntP("alpha", "a", 20, "the parallelism parameter")
 	dValue = flag.IntP("disjoint-paths", "d", 1, "the disjoint path parameter")
-	expType = flag.StringP("exp-type", "e", "uni", "uni|uni-max")
-	failureRatio = flag.Float64P("failure-ratio", "f", 0.2, "failure ratio")
-	kValue = flag.IntP("bucket-size", "k", 16, "the bucket size parameter")
-	numberOfNodes = flag.IntP("nodes", "n", 100, "number of nodes")
+	expType = flag.StringP("exp-type", "e", "tto", "uni|uni-max")
+	failureRatio = flag.Float64P("failure-ratio", "f", 0.0, "failure ratio")
+	kValue = flag.IntP("bucket-size", "k", 20, "the bucket size parameter")
+	numberOfNodes = flag.IntP("nodes", "n", 1001, "number of nodes")
 	trials = flag.IntP("trials", "t", -1, "number of search trials (-1 means same as nodes)")
 	underAttackType = flag.StringP("attack-type", "u", "cea", "runs under attacks {none|ara|cea|stop}")
-	seed = flag.Int64P("seed", "s", 1, "give a random seed")
+	seed = flag.Int64P("seed", "s", 3, "give a random seed")
 	verbose = flag.BoolP("verbose", "v", false, "verbose output")
 
 	flag.Parse()
@@ -312,6 +339,8 @@ func main() {
 	//numberOfTrials := *numberOfNodes * 6
 
 	switch *expType {
+	case "tto":
+		expTenToOne(strials)
 	case "uni-max":
 		expEachIterative()
 	case "uni":

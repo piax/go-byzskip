@@ -326,7 +326,7 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 						}
 					}
 				}
-				localn.JoinAsync(context.TODO(), nodes[index])
+				localn.JoinSim(context.TODO(), nodes[index])
 				// need to wait until function end or channel waiting status
 				count++
 				percent := 100 * count / len(nodes)
