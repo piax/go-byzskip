@@ -1,5 +1,5 @@
-# go-byzskip
-An implementation of ByzSkip by Go language.
+# go-byzskip: ByzSkip Implementation in Go
+
 This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for the P2P transport.
 
 ## Libraries
@@ -29,18 +29,39 @@ The simulators related to ByzSkip.
 Some experimental codes.
 
 * [visskip](simulators/visskip) - an experimental visualizer of byzskip simulations.
-* [dht](dht) - an experimental DHT implementation using ByzSkip
+* [dht](dht) - an experimental IPFS-compatible DHT implementation using ByzSkip
 * [dhtsrv](cmd/dhtsrv) - an experimental DHT node with API/web server
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)
 
-## Requirements
+## Run as a router in IPFS/Kubo
 
-Go 1.18 or higher
+There are a few steps required to run ByzSkip/DHT on IPFS. Here's what you need to do:
+
+1. Obtain kubo source code
+```bash
+git clone https://github.com/ipfs/kubo
+```
+2. Apply the patch
+```bash
+cd kubo
+patch -p1 < bsdht.diff
+```
+3. Update dependencies
+```bash
+go mod tidy
+```
+4. Build kubo binary
+```bash
+cd cmd/kubo
+go build
+```
 
 ## License
 
 AGPLv3
 
+If you need alternative license without source code disclosure obligation, feel free to contact us to discuss alternative licensing options.
+
 ## Acknowledgements
 
-This work was partially supported by JSPS KAKENHI Grant Number JP20H04186.
+This work was partially supported by JSPS KAKENHI Grant Number JP23K28081.
