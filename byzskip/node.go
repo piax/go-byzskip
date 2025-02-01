@@ -426,7 +426,8 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
+		//if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || true {
 			ret = ayame.AppendIfAbsent(ret, c)
 			ret = ayame.Exclude(ret, stat.queried)
 			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
@@ -437,7 +438,8 @@ func (n *BSNode) pickCandidates(stat *JoinStats, count int) []*BSNode {
 		if len(ret) == count {
 			return ret
 		}
-		if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
+		//if MODIFY_ROUTING_TABLE_BY_RESPONSE || c.isIntroducer() || n.RoutingTable.PossiblyBeAdded(c) {
+		if MODIFY_ROUTING_TABLE_BY_RESPONSE || true {
 			ret = ayame.AppendIfAbsent(ret, c)
 			ret = ayame.Exclude(ret, stat.queried)
 			ret = ayame.Exclude(ret, []*BSNode{n}) // remove self.
@@ -522,12 +524,17 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 			//n.statsMutex.Unlock()
 		}
 		for _, c := range cs {
-			node := c // candidate
-			reqCount++
-			id := NextId()
-			go func() {
-				n.FindNode(joinCtx, findCh, node, id)
-			}()
+			if c.isIntroducer() || c.RoutingTable.PossiblyBeAdded(c) {
+				node := c // candidate
+				reqCount++
+				id := NextId()
+				go func() {
+					n.FindNode(joinCtx, findCh, node, id)
+				}()
+			} else {
+				// no need to be queried, just marked as queried
+				n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, c)
+			}
 		}
 	L:
 		for i := 0; i < reqCount; i++ {
@@ -589,7 +596,7 @@ func (n *BSNode) RunBootstrap(ctx context.Context) error {
 	return nil
 }
 
-func (n *BSNode) JoinAsync(ctx context.Context, introducer *BSNode) {
+func (n *BSNode) JoinSim(ctx context.Context, introducer *BSNode) {
 	n.stats = &JoinStats{runningQueries: 0,
 		closest:    []*BSNode{introducer},
 		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
@@ -1290,6 +1297,7 @@ func NodeEventForwarder(ctx context.Context, sender *BSNode, receiver *BSNode, e
 
 func (n *BSNode) SendEventAsync(ctx context.Context, receiver ayame.Node, ev ayame.SchedEvent, sign bool) {
 	// XXX run asynchronously? it should be ended in a short time.
+	// XXX this breaks simulation?
 	//go func() {
 	ev.SetSender(n)
 	ev.SetReceiver(receiver)

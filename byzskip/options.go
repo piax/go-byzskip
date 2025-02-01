@@ -56,6 +56,13 @@ func DetailedStatistics(enable bool) Option {
 	}
 }
 
+func DisableFixLowPeers(enable bool) Option {
+	return func(c *Config) error {
+		c.DisableFixLowPeers = &enable
+		return nil
+	}
+}
+
 // desired key
 func Key(key ayame.Key) Option {
 	return func(c *Config) error {
