@@ -72,19 +72,19 @@ func ConvertPeers(self *p2p.P2PNode, peers []*pb.Peer) []*BSNode {
 	ret := []*BSNode{}
 
 	for _, p := range peers {
-		if n, err := ConvertPeer(self, p); err == nil {
+		if n, err := ConvertPeer(self, p, self.VerifyIntegrity); err == nil {
 			ret = append(ret, n)
 		} else {
-			panic("pubkey verify failed")
+			// pubkey verify failed
 		}
 	}
 	return ret
 }
 
-func ConvertPeer(self *p2p.P2PNode, p *pb.Peer) (*BSNode, error) {
+func ConvertPeer(self *p2p.P2PNode, p *pb.Peer, needValidation bool) (*BSNode, error) {
 	parent := p2p.NewRemoteNode(self, p)
 	if self.VerifyIntegrity {
-		if self.Validator != nil {
+		if self.Validator != nil && needValidation {
 			//ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
 			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
 				ayame.Log.Debugf("remote peer %s validated", parent.Id()) // XXX should be cached for performance.
@@ -144,7 +144,7 @@ func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
-	author, _ := ConvertPeer(self, mes.Data.Author)
+	author, _ := ConvertPeer(self, mes.Data.Author, self.VerifyIntegrity)
 	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
@@ -155,7 +155,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, ayame.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
 			ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		}
-		p, _ := ConvertPeer(self, mes.Sender)
+		p, _ := ConvertPeer(self, mes.Sender, self.VerifyIntegrity)
 		ev.SetSender(p)
 		ev.SetVerified(!self.VerifyIntegrity || valid) // verification conscious
 	case pb.MessageType_FIND_MV:
@@ -168,7 +168,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			messageId:          mes.Data.Id,
 			neighbors:          ConvertPeers(self, mes.Data.CloserPeers),
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
-		p, err := ConvertPeer(self, mes.Sender)
+		p, err := ConvertPeer(self, mes.Sender, false) // request-response can skip sender verification (done by libp2p)
 		if err != nil {
 			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
@@ -182,7 +182,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			messageId:          mes.Data.Id,
 			targets:            ConvertPeers(self, mes.Data.CloserPeers),
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
-		p, err := ConvertPeer(self, mes.Sender)
+		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
@@ -202,7 +202,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			closers:            ConvertPeers(self, mes.Data.CloserPeers),
 			level:              level,
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
-		p, err := ConvertPeer(self, mes.Sender)
+		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
@@ -214,7 +214,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			MessageId: mes.Data.Id,
 			TargetKey: ayame.NewKey(mes.Data.Key),
 		}
-		p, err := ConvertPeer(self, mes.Sender)
+		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
