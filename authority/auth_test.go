@@ -22,4 +22,9 @@ func TestAuthJoinInfo(t *testing.T) {
 	if VerifyJoinCert(id2, key, mv, sig, auth.PublicKey()) {
 		t.Fail()
 	}
+	id3 := peer.ID("16Uiu2HAmJWtZnYUiB7aMDVQs6itSUPc5bCWFytwdf3KQYRuMcjTv")
+	sig2 := auth.Authorize(id3, key, mv)
+	if !VerifyJoinCert(id3, key, mv, sig2, auth.PublicKey()) {
+		t.Fail()
+	}
 }
