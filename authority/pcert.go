@@ -63,7 +63,7 @@ func NewPCert(key ayame.Key, id peer.ID, mv *ayame.MembershipVector, cert []byte
 func (r *PCert) MarshalJSON() ([]byte, error) {
 	type alias PCert
 	kb := r.Key.Encode()
-	idb := peer.Encode(r.id)
+	idb := r.id.String()
 	mvb := r.Mv.Encode()
 
 	return json.Marshal(&struct {
