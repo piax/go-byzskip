@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ipfs-util v0.0.3
@@ -24,7 +24,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/thoas/go-funk v0.9.2
 	go.opentelemetry.io/otel v1.34.0
-	golang.org/x/mobile v0.0.0-20201217150744-e6ae53a27f4f
+	golang.org/x/mobile v0.0.0-20250106192035-c31d5b91ecc3
 )
 
 require (
@@ -122,8 +122,8 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
-	golang.org/x/exp/shiny v0.0.0-20221106115401-f9659909a136 // indirect
-	golang.org/x/image v0.14.0 // indirect
+	golang.org/x/exp/shiny v0.0.0-20230817173708-d852ddb80c63 // indirect
+	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
