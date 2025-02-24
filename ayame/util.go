@@ -1,11 +1,13 @@
 package ayame
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/op/go-logging"
 )
@@ -146,4 +148,26 @@ func SliceString[T fmt.Stringer](args []T) string {
 func PickRandomly[T any](arg []T) T {
 	i := rand.Intn(len(arg))
 	return arg[i]
+}
+
+func ExecWithTimeout(ctx context.Context, fn func(), timeout time.Duration) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	go func() {
+		fn()
+	}()
+	return sentinel(timeoutCtx)
+}
+
+func sentinel(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			return nil
+		}
+		return ctx.Err()
+	default:
+		return nil // finished normally
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	u "github.com/ipfs/go-ipfs-util"
@@ -27,6 +26,7 @@ import (
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	bs "github.com/piax/go-byzskip/byzskip"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/protobuf/proto"
 )
 
 // assertion
@@ -193,7 +193,9 @@ func (dht *BSDHT) getRecordFromDatastore(ctx context.Context, dskey ds.Key) (*pb
 	}
 	err = dht.RecordValidator.Validate(string(rec.GetKey()), rec.GetValue())
 	if err != nil {
-		return nil, err
+		// Invalid record in datastore, probably expired but don't return an error,
+		// we'll just overwrite it
+		return nil, nil
 	}
 
 	return rec, nil
@@ -268,15 +270,32 @@ func (dht *BSDHT) PutValue(ctx context.Context, key string, value []byte, opts .
 	}
 	ayame.Log.Debugf("lookup done: %v", peers)
 
-	successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
-		err := dht.sendPutValue(ctx, p, rec)
-		return err
-	}, nsToIs(peers), true)
+	/*
+		successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
+			err := dht.sendPutValue(ctx, p, rec)
+			return err
+		}, nsToIs(peers), true)
 
-	ayame.Log.Debugf("put succeeded on %d nodes", successes)
-	if successes == 0 {
-		return fmt.Errorf("failed to complete put")
+		ayame.Log.Debugf("put succeeded on %d nodes", successes)
+		if successes == 0 {
+			return fmt.Errorf("failed to complete put")
+		}
+	*/
+	wg := sync.WaitGroup{}
+	for _, p := range peers {
+		wg.Add(1)
+		go func(p ayame.Node) {
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			defer wg.Done()
+			err := dht.sendPutValue(ctx, p, rec)
+			if err != nil {
+				ayame.Log.Debugf("failed putting value to peer: %s", err)
+			}
+		}(p)
 	}
+	wg.Wait()
+
 	return nil
 }
 
@@ -290,6 +309,7 @@ func nsToIs(lst []*bs.BSNode) []ayame.Node {
 }
 
 func (dht *BSDHT) sendGetProviders(ctx context.Context, p ayame.Node, key multihash.Multihash) ([]*peer.AddrInfo, error) {
+	ayame.Log.Debugf("send get providers")
 	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
 		return nil, nil
 	}
@@ -323,6 +343,7 @@ func (dht *BSDHT) sendPutProvider(ctx context.Context, p ayame.Node, key multiha
 }
 
 func (dht *BSDHT) sendPutValue(ctx context.Context, p ayame.Node, rec *pb.Record) error {
+	ayame.Log.Debugf("send put value")
 	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
 		return nil
 	}
@@ -344,6 +365,7 @@ func (dht *BSDHT) sendPutValue(ctx context.Context, p ayame.Node, rec *pb.Record
 }
 
 func (dht *BSDHT) sendGetValue(ctx context.Context, p ayame.Node, key string) (*pb.Record, error) {
+	ayame.Log.Debugf("send get values")
 	if dht.Node.Id() == p.Id() { // put to self.
 		return dht.getRecordFromDatastore(ctx, mkDsKey(key))
 	}
@@ -462,6 +484,7 @@ func (dht *BSDHT) GetValue(ctx context.Context, key string, opts ...routing.Opti
 }
 
 type RecvdVal struct {
+	Key  []byte
 	Val  []byte
 	From peer.ID
 }
@@ -509,8 +532,7 @@ loop:
 	return
 }
 
-func (dht *BSDHT) searchValueQuorum(ctx context.Context, key string, valCh <-chan RecvdVal, stopCh chan struct{},
-	out chan<- []byte, nvals int) ([]byte, map[peer.ID]struct{}, bool) {
+func (dht *BSDHT) searchValueQuorum(ctx context.Context, key string, valCh <-chan RecvdVal, out chan<- []byte, nvals int) ([]byte, map[peer.ID]struct{}, bool) {
 	numResponses := 0
 	return dht.processValues(ctx, key, valCh,
 		func(ctx context.Context, v RecvdVal, better bool) bool {
@@ -524,7 +546,7 @@ func (dht *BSDHT) searchValueQuorum(ctx context.Context, key string, valCh <-cha
 			}
 
 			if nvals > 0 && numResponses > nvals {
-				close(stopCh)
+				//close(stopCh)
 				return true
 			}
 			return false
@@ -543,13 +565,13 @@ func (dht *BSDHT) SearchValue(ctx context.Context, key string, opts ...routing.O
 		responsesNeeded = GetQuorum(&cfg)
 	}
 
-	stopCh := make(chan struct{})
-	valCh, lookupRes := dht.getValues(ctx, key, stopCh)
+	//stopCh := make(chan struct{})
+	valCh, lookupRes := dht.getValues(ctx, key)
 
 	out := make(chan []byte)
 	go func() {
 		defer close(out)
-		best, peersWithBest, aborted := dht.searchValueQuorum(ctx, key, valCh, stopCh, out, responsesNeeded)
+		best, peersWithBest, aborted := dht.searchValueQuorum(ctx, key, valCh, out, responsesNeeded)
 		if best == nil || aborted {
 			return
 		}
@@ -582,7 +604,8 @@ type lookupWithFollowupResult struct {
 	peers []ayame.Node // the top K not unreachable peers at the end of the query
 }
 
-func (dht *BSDHT) getValues(ctx context.Context, key string, stopQuery chan struct{}) (<-chan RecvdVal, <-chan *lookupWithFollowupResult) {
+// stopQuery is not implemented.
+func (dht *BSDHT) getValues(ctx context.Context, key string) (<-chan RecvdVal, <-chan *lookupWithFollowupResult) {
 	valCh := make(chan RecvdVal, 1)
 	lookupResCh := make(chan *lookupWithFollowupResult, 1)
 
@@ -591,6 +614,7 @@ func (dht *BSDHT) getValues(ctx context.Context, key string, stopQuery chan stru
 	if rec, err := dht.getLocal(ctx, key); rec != nil && err == nil {
 		select {
 		case valCh <- RecvdVal{
+			Key:  rec.GetKey(),
 			Val:  rec.GetValue(),
 			From: dht.Node.Id(),
 		}:
@@ -614,6 +638,7 @@ func (dht *BSDHT) getValues(ctx context.Context, key string, stopQuery chan stru
 			// Pre-existing code counted it towards the quorum, but should it?
 			if rec != nil && rec.GetValue() != nil {
 				rv := RecvdVal{
+					Key:  rec.GetKey(),
 					Val:  rec.GetValue(),
 					From: p.Id(),
 				}
@@ -628,12 +653,14 @@ func (dht *BSDHT) getValues(ctx context.Context, key string, stopQuery chan stru
 		}
 
 		dht.execOnMany(ctx, queryFn, peers, false)
+
 		lookupResCh <- &lookupWithFollowupResult{peers: peers}
 	}()
 	return valCh, lookupResCh
 }
 
 func (dht *BSDHT) updatePeerValues(ctx context.Context, key string, val []byte, peers []ayame.Node) {
+	ayame.Log.Debugf("update peer values")
 	fixupRec := MakePutRecord(key, val)
 	for _, p := range peers {
 		go func(p ayame.Node) {
@@ -709,20 +736,30 @@ func (dht *BSDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) error {
 	default:
 		return err
 	}
+	/*
+		successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
+			err := dht.sendPutProvider(context.Background(), p, keyMH) //dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h)
+			return err
+		}, peers, true)
+	*/
 
-	successes := dht.execOnMany(ctx, func(ctx context.Context, p ayame.Node) error {
-		err := dht.sendPutProvider(context.Background(), p, keyMH) //dht.protoMessenger.PutProvider(ctx, p, keyMH, dht.h)
-		return err
-	}, peers, true)
+	wg := sync.WaitGroup{}
+	for _, p := range peers {
+		wg.Add(1)
+		go func(p ayame.Node) {
+			defer wg.Done()
+			ayame.Log.Debugf("putProvider(%s, %s)", keyMH, p)
+			err := dht.sendPutProvider(ctx, p, keyMH)
+			if err != nil {
+				ayame.Log.Debug(err)
+			}
+		}(p)
+	}
+	wg.Wait()
 
 	if exceededDeadline {
 		return context.DeadlineExceeded
 	}
-
-	if successes == 0 {
-		return fmt.Errorf("failed to complete provide")
-	}
-
 	return ctx.Err()
 }
 
@@ -876,11 +913,11 @@ func (dht *BSDHT) GetPublicKey(ctx context.Context, p peer.ID) (crypto.PubKey, e
 
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	var ev ayame.SchedEvent
-	author, _ := bs.ConvertPeer(self, mes.Data.Author, self.VerifyIntegrity)
-	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
+	originator, _ := bs.ConvertPeer(self, mes.Data.Originator, self.VerifyIntegrity)
+	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Originator.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_GET_VALUE:
-		ev = NewBSGetEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record)
+		ev = NewBSGetEvent(originator, mes.Data.Id, mes.IsRequest, mes.Data.Record)
 		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
@@ -889,7 +926,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetVerified(true) // always verified
 		return ev
 	case pb.MessageType_PUT_VALUE:
-		ev = NewBSPutEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.Record[0])
+		ev = NewBSPutEvent(originator, mes.Data.Id, mes.IsRequest, mes.Data.Record[0])
 		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to convert node: %s\n", err))
@@ -898,7 +935,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetVerified(true) // always verified
 		return ev
 	case pb.MessageType_ADD_PROVIDER:
-		ev = NewBSPutProviderEvent(author, mes.Data.Id, mes.Data.SenderAppData,
+		ev = NewBSPutProviderEvent(originator, mes.Data.Id, mes.Data.SenderAppData,
 			bs.ConvertPeers(self, mes.Data.CandidatePeers))
 		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {
@@ -908,7 +945,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		ev.SetVerified(true) // always verified
 		return ev
 	case pb.MessageType_GET_PROVIDERS:
-		ev = NewBSGetProvidersEvent(author, mes.Data.Id, mes.IsRequest, mes.Data.SenderAppData,
+		ev = NewBSGetProvidersEvent(originator, mes.Data.Id, mes.IsRequest, mes.Data.SenderAppData,
 			mes.Data.CandidatePeers)
 		p, err := bs.ConvertPeer(self, mes.Sender, false)
 		if err != nil {

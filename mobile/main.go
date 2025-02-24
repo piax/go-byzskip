@@ -5,15 +5,14 @@ package main
 import (
 	"context"
 
+	"github.com/libp2p/go-libp2p"
+	"github.com/piax/go-byzskip/ayame"
+	bs "github.com/piax/go-byzskip/byzskip"
 	"golang.org/x/mobile/app"
 	"golang.org/x/mobile/event/lifecycle"
 	"golang.org/x/mobile/event/paint"
 	"golang.org/x/mobile/event/size"
 	"golang.org/x/mobile/gl"
-
-	"github.com/libp2p/go-libp2p"
-	"github.com/piax/go-byzskip/ayame"
-	bs "github.com/piax/go-byzskip/byzskip"
 )
 
 var (
@@ -67,4 +66,5 @@ func onDraw(glctx gl.Context, sz size.Event) {
 		glctx.ClearColor(1, 0, 0, 1) // red
 	}
 	glctx.Clear(gl.COLOR_BUFFER_BIT)
+	ayame.Log.Debugf("%d, %d", sz.HeightPx, sz.WidthPx)
 }

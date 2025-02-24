@@ -49,7 +49,7 @@ func PathEntries(nodes []*BSNode) []PathEntry {
 	return ret
 }
 
-func NewBSUnicastEventNoAuthor(sender *BSNode, messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
+func NewBSUnicastEventNoOriginator(sender *BSNode, messageId string, level int, target ayame.Key, payload []byte) *BSUnicastEvent {
 	ev := &BSUnicastEvent{
 		TargetKey:                  target,
 		MessageId:                  messageId,
@@ -112,8 +112,8 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
 
-	if !strings.HasPrefix(ev.MessageId, ev.Author().MessageIdPrefix()+".") { // check if adversary generated mimic message id.
-		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Author().Id().String(), myNode.String())
+	if !strings.HasPrefix(ev.MessageId, ev.Originator().MessageIdPrefix()+".") { // check if adversary generated mimic message id.
+		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Originator().Id().String(), myNode.String())
 		return false
 	}
 	myNode.seenMutex.RLock()
@@ -168,7 +168,7 @@ func (ue *BSUnicastEvent) String() string {
 func (ue *BSUnicastEvent) Encode() *pb.Message {
 	sender := ue.Sender().(*BSNode).Parent.(*p2p.P2PNode)
 	ret := sender.NewMessage(ue.MessageId,
-		pb.MessageType_UNICAST, ue.Author(), ue.AuthorSign(), ue.AuthorPubKey(),
+		pb.MessageType_UNICAST, ue.Originator(), ue.OriginatorSign(), ue.OriginatorPubKey(),
 		ue.TargetKey, nil)
 
 	var peers []*pb.Peer
@@ -323,7 +323,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 				ks, _ := myNode.RoutingTable.GetNeighborLists()[i].PickupKNodes(ev.TargetKey)
 				if len(ks) > 0 {
 					kNodes = funk.Filter(ksToNs(ks), func(n *BSNode) bool {
-						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(ev.Author().MV()) > n.MV().CommonPrefixLength(ev.Author().MV())
+						return n.Equals(myNode) || myNode.MV().CommonPrefixLength(ev.Originator().MV()) > n.MV().CommonPrefixLength(ev.Originator().MV())
 					}).([]*BSNode)
 					destLevel = i
 					break

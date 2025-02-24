@@ -22,7 +22,7 @@ func (blankValidator) Select(_ string, _ [][]byte) (int, error) { return 0, nil 
 
 func addr(port int, quic bool) string {
 	if quic {
-		return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", port)
+		return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic-v1", port)
 	} else {
 		return fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port)
 	}
@@ -33,7 +33,7 @@ func setupDHTs(ctx context.Context, numberOfPeers int, useQuic bool) []*BSDHT {
 	auth := authority.NewAuthorizer()
 	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 		mv := ayame.NewMembershipVector(2)
-		bin := auth.Authorize(id, key, mv)
+		bin := auth.Authorize(id, key, mv, time.Now().Unix(), time.Now().Unix()+100)
 		return key, mv, bin, nil
 	}
 	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {

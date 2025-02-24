@@ -163,7 +163,7 @@ func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
 
 func receiveMessage(node *bs.BSNode, ev *bs.BSUnicastEvent) {
 	ayame.Log.Infof("received message: %s", ev.Payload)
-	sender := ev.Author().(*bs.BSNode)
+	sender := ev.Originator().(*bs.BSNode)
 	res := bs.NewBSUnicastResEvent(node, ev.MessageId, ev.Payload)
 	res.Path = ev.Path       // copy the path info
 	if sender.Equals(node) { //&& ev.TargetKey.Equals(node.Key()) {

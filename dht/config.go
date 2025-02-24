@@ -53,11 +53,11 @@ func ChainOptions(opts ...Option) Option {
 }
 
 const (
-	PROTOCOL = "/ipfs/byzskip/0.0.1"
+	PROTOCOL = "/ipfs/byzskip-dht/0.1.0"
 )
 
 func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
-	ayame.InitLogger(logging.ERROR) // set log level to error so that surpress messages.
+	ayame.InitLogger(logging.DEBUG) // set log level to error so that surpress messages.
 	key := ayame.NewIdKey(h.ID())
 	assignedKey, mv, cert, err := c.Authorizer(h.ID(), key)
 	if err != nil {

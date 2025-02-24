@@ -1,12 +1,15 @@
 // In order to re-generate the golang packages for `Message` you will need...
+// protoc -I. --go_out=. ayame.proto
+//
+// Old:
 // 1. Protobuf binary (tested with protoc 3.17.3)
 // 2. protoc-gen-gofast binary - go get github.com/gogo/protobuf/protoc-gen-gofast
-// Now you can run...
 // protoc --gofast_out=. ayame.proto
-
 
 syntax = "proto3";
 package ayame.pb;
+option go_package = "./";
+import "github.com/libp2p/go-libp2p-record/pb/record.proto";
 
 enum KeyType {
 	INT = 0;
@@ -15,6 +18,12 @@ enum KeyType {
     ID = 3;
     RANGE = 4;
     UNIFIED = 5;
+}
+
+message Cert {
+    int64 validAfter = 1;
+    int64 validBefore = 2;
+    bytes sig = 3;
 }
 
 message Key {
@@ -76,22 +85,23 @@ message Peer {
     bytes cert = 6;
 }
 
-message Record {
+// import libp2p-record
+//message Record {
         // The key that references this record
-        bytes key = 1;
+//        bytes key = 1;
 
         // The actual value this record is storing
-        bytes value = 2;
+//        bytes value = 2;
 
         // Note: These fields were removed from the Record message
-        // hash of the authors public key
-        //optional string author = 3;
-        // A PKI signature for the key+value+author
+        // hash of the originators public key
+        //optional string originator = 3;
+        // A PKI signature for the key+value+originator
         //optional bytes signature = 4;
 
         // Time the record was received, set by receiver
-        string timeReceived = 5;
-}
+//        string timeReceived = 5;
+//}
 
 message TableIndex {
     int32 level = 1;
@@ -121,16 +131,16 @@ message MessageData {
     // Used to specify the MV associated with this message
     bytes mv = 7;
 
-    // protocol specific data added by author (such as level info)
-    string authorAppData = 8;
+    // protocol specific data added by originator (such as level info)
+    string originatorAppData = 8;
 
     // peer information of the node who created the message 
-    Peer author = 9;    // XXX ConnectionType is always CONNECTED for node itself
+    Peer originator = 9;    // XXX ConnectionType is always CONNECTED for node itself
     // the Secp256k1 public key (32bytes)
-    bytes authorPubKey = 10;
+    bytes originatorPubKey = 10;
 
-    // signature of message by authoring node (except authorSign and senderAppData)
-    bytes authorSign = 11;
+    // signature of message by originator node (except originatorSign and senderAppData)
+    bytes originatorSign = 11;
     // protocol specific data added by sender (such as level info)
     string senderAppData = 12;
 

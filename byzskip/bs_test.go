@@ -85,7 +85,7 @@ func TestSortMV(t *testing.T) {
 	ast.Equal(t, ayame.SliceString(lst), "[6,14,22,1,2,3,4]", "expected [6,14,22,1,2,3,4]")
 	//fmt.Println(MVString(lst))
 	//fmt.Println(target.LessOrEquals(lst[1].MV()))
-	//found := closestMV(target, lst)
+	//found, fin := .GetClosestNodesMV(target, lst, lst[1].Key())
 	//fmt.Println(ayame.SliceString(found))
 }
 
@@ -277,29 +277,6 @@ func TestSufficient2(t *testing.T) {
 	ast.Equal(t, rt.HasSufficientNeighbors(), false, "expected to have sufficient neighbors")
 }
 
-func TestChannel(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(300)*time.Millisecond)
-	defer cancel()
-	c := make(chan struct{})
-	go func() {
-		//time.Sleep(1000 * time.Microsecond)
-		c <- struct{}{}
-	}()
-
-	for len(c) == 0 {
-		time.Sleep(10 * time.Microsecond)
-		fmt.Printf("len=%d.\n", len(c))
-	}
-
-	select {
-	case <-ctx.Done():
-		fmt.Printf("timed out.\n")
-	case x := <-c:
-		fmt.Printf("got it %v.\n", x)
-	}
-
-}
-
 func TestTicker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1)*time.Second)
 	go func() {
@@ -323,7 +300,7 @@ L:
 
 func addr(port int, quic bool) string {
 	if quic {
-		return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", port)
+		return fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic-v1", port)
 	} else {
 		return fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port)
 	}
@@ -341,7 +318,7 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	}
 	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 		mv := ayame.NewMembershipVector(2)
-		bin := auth.Authorize(id, key, mv)
+		bin := auth.Authorize(id, key, mv, time.Now().Unix(), time.Now().Unix()+100)
 		return key, mv, bin, nil
 	}
 	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
@@ -400,7 +377,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
 		//mv := ayame.NewMembershipVector(2)
 		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
-		bin := auth.Authorize(id, key, mv)
+		bin := auth.Authorize(id, key, mv, time.Now().Unix(), time.Now().Unix()+100)
 		return key, mv, bin, nil
 	}
 	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
@@ -448,13 +425,16 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-func TestMVFromPeerID(t *testing.T) {
-	ayame.NewMembershipVectorFromBinary([]byte(ayame.RandomID()))
-}
+//func TestMVFromPeerID(t *testing.T) {
+//	ayame.NewMembershipVectorFromBinary([]byte(ayame.RandomID()))
+//}
 
 func TestJoin(t *testing.T) {
 	numberOfPeers := 32
-	setupNodes(4, numberOfPeers, true, true)
+	nodes := setupNodes(4, numberOfPeers, true, true)
+	for _, node := range nodes {
+		node.Close()
+	}
 }
 
 func TestFix(t *testing.T) { // 30 sec long test
@@ -467,6 +447,9 @@ func TestFix(t *testing.T) { // 30 sec long test
 	peers[20].Close()
 	time.Sleep(20 * time.Second)
 	ast.Equal(t, false, ContainsKey(ayame.IntKey(2), ksToNs(peers[1].RoutingTable.AllNeighbors(false, true))), "should not contain deleted key 2")
+	for _, peer := range peers {
+		peer.Close()
+	}
 }
 
 func TestLookup(t *testing.T) {
@@ -555,6 +538,11 @@ func TestLookupRange(t *testing.T) {
 func TestLookupName(t *testing.T) {
 	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
+	bak := ayame.MembershipVectorSize
+	defer func() {
+		ayame.MembershipVectorSize = bak
+	}()
+	ayame.MembershipVectorSize = 320
 	peers := setupNamedNodes(4, numberOfPeers, false, true)
 	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
@@ -649,12 +637,12 @@ func Example() {
 	numberOfPeers := 32
 	peers := make([]*BSNode, numberOfPeers)
 
-	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic"))
+	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic-v1"))
 	peers[0], _ = New(h)
-	introducer := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+	introducer := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic-v1/p2p/%s", peers[0].Id())
 	peers[0].RunBootstrap(context.Background())
 	for i := 1; i < numberOfPeers; i++ {
-		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic-v1", 9000+i)))
 		peers[i], _ = New(h, Bootstrap(introducer))
 		peers[i].Join(context.Background())
 		peers[i].SetMessageReceiver(func(node *BSNode, ev *BSUnicastEvent) {
@@ -671,5 +659,8 @@ func Example() {
 
 func TestTCP(t *testing.T) {
 	numberOfPeers := 100
-	setupNodes(4, numberOfPeers, true, false)
+	peers := setupNodes(4, numberOfPeers, true, false)
+	for _, peer := range peers {
+		peer.Close()
+	}
 }

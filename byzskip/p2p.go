@@ -144,15 +144,16 @@ func ConvertFindNodeRequest(req *pb.FindNodeRequest) *NeighborRequest {
 func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedEvent {
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
-	author, _ := ConvertPeer(self, mes.Data.Author, self.VerifyIntegrity)
-	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Author.Id)
+	originator, _ := ConvertPeer(self, mes.Data.Originator, self.VerifyIntegrity)
+	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Originator.Id)
+
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
 		if mes.IsResponse {
-			ev = NewBSUnicastResEvent(author, mes.Data.Id, mes.Data.Record[0].Value)
+			ev = NewBSUnicastResEvent(originator, mes.Data.Id, mes.Data.Record[0].Value)
 			ev.(*BSUnicastResEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		} else {
-			ev = NewBSUnicastEvent(author, mes.Data.AuthorSign, mes.Data.AuthorPubKey, mes.Data.Id, level, ayame.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
+			ev = NewBSUnicastEvent(originator, mes.Data.OriginatorSign, mes.Data.OriginatorPubKey, mes.Data.Id, level, ayame.NewKey(mes.Data.Key), mes.Data.Record[0].Value)
 			ev.(*BSUnicastEvent).Path = PathEntries(ConvertPeers(self, mes.Data.Path))
 		}
 		p, _ := ConvertPeer(self, mes.Sender, self.VerifyIntegrity)

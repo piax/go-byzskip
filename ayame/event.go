@@ -8,9 +8,9 @@ import (
 )
 
 type Event interface {
-	Author() Node
-	AuthorSign() []byte
-	AuthorPubKey() []byte
+	Originator() Node
+	OriginatorSign() []byte
+	OriginatorPubKey() []byte
 	Sender() Node
 	SetSender(Node)
 	Receiver() Node
@@ -28,27 +28,27 @@ type Event interface {
 }
 
 type AbstractEvent struct {
-	author       Node // the origin (creator) of this event.
-	authorSign   []byte
-	authorPubKey []byte
-	sender       Node
-	receiver     Node
-	sendTime     int64
-	vTime        int64
-	isVerified   bool
-	isRequest    bool
+	originator       Node // the origin (creator) of this event.
+	originatorSign   []byte
+	originatorPubKey []byte
+	sender           Node
+	receiver         Node
+	sendTime         int64
+	vTime            int64
+	isVerified       bool
+	isRequest        bool
 }
 
-func (ev *AbstractEvent) Author() Node {
-	return ev.author
+func (ev *AbstractEvent) Originator() Node {
+	return ev.originator
 }
 
-func (ev *AbstractEvent) AuthorSign() []byte {
-	return ev.authorSign
+func (ev *AbstractEvent) OriginatorSign() []byte {
+	return ev.originatorSign
 }
 
-func (ev *AbstractEvent) AuthorPubKey() []byte {
-	return ev.authorPubKey
+func (ev *AbstractEvent) OriginatorPubKey() []byte {
+	return ev.originatorPubKey
 }
 
 func (ev *AbstractEvent) Sender() Node {
@@ -103,8 +103,8 @@ func (ev *AbstractEvent) IsResponse() bool {
 	return false
 }
 
-func NewEvent(author Node, authorSign []byte, authorPubKey []byte) *AbstractEvent {
-	return &AbstractEvent{author: author, authorSign: authorSign, authorPubKey: authorPubKey, sender: nil, receiver: nil, isVerified: true, isRequest: false, sendTime: -1, vTime: -1}
+func NewEvent(originator Node, originatorSign []byte, originatorPubKey []byte) *AbstractEvent {
+	return &AbstractEvent{originator: originator, originatorSign: originatorSign, originatorPubKey: originatorPubKey, sender: nil, receiver: nil, isVerified: true, isRequest: false, sendTime: -1, vTime: -1}
 }
 
 func NewEventNoAuthor() *AbstractEvent {
@@ -172,12 +172,12 @@ func (se *AbstractSchedEvent) SetCanceled(c bool) {
 	se.isCanceled = c
 }
 
-//func (se *AbstractSchedEvent) Job() func(se SchedEvent, node Node) {
+// func (se *AbstractSchedEvent) Job() func(se SchedEvent, node Node) {
 func (se *AbstractSchedEvent) Job() func() {
 	return se.job
 }
 
-//func (se *AbstractSchedEvent) SetJob(j func(se SchedEvent, node Node)) {
+// func (se *AbstractSchedEvent) SetJob(j func(se SchedEvent, node Node)) {
 func (se *AbstractSchedEvent) SetJob(j func()) {
 	se.job = j
 }

@@ -49,7 +49,7 @@ func ChainOptions(opts ...Option) Option {
 }
 
 const (
-	PROTOCOL = "/byzskip/0.0.1"
+	PROTOCOL = "/byzskip/0.1.0"
 )
 
 func (c *Config) NewNode(h host.Host) (*BSNode, error) {

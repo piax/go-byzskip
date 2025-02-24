@@ -1,8 +1,9 @@
 package ayame
 
 import (
-	"github.com/gogo/protobuf/proto"
+	//proto "github.com/gogo/protobuf/proto"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 func isOrderedInclusive(a, b, c Key) bool {
@@ -134,7 +135,7 @@ func (t *RangeKey) Encode() *pb.Key {
 		EndInclusive:   t.endInclusive,
 		EndExtent:      encEE,
 	}
-	bytes, _ := pr.Marshal()
+	bytes, _ := proto.Marshal(&pr)
 	return &pb.Key{
 		Type: pb.KeyType_RANGE,
 		Body: bytes}

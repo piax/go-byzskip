@@ -54,7 +54,7 @@ func DoUnicast() string {
 	src := NormalList[rand.Intn(len(NormalList))]
 	dst := NormalList[rand.Intn(len(NormalList))]
 	mid := src.String() + "." + NextId()
-	msg := bs.NewBSUnicastEventNoAuthor(src, mid, ayame.MembershipVectorSize, dst.Key(), []byte("hello"))
+	msg := bs.NewBSUnicastEventNoOriginator(src, mid, ayame.MembershipVectorSize, dst.Key(), []byte("hello"))
 	ayame.GlobalEventExecutor.RegisterEvent(msg, int64(1000))
 	ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
 		ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)

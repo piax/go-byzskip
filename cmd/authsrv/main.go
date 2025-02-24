@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -22,9 +23,10 @@ var keystore *string
 var auth *authority.Authorizer
 
 const (
-	SEQ_NO      = "_seq"
-	KEY_PREFIX  = "key_"
-	CERT_PREFIX = "cert_"
+	SEQ_NO              = "_seq"
+	KEY_PREFIX          = "key_"
+	CERT_PREFIX         = "cert_"
+	AUTH_VALID_DURATION = "8760h"
 )
 
 // honest integer key
@@ -45,10 +47,13 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	mv := ayame.NewMembershipVector(2)
-	bin := auth.Authorize(id, key, mv)
+	d, _ := time.ParseDuration(AUTH_VALID_DURATION)
 
-	p := authority.NewPCert(key, id, mv, bin)
+	va := time.Now().Unix()
+	vb := va + int64(d.Seconds())
+	mv := ayame.NewMembershipVector(2)
+	bin := auth.Authorize(id, key, mv, va, vb)
+	p := authority.NewPCert(key, id, mv, bin, time.Unix(va, 0), time.Unix(vb, 0))
 
 	pcert, _ := json.Marshal(p)
 	//db.Put([]byte(KEY_PREFIX+vals["user"][0]), pcert, nil)
