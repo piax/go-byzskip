@@ -1,11 +1,16 @@
 package authority
 
 import (
+	"encoding/binary"
 	"os"
+	"time"
 
+	//proto "github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/ayame"
+	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -53,35 +58,99 @@ func (auth *Authorizer) PublicKey() crypto.PubKey {
 	return auth.pubKey
 }
 
-func (auth *Authorizer) Authorize(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
-	return newJoinInfoCert(id, key, mv, auth.privKey)
+func (auth *Authorizer) Authorize(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64) []byte {
+	return newJoinInfoCert(id, key, mv, va, vb, auth.privKey)
 }
 
-func marshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector) []byte {
+func MarshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64) []byte {
 	ret, _ := id.MarshalBinary() // XXX discarded errors
-	bin, _ := key.Encode().Marshal()
+	//bin, _ := key.Encode().Marshal()
+	bin, _ := proto.Marshal(key.Encode())
 	ret = append(ret, bin...)
 	ret = append(ret, mv.Encode()...)
+	ret = append(ret, int64ToBytes(va)...)
+	ret = append(ret, int64ToBytes(vb)...)
 	return ret
 }
 
-// Create a new node with its implemented protocols
-func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
-	data := marshalJoinInfo(id, key, mv)
-	ayame.Log.Debugf("verifying joincert id=%s, key=%s, mv=%s, data=%v, cert=%x", id, key, mv, data, cert)
+func int64ToBytes(i int64) []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(i))
+	return b
+}
 
-	res, err := pubKey.Verify(data, cert)
+func Sign(data []byte, va int64, vb int64, privKey crypto.PrivKey) ([]byte, error) {
+	res, err := privKey.Sign(data)
+	if err != nil {
+		return nil, err
+	}
+	c := &pb.Cert{Sig: res, ValidAfter: va, ValidBefore: vb}
+	ret, err := proto.Marshal(c)
+	return ret, err
+}
+
+func ExtractCert(cert []byte) ([]byte, int64, int64, error) {
+	c := &pb.Cert{}
+	err := proto.Unmarshal(cert, c)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return c.Sig, c.ValidAfter, c.ValidBefore, nil
+}
+
+func Verify(data []byte, cert []byte, pubKey crypto.PubKey) bool {
+	c := &pb.Cert{}
+	err := proto.Unmarshal(cert, c)
 	if err != nil {
 		ayame.Log.Errorf("Verify error: %s\n", err)
 		return false
 	}
+	res, err := pubKey.Verify(data, c.Sig)
+	if err != nil {
+		ayame.Log.Errorf("Verify error: %s\n", err)
+		return false
+	}
+	if !res {
+		ayame.Log.Errorf("Verify error\n")
+		return false
+	}
+	now := time.Now().Unix()
+	if c.ValidAfter > now {
+		ayame.Log.Errorf("Not valid yet: validAfter=%s\n", time.Unix(c.ValidAfter, 0).Format(time.RFC3339))
+		return false
+	}
+	if c.ValidBefore < now {
+		ayame.Log.Errorf("Certificate expired: validBefore=%s\n", time.Unix(c.ValidBefore, 0).Format(time.RFC3339))
+		return false
+	}
+	return true
+}
+
+// Create a new node with its implemented protocols
+func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
+	c := &pb.Cert{}
+	if err := proto.Unmarshal(cert, c); err != nil {
+		ayame.Log.Errorf("Verify error: %s\n", err)
+		return false
+	}
+	data := MarshalJoinInfo(id, key, mv, c.ValidAfter, c.ValidBefore)
+	ayame.Log.Debugf("verifying joincert id=%s, key=%s, mv=%s, data=%v, cert=%x", id, key, mv, data, cert)
+
+	//res, err := pubKey.Verify(data, cert)
+	res := Verify(data, cert, pubKey)
+	//if err != nil {
+	//	ayame.Log.Errorf("Verify error: %s\n", err)
+	//	return false
+	//}
 	return res
 }
 
-func newJoinInfoCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, privKey crypto.PrivKey) []byte {
-	data := marshalJoinInfo(id, key, mv)
+func newJoinInfoCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64, privKey crypto.PrivKey) []byte {
+	data := MarshalJoinInfo(id, key, mv, va, vb)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
 	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
-	res, _ := privKey.Sign(data) // XXX discarded errors
+	//res, _ := privKey.Sign(data) // XXX discarded errors
+	res, _ := Sign(data, va, vb, privKey) // XXX discarded errors
+
 	return res
 }
