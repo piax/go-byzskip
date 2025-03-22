@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -15,28 +16,23 @@ const (
 	WEBAUTH_URL = "WEBAUTH_URL"
 )
 
-func WebAuthAuthorize(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-	c, err := authWeb(os.Getenv(WEBAUTH_URL), id, key)
+func WebGetCert(id peer.ID, key ayame.Key, name string) (*PCert, error) {
+	c, err := authWeb(os.Getenv(WEBAUTH_URL), id, name)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	UpdateAuthPubKey()
-	return c.Key, c.Mv, c.Cert, nil
+	return c, nil
 }
 
-func AuthValidate(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
+func AuthValidate(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
 	UpdateAuthPubKey()
-	return VerifyJoinCert(id, key, mv, cert, AuthPubKey)
+	return VerifyJoinCert(id, key, name, mv, cert, AuthPubKey)
 }
 
-func authWeb(url string, id peer.ID, key ayame.Key) (*PCert, error) {
-	var keyStr string
-	if key == nil {
-		keyStr = ""
-	} else {
-		keyStr = MarshalKeyToString(key)
-	}
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", keyStr, id.String()))
+func authWeb(authUrl string, id peer.ID, name string) (*PCert, error) {
+	name = url.QueryEscape(name)
+	resp, err := http.Get(authUrl + fmt.Sprintf("/issue?id=%s&name=%s", id.String(), name))
 	if err != nil {
 		return nil, fmt.Errorf("authority error: %s", err)
 	}

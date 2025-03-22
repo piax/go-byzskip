@@ -228,6 +228,31 @@ func TestExtraRight(t *testing.T) {
 	ast.NotEqual(t, nil, EndExtentIn(ayame.NewRangeKey(base, true, max.Key(), true), lst))
 }
 
+func TestUnifiedKeySort(t *testing.T) {
+	lst := []KeyMV{
+		// String keys
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("abc", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromString("def", ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 0})},
+		// Int keys
+		KeyMVData{key: ayame.NewUnifiedKeyFromInt(5, ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 1, 0})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromInt(10, ayame.RandomID()), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 0, 1})},
+		// Pure ID keys
+		KeyMVData{key: ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(ayame.RandomID())), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{1, 0, 1})},
+		KeyMVData{key: ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(ayame.RandomID())), Mvdata: ayame.NewMembershipVectorLiteral(2, []int{0, 1, 1})},
+	}
+
+	base := ayame.NewUnifiedKeyFromString("a", ayame.ZeroID())
+	SortC(base, lst)
+
+	// Verify sorting worked by checking each pair is in order
+	for i := 1; i < len(lst)-1; i++ {
+		ast.True(t, ayame.IsOrdered(lst[i-1].Key(), true, lst[i].Key(), lst[i+1].Key(), true),
+			"Expected key %v to be <= %v", lst[i].Key(), lst[i+1].Key())
+	}
+	ast.True(t, ayame.IsOrdered(lst[len(lst)-1].Key(), true, lst[0].Key(), lst[1].Key(), true),
+		"Expected key %v to be <= %v", lst[len(lst)-1].Key(), lst[0].Key())
+}
+
 func TestPickExtra(t *testing.T) {
 	InitK(4)
 	lst := []KeyMV{
@@ -316,13 +341,15 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	if shuffle {
 		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 	}
-	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		mv := ayame.NewMembershipVector(2)
-		bin := auth.Authorize(id, key, mv, time.Now().Unix(), time.Now().Unix()+100)
-		return key, mv, bin, nil
+		key := ayame.IdKey(id)
+		name := ""
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
 	}
-	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
 	}
 	peers := make([]*BSNode, numberOfPeers)
 	var err error
@@ -368,20 +395,23 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	auth := authority.NewAuthorizer()
 	numberOfPeers := num
 	keys := []int{}
+	count := 0
 	for i := 0; i < numberOfPeers; i++ {
 		keys = append(keys, i)
 	}
 	if shuffle {
 		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 	}
-	authFunc := func(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-		//mv := ayame.NewMembershipVector(2)
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
-		bin := auth.Authorize(id, key, mv, time.Now().Unix(), time.Now().Unix()+100)
-		return key, mv, bin, nil
+		name := string([]byte{'a' + byte(count/10)})
+		key := ayame.NewUnifiedKeyFromString(name, id)
+		count++
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
 	}
-	validateFunc := func(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-		return authority.VerifyJoinCert(id, key, mv, cert, auth.PublicKey())
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
 	}
 	peers := make([]*BSNode, numberOfPeers)
 	var err error
@@ -389,8 +419,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	if err != nil {
 		panic(err)
 	}
-	rkey := ayame.NewUnifiedKeyFromString(string([]byte{'r'}), h.ID())
-	peers[0], err = New(h, []Option{Key(rkey), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -402,8 +431,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 		if err != nil {
 			panic(err)
 		}
-		key := ayame.NewUnifiedKeyFromString(string([]byte{'a' + byte(i/10)}), h.ID())
-		peers[i], err = New(h, []Option{Bootstrap(locator), Key(key), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -425,9 +453,168 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-//func TestMVFromPeerID(t *testing.T) {
-//	ayame.NewMembershipVectorFromBinary([]byte(ayame.RandomID()))
-//}
+func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+	auth := authority.NewAuthorizer()
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
+		key := ayame.NewIdKey(id)
+		name := ""
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
+	}
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
+	}
+
+	peers := make([]*BSNode, num)
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
+	if err != nil {
+		panic(err)
+	}
+
+	// Root node uses IdKey
+	rkey := ayame.NewIdKey(h.ID())
+	peers[0], err = New(h, []Option{Key(rkey), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
+
+	for i := 1; i < num; i++ {
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+
+		// All nodes use IdKey
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		if err != nil {
+			panic(err)
+		}
+		peers[i].Join(context.Background())
+	}
+	time.Sleep(time.Duration(5) * time.Second)
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < num; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(num))
+	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(num))
+	fmt.Printf("avg-msg-size(bytes): %f\n", float64(sumTraffic)/float64(sumCount))
+	return peers
+}
+
+func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+	auth := authority.NewAuthorizer()
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		key := ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(id))
+		name := ""
+		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
+	}
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
+	}
+
+	peers := make([]*BSNode, num)
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
+	if err != nil {
+		panic(err)
+	}
+
+	// Root node uses UnifiedKey from ID
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
+
+	for i := 1; i < num; i++ {
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+
+		// All nodes use UnifiedKey from ID
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		if err != nil {
+			panic(err)
+		}
+		peers[i].Join(context.Background())
+	}
+	time.Sleep(time.Duration(5) * time.Second)
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := 0; i < num; i++ {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-join-num-msgs: %f\n", float64(sumCount)/float64(num))
+	fmt.Printf("avg-join-traffic(bytes): %f\n", float64(sumTraffic)/float64(num))
+	fmt.Printf("avg-msg-size(bytes): %f\n", float64(sumTraffic)/float64(sumCount))
+	return peers
+}
+
+func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+	auth := authority.NewAuthorizer()
+	count := 0
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		name := string([]byte{'a' + byte(count/10)})
+		var key ayame.Key
+		if count < num/2 {
+			key = ayame.NewUnifiedKeyFromString(name, id)
+		} else {
+			key = ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(id))
+		}
+		fmt.Printf("key=%s\n", key)
+		count++
+		mv := ayame.NewMembershipVectorFromId(id.String())
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
+	}
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
+	}
+
+	peers := make([]*BSNode, num)
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
+	if err != nil {
+		panic(err)
+	}
+
+	// Root node uses UnifiedKey
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
+
+	for i := 1; i < num; i++ {
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		if err != nil {
+			panic(err)
+		}
+		//go func(pos int) {
+		peers[i].Join(context.Background())
+		//}(i)
+	}
+
+	time.Sleep(time.Duration(5) * time.Second)
+	return peers
+}
 
 func TestJoin(t *testing.T) {
 	numberOfPeers := 32
@@ -456,19 +643,19 @@ func TestLookup(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, true, true)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
-	for i := 0; i < numberOfPeers; i++ { // RESET
+	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 	}
 	numberOfLookups := numberOfPeers
-	for i := 0; i < numberOfLookups; i++ {
+	for range numberOfLookups {
 		src := rand.Intn(numberOfPeers)
 		dst := rand.Intn(numberOfPeers)
 		peers[src].Lookup(context.Background(), ayame.IntKey(dst))
 	}
 	sumCount := int64(0)
 	sumTraffic := int64(0)
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
 		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
@@ -481,24 +668,34 @@ func TestLookupMV(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, false, true)
 	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
-	for i := 0; i < numberOfPeers; i++ { // RESET
+	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 	numberOfLookups := numberOfPeers
-	for i := 0; i < numberOfLookups; i++ {
-		src := rand.Intn(numberOfPeers)
-		dst := rand.Intn(numberOfPeers)
+	// Test lookups from all nodes to a fixed destination
+	dst := 0
+	for src := 0; src < numberOfPeers; src++ {
 		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
-		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV(), ayame.IntKey(src))
+		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV())
 		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
+		ast.Equal(t, 4, len(nodes), "number of nodes should match K=4")
+		ast.Equal(t, true, Contains(peers[dst], nodes))
+	}
+	// Test lookups from a fixed source to all destinations
+	src := 0
+	for dst := 0; dst < numberOfPeers; dst++ {
+		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
+		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV())
+		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
+		ast.Equal(t, 4, len(nodes), "number of nodes should match K=4")
 		ast.Equal(t, true, Contains(peers[dst], nodes))
 	}
 
 	sumCount := int64(0)
 	sumTraffic := int64(0)
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
 		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
@@ -512,27 +709,112 @@ func TestLookupRange(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, false, true)
 	ayame.Log.Debugf("------- LOOKUP RANGE STARTS ---------")
-	for i := 0; i < numberOfPeers; i++ { // RESET
+	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 	numberOfLookups := numberOfPeers
-	for i := 0; i < numberOfLookups; i++ {
-		src := rand.Intn(numberOfPeers)
-		nodes, _ := peers[src].LookupRange(context.Background(), ayame.NewRangeKey(ayame.IntKey(5), true, ayame.IntKey(7), true))
+	// Test lookups from all nodes to a fixed range
+	dst := ayame.NewRangeKey(ayame.IntKey(5), true, ayame.IntKey(7), true)
+	for src := range numberOfPeers {
+		nodes, _ := peers[src].LookupRange(context.Background(), dst)
 		fmt.Printf("src=%d, searched=%s\n", src, ayame.SliceString(nodes))
+	}
+
+	// Test lookups from a fixed source to sequential ranges starting from 16
+	src := 0
+	start := numberOfPeers / 2 // 16
+	for range numberOfLookups {
+		end := start + 3
+		if end >= numberOfPeers {
+			end = end - numberOfPeers // Wrap around the ring
+		}
+		dst := ayame.NewRangeKey(ayame.IntKey(start), true, ayame.IntKey(end), true)
+		nodes, _ := peers[src].LookupRange(context.Background(), dst)
+		fmt.Printf("src=%d, range=[%d,%d], searched=%s\n", src, start, end, ayame.SliceString(nodes))
+		start = (start + 1) % numberOfPeers
+		// Check that all nodes in the range are found, handling ring wraparound
+		if start <= end {
+			// Normal case - no wraparound
+			for i := start; i <= end; i++ {
+				ast.Equal(t, true, Contains(peers[i], nodes), "Node %d should be in results", i)
+			}
+		} else {
+			// Wraparound case - check from start to end of ring, then beginning to end
+			for i := start; i < numberOfPeers; i++ {
+				ast.Equal(t, true, Contains(peers[i], nodes), "Node %d should be in results", i)
+			}
+			for i := 0; i <= end; i++ {
+				ast.Equal(t, true, Contains(peers[i], nodes), "Node %d should be in results", i)
+			}
+		}
 	}
 
 	sumCount := int64(0)
 	sumTraffic := int64(0)
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
 		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
 	}
 	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
 	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestDualDHT(t *testing.T) {
+	ayame.InitLogger(logging.INFO)
+	numberOfPeers := 32
+	bak := ayame.MembershipVectorSize
+	defer func() {
+		ayame.MembershipVectorSize = bak
+	}()
+	ayame.MembershipVectorSize = 320
+	peers := setupNamedNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- DUAL DHT SEARCH STARTS ---------")
+	for i := 0; i < numberOfPeers; i++ { // RESET
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+	numberOfLookups := numberOfPeers
+
+	// First do name lookups like TestLookupName
+	for i := 0; i < numberOfLookups; i++ {
+		src := rand.Intn(numberOfPeers)
+		nodes, _ := peers[src].LookupName(context.Background(), "a")
+		//fmt.Printf("src=%d, searched=%s\n, len=%d", src, ayame.SliceString(nodes), len(nodes))
+		ast.Equal(t, 13, len(nodes), "expected 13")
+	}
+
+	// Then do MV lookups
+	// Search from node 0 to all peers' MVs
+	for i := range numberOfPeers {
+		dstMV := peers[i].MV()
+		nodes, _ := peers[0].LookupMV(context.Background(), dstMV)
+		//fmt.Printf("src=0, target=%d, mv lookup searched=%s\n", i, ayame.SliceString(nodes))
+		// Verify target node is in results
+		ast.Equal(t, true, Contains(peers[i], nodes), "Target node %d should be in results", i)
+	}
+
+	// Search from all peers to node 0's MV
+	mv := peers[0].MV()
+	for i := 1; i < numberOfPeers; i++ {
+		nodes, _ := peers[i].LookupMV(context.Background(), mv)
+		//fmt.Printf("src=%d, target=0, mv lookup searched=%s\n", i, ayame.SliceString(nodes))
+		// Verify node 0 is in results
+		ast.Equal(t, true, Contains(peers[0], nodes), "Target node 0 should be in results")
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := range numberOfPeers {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups*2))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups*2))
 }
 
 func TestLookupName(t *testing.T) {
@@ -544,7 +826,7 @@ func TestLookupName(t *testing.T) {
 	}()
 	ayame.MembershipVectorSize = 320
 	peers := setupNamedNodes(4, numberOfPeers, false, true)
-	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
+	ayame.Log.Debugf("------- LOOKUP NAME STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
@@ -561,10 +843,150 @@ func TestLookupName(t *testing.T) {
 
 	sumCount := int64(0)
 	sumTraffic := int64(0)
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
 		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestUnifiedId(t *testing.T) {
+	ayame.InitLogger(logging.INFO)
+	numberOfPeers := 32
+	ayame.MembershipVectorSize = 320
+	peers := setupUnifiedIdNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- UNIFIED ID LOOKUP STARTS ---------")
+
+	// Reset counters
+	for i := range numberOfPeers {
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+
+	numberOfLookups := numberOfPeers
+	src := 0
+	for i := range numberOfLookups {
+		target := i
+		dst := peers[target].Key()
+		nodes, _ := peers[src].Lookup(context.Background(), dst)
+		fmt.Printf("target=%s, src=%s, found=%s, len=%d\n", peers[target].Key(), peers[src].Key(), ayame.SliceString(nodes), len(nodes))
+		ast.NotEmpty(t, nodes, "should find nodes")
+		ast.True(t, ContainsKey(dst, nodes), "should find target node")
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := range numberOfPeers {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestIdKey(t *testing.T) {
+	ayame.InitLogger(logging.INFO)
+	numberOfPeers := 32
+	bak := ayame.MembershipVectorSize
+	defer func() {
+		ayame.MembershipVectorSize = bak
+	}()
+	ayame.MembershipVectorSize = 320
+	peers := setupIdKeyNodes(4, numberOfPeers, false, true)
+	ayame.Log.Debugf("------- ID KEY LOOKUP STARTS ---------")
+
+	// Reset counters
+	for i := range numberOfPeers {
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+	}
+
+	numberOfLookups := numberOfPeers
+	src := 0
+	for i := range numberOfLookups {
+		target := i
+		dst := peers[target].Key()
+		nodes, _ := peers[src].Lookup(context.Background(), dst)
+		fmt.Printf("target=%s, src=%s, found=%s, len=%d\n", peers[target].Key(), peers[src].Key(), ayame.SliceString(nodes), len(nodes))
+		ast.NotEmpty(t, nodes, "should find nodes")
+		ast.True(t, ContainsKey(dst, nodes), "should find target node")
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := range numberOfPeers {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
+	}
+	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
+	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
+}
+
+func TestMixed(t *testing.T) {
+	ayame.InitLogger(logging.DEBUG)
+	numberOfPeers := 32
+	bak := ayame.MembershipVectorSize
+	defer func() {
+		ayame.MembershipVectorSize = bak
+	}()
+	ayame.MembershipVectorSize = 320
+
+	// Create mix of nodes - half with IdKey, half with string keys
+	peers := setupMixedKeyNodes(4, numberOfPeers, false, true) // Create all nodes at once
+
+	ayame.Log.Debugf("------- MIXED KEY LOOKUP STARTS ---------")
+
+	// Reset counters
+	for i := range numberOfPeers {
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+		fmt.Printf("key=%s,mv=%s\n", peers[i].Key(), peers[i].MV())
+	}
+
+	// Test lookups from to all other nodes
+	numberOfLookups := 0
+	src := 0 //
+	for i := range numberOfPeers {
+		target := i
+		dst := peers[target].Key()
+		nodes, _ := peers[src].Lookup(context.Background(), dst)
+		ast.NotEmpty(t, nodes, "should find nodes")
+		ast.True(t, ContainsKey(dst, nodes), "should find target node")
+		numberOfLookups++
+	}
+	// Test lookups from all nodes to node 0
+	target := 0 // Target is always node 0
+	dst := peers[target].Key()
+	for src := range numberOfPeers {
+		nodes, _ := peers[src].Lookup(context.Background(), dst)
+		fmt.Printf("target=%s, src=%s, found=%s, len=%d\n", peers[target].Key(), peers[src].Key(), ayame.SliceString(nodes), len(nodes))
+		ast.NotEmpty(t, nodes, "should find nodes")
+		ast.True(t, ContainsKey(dst, nodes), "should find target node")
+		numberOfLookups++
+	}
+	// Test lookups for all nodes from random nodes
+	for i := range numberOfPeers {
+		dst := i
+		src := rand.Intn(numberOfPeers)
+		nodes, _ := peers[src].Lookup(context.Background(), peers[dst].Key())
+		fmt.Printf("target=%s, src=%s, found=%s, len=%d\n", peers[dst].Key(), peers[src].Key(), ayame.SliceString(nodes), len(nodes))
+		ast.NotEmpty(t, nodes, "should find nodes")
+		ast.True(t, ContainsKey(peers[dst].Key(), nodes), "should find target node")
+		numberOfLookups++
+	}
+
+	sumCount := int64(0)
+	sumTraffic := int64(0)
+	for i := range numberOfPeers {
+		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
+		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
+		fmt.Printf("%d %d %d %f\n", i, peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
 	}
 	fmt.Printf("avg-lookup-num-msgs: %f\n", float64(sumCount)/float64(numberOfLookups))
 	fmt.Printf("avg-lookup-traffic(bytes): %f\n", float64(sumTraffic)/float64(numberOfLookups))
@@ -577,8 +999,12 @@ func TestUnicast(t *testing.T) {
 	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
+	for i := range numberOfPeers {
+		peers[i].Parent.(*p2p.P2PNode).InCount = 0
+		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
+	}
 
-	for i := 0; i < numberOfPeers; i++ { // RESET
+	for _, i := range make([]int, numberOfPeers) { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
 
@@ -596,7 +1022,7 @@ func TestUnicast(t *testing.T) {
 
 	}
 	numberOfUnicasts := numberOfPeers
-	for i := 0; i < numberOfUnicasts; i++ {
+	for range numberOfUnicasts {
 		src := rand.Intn(numberOfPeers)
 		dst := rand.Intn(numberOfPeers)
 		for src == dst {
@@ -608,7 +1034,7 @@ func TestUnicast(t *testing.T) {
 	sumCount := int64(0)
 	sumTraffic := int64(0)
 
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		sumCount += peers[i].Parent.(*p2p.P2PNode).InCount
 		sumTraffic += peers[i].Parent.(*p2p.P2PNode).InBytes
 		fmt.Printf("%s %d %d %f\n", peers[i].Key(), peers[i].Parent.(*p2p.P2PNode).InBytes, peers[i].Parent.(*p2p.P2PNode).InCount, float64(peers[i].Parent.(*p2p.P2PNode).InBytes)/float64(peers[i].Parent.(*p2p.P2PNode).InCount))
@@ -628,7 +1054,7 @@ func TestClose(t *testing.T) {
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
 	}
-	for i := 0; i < numberOfPeers; i++ {
+	for i := range numberOfPeers {
 		fmt.Printf("%d: %d\n", peers[i].Key(), peers[i].RoutingTable.Size())
 	}
 }

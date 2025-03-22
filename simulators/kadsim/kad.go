@@ -182,7 +182,7 @@ func NewKADNode(number int, k int, isFailure bool) *KADNode {
 		log.Fatalf("error: %s", err)
 	}
 	table := NewKADRoutingTable(id, k)
-	return &KADNode{number: number, id: id, routingTable: table, LocalNode: *ayame.NewLocalNode(ayame.IntKey(number), nil), isFailure: isFailure}
+	return &KADNode{number: number, id: id, routingTable: table, LocalNode: *ayame.NewLocalNode(ayame.IntKey(number), "", nil), isFailure: isFailure}
 }
 
 func (n *KADNode) equals(m *KADNode) bool {

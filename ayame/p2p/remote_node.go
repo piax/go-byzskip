@@ -16,6 +16,7 @@ import (
 type RemoteNode struct {
 	self  *P2PNode
 	key   ayame.Key
+	name  string
 	mv    *ayame.MembershipVector
 	addrs []ma.Multiaddr
 	cert  []byte
@@ -30,6 +31,14 @@ func (n *RemoteNode) Key() ayame.Key {
 
 func (n *RemoteNode) SetKey(key ayame.Key) {
 	n.key = key
+}
+
+func (n *RemoteNode) Name() string {
+	return n.name
+}
+
+func (n *RemoteNode) SetName(name string) {
+	n.name = name
 }
 
 func (n *RemoteNode) MV() *ayame.MembershipVector { // Endpoint
@@ -144,6 +153,7 @@ func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 		self:  self,
 		id:    id,
 		key:   ayame.NewKey(p.Key),
+		name:  p.Name,
 		addrs: Addresses(p.Addrs),
 		cert:  p.Cert,
 		mv:    ayame.NewMembershipVectorFromBinary(p.Mv),

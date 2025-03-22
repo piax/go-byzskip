@@ -9,14 +9,14 @@ import (
 )
 
 var DefaultAuthorizer = func(cfg *Config) error {
-	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+	return cfg.Apply(Authorizer(func(pid peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
-		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2
+		return ayame.IdKey(pid), "", ayame.NewMembershipVector(2), nil, nil // alpha=2
 	}))
 }
 
 var DefaultAuthValidator = func(cfg *Config) error {
-	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
+	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool {
 		return true
 	}))
 }

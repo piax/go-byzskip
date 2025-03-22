@@ -58,11 +58,11 @@ func (auth *Authorizer) PublicKey() crypto.PubKey {
 	return auth.pubKey
 }
 
-func (auth *Authorizer) Authorize(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64) []byte {
-	return newJoinInfoCert(id, key, mv, va, vb, auth.privKey)
+func (auth *Authorizer) Authorize(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, va int64, vb int64) []byte {
+	return newJoinInfoCert(id, key, name, mv, va, vb, auth.privKey)
 }
 
-func MarshalJoinInfo(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64) []byte {
+func MarshalJoinInfo(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, va int64, vb int64) []byte {
 	ret, _ := id.MarshalBinary() // XXX discarded errors
 	//bin, _ := key.Encode().Marshal()
 	bin, _ := proto.Marshal(key.Encode())
@@ -126,15 +126,19 @@ func Verify(data []byte, cert []byte, pubKey crypto.PubKey) bool {
 	return true
 }
 
+func VerifyPCert(pcert *PCert, pubKey crypto.PubKey) bool {
+	return VerifyJoinCert(pcert.ID, pcert.Key, pcert.Name, pcert.Mv, pcert.Cert, pubKey)
+}
+
 // Create a new node with its implemented protocols
-func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
+func VerifyJoinCert(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
 	c := &pb.Cert{}
 	if err := proto.Unmarshal(cert, c); err != nil {
 		ayame.Log.Errorf("Verify error: %s\n", err)
 		return false
 	}
-	data := MarshalJoinInfo(id, key, mv, c.ValidAfter, c.ValidBefore)
-	ayame.Log.Debugf("verifying joincert id=%s, key=%s, mv=%s, data=%v, cert=%x", id, key, mv, data, cert)
+	data := MarshalJoinInfo(id, key, name, mv, c.ValidAfter, c.ValidBefore)
+	//ayame.Log.Debugf("verifying joincert id=%s, key=%s, name=%s, mv=%s, data=%v, cert=%x", id, key, name, mv, data, cert)
 
 	//res, err := pubKey.Verify(data, cert)
 	res := Verify(data, cert, pubKey)
@@ -145,8 +149,8 @@ func VerifyJoinCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert 
 	return res
 }
 
-func newJoinInfoCert(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, va int64, vb int64, privKey crypto.PrivKey) []byte {
-	data := MarshalJoinInfo(id, key, mv, va, vb)
+func newJoinInfoCert(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, va int64, vb int64, privKey crypto.PrivKey) []byte {
+	data := MarshalJoinInfo(id, key, name, mv, va, vb)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
 	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
 	//res, _ := privKey.Sign(data) // XXX discarded errors

@@ -36,7 +36,7 @@ func TestSim(t *testing.T) {
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, nil, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), "", peers[i].MV()), bs.NewSkipRoutingTable, nil, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -75,7 +75,7 @@ func TestP2P(t *testing.T) {
 
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), peers[i].MV()), bs.NewSkipRoutingTable, nil, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(peers[i].Key(), "", peers[i].MV()), bs.NewSkipRoutingTable, nil, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -88,7 +88,7 @@ func TestTableIndex(t *testing.T) {
 	numberOfPeers := 100
 	localPeers := make([]*bs.BSNode, numberOfPeers)
 	for i := 0; i < numberOfPeers; i++ {
-		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(i), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false)
+		localPeers[i] = bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(i), "", ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false)
 	}
 	FastJoinAllByCheat(localPeers)
 	for i := 1; i < numberOfPeers; i++ {
@@ -104,9 +104,9 @@ func TestPickAlternately(t *testing.T) {
 	sorted := []bs.KeyMV{}
 	queried := []bs.KeyMV{}
 	keys := []int{8, 10, 11, 9, 5, 3, 4, 15, 6}
-	self := bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(7), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false)
+	self := bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(7), "", ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false)
 	for _, n := range keys {
-		lst = append(lst, bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(n), ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false))
+		lst = append(lst, bs.NewWithParent(ayame.NewLocalNode(ayame.IntKey(n), "", ayame.NewMembershipVector(2)), bs.NewSkipRoutingTable, nil, false))
 	}
 	for _, n := range lst {
 		sorted = bs.SortCircularAppend(self.Key(), sorted, n)

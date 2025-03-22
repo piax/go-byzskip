@@ -13,6 +13,8 @@ type Node interface {
 	SetKey(Key)
 	MV() *MembershipVector
 	SetMV(*MembershipVector)
+	Name() string
+	SetName(string)
 	String() string
 	Addrs() []ma.Multiaddr
 	Id() peer.ID // ID as an Endpoint
@@ -28,13 +30,14 @@ type Node interface {
 // var SecureKeyMV bool = true
 
 type LocalNode struct {
-	key Key
-	mv  *MembershipVector
-	app interface{}
+	key  Key
+	name string
+	mv   *MembershipVector
+	app  interface{}
 }
 
-func NewLocalNode(key Key, mv *MembershipVector) *LocalNode {
-	return &LocalNode{key: key, mv: mv}
+func NewLocalNode(key Key, name string, mv *MembershipVector) *LocalNode {
+	return &LocalNode{key: key, name: name, mv: mv}
 }
 
 func (n *LocalNode) Key() Key {
@@ -43,6 +46,14 @@ func (n *LocalNode) Key() Key {
 
 func (n *LocalNode) SetKey(key Key) {
 	n.key = key
+}
+
+func (n *LocalNode) Name() string {
+	return n.name
+}
+
+func (n *LocalNode) SetName(name string) {
+	n.name = name
 }
 
 func (n *LocalNode) MV() *MembershipVector {

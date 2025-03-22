@@ -17,6 +17,7 @@ const (
 	JITTER_VALUE       = 100000
 	UNIFIED_KEY_LENGTH = 512 // bits
 	UNIFIED_KEY_SEP    = ":"
+	MOD_FACTOR         = 10007 // prime number
 )
 
 type UnifiedKey struct {
@@ -30,6 +31,14 @@ func randomBytes(len int) []byte {
 		ret[i] = byte(int(rand.Float32() * 8))
 	}
 	return ret
+}
+
+func randomBigInt() *big.Int {
+	ret := make([]byte, UNIFIED_KEY_LENGTH/8)
+	for i := 0; i < UNIFIED_KEY_LENGTH/8; i++ {
+		ret[i] = byte(int(rand.Float32() * 8))
+	}
+	return big.NewInt(0).SetBytes(ret)
 }
 
 func ZeroID() peer.ID { // the smallest byte
@@ -70,6 +79,10 @@ func (t *UnifiedKey) Equals(elem any) bool {
 	}
 	//panic(fmt.Sprintf("not a unified key comparison %s and %v", t, elem))
 	return false
+}
+
+func (t *UnifiedKey) GetBigInt() *big.Int {
+	return t.val
 }
 
 func (t *UnifiedKey) LessOrEquals(elem interface{}) bool {
@@ -162,6 +175,10 @@ func (t *UnifiedKey) SetID(i peer.ID) {
 	t.id = i
 }
 
+func (t *UnifiedKey) Pretty() string {
+	return t.String()[:16] + ":" + t.id.String()
+}
+
 //func DecodeUnifiedKey(pk *p2p.Key) Key {
 //	return NewUnifiedKeyFromBytes(pk.Body)
 //}
@@ -244,11 +261,12 @@ func NewUnifiedKeyFromStringWithJitter(str string) Key {
 }
 
 func NewRandomUnifiedKey() Key {
-	ret := make([]byte, UNIFIED_KEY_LENGTH)
+	/*ret := make([]byte, UNIFIED_KEY_LENGTH)
 	for i := 0; i < UNIFIED_KEY_LENGTH; i++ {
 		ret[i] = byte(int(rand.Float32() * 8))
 	}
-	return NewUnifiedKeyFromBytes(ret)
+	return NewUnifiedKeyFromBytes(ret)*/
+	return NewUnifiedKey(randomBigInt(), RandomID())
 }
 
 func NewUnifiedKey(v *big.Int, id peer.ID) Key {
@@ -264,6 +282,26 @@ func NewUnifiedKeyFromBytes(arr []byte) Key {
 	return NewUnifiedKey(z, i)
 }
 
+func modKey(bi *big.Int, id peer.ID) (*UnifiedKey, error) {
+	// Extract the bigint part from the key
+	keyBigInt := bi
+
+	// Calculate max value for the bigint (2^256 - 1)
+	maxBigInt := new(big.Int).Lsh(big.NewInt(1), 256)
+	maxBigInt.Sub(maxBigInt, big.NewInt(1))
+
+	// Calculate maxBigInt / MOD_FACTOR
+	divisor := new(big.Int).Div(maxBigInt, big.NewInt(MOD_FACTOR))
+
+	// Calculate keyBigInt % divisor
+	modResult := new(big.Int).Mod(keyBigInt, divisor)
+
+	// Create a new unified key with the modified bigint value
+	modifiedKey := NewUnifiedKey(modResult, id).(*UnifiedKey)
+
+	return modifiedKey, nil
+}
+
 func NewUnifiedKeyFromByteValue(value []byte, id peer.ID) Key {
 	z := new(big.Int)
 	z.SetBytes(value)
@@ -277,6 +315,12 @@ func NewUnifiedKeyFromString(str string, id peer.ID) Key {
 		panic(err) // XXX
 	}
 	z.SetBytes(b)
+
+	//modKey, err := modKey(z, id)
+	//if err != nil {
+	//	panic(err) // XXX
+	//}
+
 	return NewUnifiedKey(z, id)
 }
 
@@ -288,4 +332,10 @@ func NewUnifiedKeyFromIdKey(id IdKey) Key {
 	}
 	z.SetBytes(b)
 	return NewUnifiedKey(z, peer.ID(id))
+}
+
+func NewUnifiedKeyFromInt(i int, id peer.ID) Key {
+	z := new(big.Int)
+	z.SetInt64(int64(i))
+	return NewUnifiedKey(z, id)
 }

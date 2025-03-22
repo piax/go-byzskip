@@ -101,6 +101,7 @@ type RequestProcess struct {
 type BSNode struct {
 	Parent ayame.Node
 	key    ayame.Key
+	name   string
 	mv     *ayame.MembershipVector
 	//bs.IntKeyMV
 	stats *JoinStats
@@ -136,6 +137,14 @@ func (n *BSNode) Key() ayame.Key {
 func (n *BSNode) SetKey(key ayame.Key) {
 	// should check running status
 	n.key = key
+}
+
+func (n *BSNode) Name() string {
+	return n.name
+}
+
+func (n *BSNode) SetName(name string) {
+	n.name = name
 }
 
 func (node *BSNode) Id() peer.ID { // Endpoint
@@ -267,7 +276,7 @@ func NewWithoutDefaults(h host.Host, options ...Option) (*BSNode, error) {
 func NewWithParent(parent ayame.Node, rtMaker func(KeyMV) RoutingTable,
 	eventForwarder func(context.Context, *BSNode, *BSNode, ayame.SchedEvent, bool),
 	isFailure bool) *BSNode {
-	ret := &BSNode{key: parent.Key(), mv: parent.MV(),
+	ret := &BSNode{key: parent.Key(), mv: parent.MV(), name: parent.Name(),
 		//LocalNode: ayame.GetLocalNode(strconv.Itoa(key)),
 		Parent: parent,
 		// stats is not generated at this time
@@ -456,7 +465,7 @@ func (n *BSNode) isIntroducer() bool {
 
 // New simulation node
 func NewSimNode(key ayame.Key, mv *ayame.MembershipVector) *BSNode {
-	return NewWithParent(ayame.NewLocalNode(key, mv), NewSkipRoutingTable, nil, false)
+	return NewWithParent(ayame.NewLocalNode(key, "", mv), NewSkipRoutingTable, nil, false)
 }
 
 // Join a node join to the network.
@@ -1055,6 +1064,8 @@ func (n *BSNode) LookupName(ctx context.Context, name string) ([]*BSNode, error)
 	return n.LookupRange(ctx, ayame.NewRangeKey(start, false, end, false))
 }
 
+// still have some bugs.
+
 func (n *BSNode) LookupRange(ctx context.Context, rng *ayame.RangeKey) ([]*BSNode, error) {
 	closests, err := n.Lookup(ctx, rng.Start())
 	if err != nil {
@@ -1063,6 +1074,9 @@ func (n *BSNode) LookupRange(ctx context.Context, rng *ayame.RangeKey) ([]*BSNod
 	//cl := nsToKs(closests)
 	//	SortC(start, cl)
 	//	ayame.ReverseSlice(cl)
+	if len(closests) == 0 {
+		return nil, fmt.Errorf("no closests found")
+	}
 	ayame.Log.Debugf("scan starts from: %s to: %s", closests[0].Key(), rng.End())
 	return n.Scan(ctx, closests, rng)
 }
@@ -1142,15 +1156,15 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey)
 	return results, nil
 }
 
-func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector, src ayame.Key) ([]*BSNode, error) {
+func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector) ([]*BSNode, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, time.Duration(LOOKUP_TIMEOUT)*time.Second) // all request should be ended within
 	defer cancel()
 
-	neighbors, fin := n.GetClosestNodesMV(mv, src)
+	neighbors, fin := n.GetClosestNodesMV(mv, n.Key())
 	results := []*BSNode{}
 	if fin {
 		results = neighbors
-		ayame.Log.Debugf("directly found on %s, results=%s\n", src, ayame.SliceString(results))
+		ayame.Log.Debugf("directly found on %s, results=%s\n", n.Key(), ayame.SliceString(results))
 		return results, nil
 	}
 
@@ -1166,7 +1180,7 @@ func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector, src a
 			node := c // candidate
 			reqCount++
 			id := NextId()
-			go func() { n.findNodeMV(lookupCtx, lookupCh, node, mv, src, id) }()
+			go func() { n.findNodeMV(lookupCtx, lookupCh, node, mv, n.Key(), id) }()
 		}
 	L:
 		for i := 0; i < reqCount; i++ {
@@ -1716,6 +1730,28 @@ func (n *BSNode) handleDelNode(sev ayame.SchedEvent) error {
 		n.rtMutex.Unlock()
 
 		// need to re-construct the routing table. crawl again?
+		// Check if routing table size at level zero is smaller than a threshold
+		n.rtMutex.RLock()
+		levelZeroSize := len(n.LevelZeroNodes())
+		n.rtMutex.RUnlock()
+		ayame.Log.Debugf("%s: Afer deletion, level zero size is %d ", n.Key(), levelZeroSize)
+		// If we have too few nodes at level zero, refresh the routing table
+		minThreshold := (K - 1) * 2
+		if levelZeroSize < minThreshold {
+			ayame.Log.Debugf("%s: Level zero size %d is below threshold %d, refreshing routing table",
+				n.Key(), levelZeroSize, minThreshold)
+
+			// Create a new context for the refresh operation
+			refreshCtx, cancel := context.WithTimeout(context.Background(), time.Duration(JOIN_TIMEOUT)*time.Second)
+			defer cancel()
+
+			// Use fixLowPeers to repair the routing table after node deletion
+			go func() {
+				ayame.Log.Debugf("%s: Initiating fixLowPeers after node deletion", n.Key())
+				n.fixLowPeers(refreshCtx)
+			}()
+
+		}
 	}
 	return nil
 }

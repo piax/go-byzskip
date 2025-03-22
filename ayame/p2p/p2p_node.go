@@ -26,6 +26,7 @@ import (
 type P2PNode struct {
 	host.Host // libp2p host
 	key       ayame.Key
+	name      string
 	mv        *ayame.MembershipVector
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent
 	child     ayame.Node
@@ -33,7 +34,7 @@ type P2PNode struct {
 	//CertSign           []byte // for cache
 	//CertValidAfter     int64  // for cache
 	//CertValidBefore    int64  // for cache
-	Validator          func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+	Validator          func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool
 	VerifyIntegrity    bool
 	DetailedStatistics bool
 	KeyInBytes         map[string]int64
@@ -55,9 +56,9 @@ const (
 	RECORD_BYTES_PER_KEY = true
 )
 
-func New(h host.Host, key ayame.Key, mv *ayame.MembershipVector, cert []byte,
+func New(h host.Host, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
-	validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool,
+	validator func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool,
 	verifyIntegrity bool, detailedStatistics bool,
 	sendMessageProto string) *P2PNode {
 
@@ -68,7 +69,7 @@ func New(h host.Host, key ayame.Key, mv *ayame.MembershipVector, cert []byte,
 		keyInBytes = nil
 	}
 
-	node := &P2PNode{Host: h, key: key, mv: mv, converter: converter, Validator: validator,
+	node := &P2PNode{Host: h, key: key, name: name, mv: mv, converter: converter, Validator: validator,
 		VerifyIntegrity: verifyIntegrity, DetailedStatistics: detailedStatistics, KeyInBytes: keyInBytes, OutBytes: 0, InBytes: 0, InCount: 0, OutCount: 0,
 		protocol: protocol.ID(sendMessageProto)}
 	node.SetStreamHandler(protocol.ID(sendMessageProto), node.onReceiveMessage)
@@ -172,6 +173,14 @@ func (n *P2PNode) SetKey(key ayame.Key) {
 	n.key = key
 }
 
+func (n *P2PNode) Name() string {
+	return n.name
+}
+
+func (n *P2PNode) SetName(name string) {
+	n.name = name
+}
+
 func (n *P2PNode) MV() *ayame.MembershipVector {
 	return n.mv
 }
@@ -200,6 +209,7 @@ func (n *P2PNode) Encode() *p2p.Peer {
 		Addrs:      EncodeAddrs(n.Addrs()),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
+		Name:       n.name,
 		Cert:       IfNeededSign(n.VerifyIntegrity, n.Cert),
 		Connection: p2p.ConnectionType_CONNECTED, // myself is always connected
 	}
@@ -280,11 +290,15 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	if mes.IsRequest {
 		resp := ev.ProcessRequest(context.TODO(), n.child)
 		//		resp.SetSender(n.child)
-		mes := resp.Encode()
-		mes.Sender = n.Encode()
-		ayame.Log.Debugf("%s: PROCESSED REQUEST\n", s.Conn().LocalPeer())
-		// no sign
-		n.sendMsgToStream(s, mes)
+		if resp != nil {
+			mes := resp.Encode()
+			mes.Sender = n.Encode()
+			ayame.Log.Debugf("%s@%s: PROCESSED REQUEST\n", n.Name(), s.Conn().LocalPeer())
+			// no sign
+			n.sendMsgToStream(s, mes)
+		} else {
+			ayame.Log.Warningf("Request %s is not processed", mes.Data.Id)
+		}
 	} else {
 		if err := ev.Run(context.TODO(), n.child); err != nil {
 			ayame.Log.Error(err)

@@ -172,7 +172,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 		case F_CALC:
 			fallthrough
 		case F_NONE:
-			n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, false)
+			n = bs.NewWithParent(ayame.NewLocalNode(key, "", mv), bs.NewSkipRoutingTable, nil, false)
 			NormalList = append(NormalList, n)
 		case F_STOP:
 			f := rand.Float64() < *failureRatio
@@ -180,9 +180,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, StopEventForwarder, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, "", mv), bs.NewSkipRoutingTable, StopEventForwarder, f)
 			} else {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, "", mv), bs.NewSkipRoutingTable, nil, f)
 				NormalList = append(NormalList, n)
 			}
 
@@ -194,9 +194,9 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 				f = false
 			}
 			if f {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), NewAdversaryRoutingTable, nil, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, "", mv), NewAdversaryRoutingTable, nil, f)
 			} else {
-				n = bs.NewWithParent(ayame.NewLocalNode(key, mv), bs.NewSkipRoutingTable, nil, f)
+				n = bs.NewWithParent(ayame.NewLocalNode(key, "", mv), bs.NewSkipRoutingTable, nil, f)
 				NormalList = append(NormalList, n)
 			}
 		}
@@ -761,7 +761,7 @@ func DoSim() {
 	if *pollutePrevRatioCalc {
 		testPeers := make([]*bs.BSNode, *numberOfNodes)
 		for i := 0; i < *numberOfNodes; i++ {
-			testPeers[i] = bs.NewWithParent(ayame.NewLocalNode(nodes[i].Key(), nodes[i].MV()), bs.NewSkipRoutingTable, nil, false)
+			testPeers[i] = bs.NewWithParent(ayame.NewLocalNode(nodes[i].Key(), "", nodes[i].MV()), bs.NewSkipRoutingTable, nil, false)
 		}
 		FastJoinAllByCheat(testPeers)
 		diffs := 0

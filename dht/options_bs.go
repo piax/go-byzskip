@@ -15,14 +15,14 @@ func RedundancyFactor(k int) Option {
 		return nil
 	}
 }
-func Authorizer(authorizer func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)) Option {
+func Authorizer(authorizer func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)) Option {
 	return func(c *Config) error {
 		c.Authorizer = authorizer
 		return nil
 	}
 }
 
-func AuthValidator(validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) Option {
+func AuthValidator(validator func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool) Option {
 	return func(c *Config) error {
 		c.AuthValidator = validator
 		return nil

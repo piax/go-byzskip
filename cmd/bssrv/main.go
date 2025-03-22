@@ -131,20 +131,20 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func authorizeWeb(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-	c, err := authWeb(*authURL, id, key)
+func authorizeWeb(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	c, err := authWeb(*authURL, id, ayame.IntKey(*key), "")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, "", nil, nil, err
 	}
-	return c.Key, c.Mv, c.Cert, nil
+	return c.Key, c.Name, c.Mv, c.Cert, nil
 }
 
-func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-	return authority.VerifyJoinCert(id, key, mv, cert, pubKey)
+func validateWeb(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+	return authority.VerifyJoinCert(id, key, name, mv, cert, pubKey)
 }
 
-func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.String()))
+func authWeb(url string, id peer.ID, key ayame.Key, name string) (*authority.PCert, error) {
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s&name=%s", authority.MarshalKeyToString(key), id.String(), name))
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,6 @@ func main() {
 	fmt.Printf("web port: %d\n", *srvPort)
 
 	bsOpts := []bs.Option{
-		bs.Key(ayame.IntKey(*key)),
 		bs.Bootstrap(*iAddr),
 		bs.RedundancyFactor(*k),
 		bs.Authorizer(authorizeWeb),

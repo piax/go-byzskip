@@ -86,8 +86,8 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer, needValidation bool) (*BSNode, e
 	if self.VerifyIntegrity {
 		if self.Validator != nil && needValidation {
 			//ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
-			if self.Validator(parent.Id(), parent.Key(), parent.MV(), p.Cert) {
-				ayame.Log.Debugf("remote peer %s validated", parent.Id()) // XXX should be cached for performance.
+			if self.Validator(parent.Id(), parent.Key(), parent.Name(), parent.MV(), p.Cert) {
+				ayame.Log.Debugf("remote peer %s@%s validated", parent.Name(), parent.Id()) // XXX should be cached for performance.
 				return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 			}
 			ayame.Log.Debugf("validation failed")

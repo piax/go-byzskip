@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -29,7 +30,7 @@ const (
 	AUTH_VALID_DURATION = "8760h"
 )
 
-// honest integer key
+// issue a certificate for the given key, id, and name.
 func issueCert(w http.ResponseWriter, req *http.Request) {
 	vals := req.URL.Query()
 
@@ -52,8 +53,13 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 	va := time.Now().Unix()
 	vb := va + int64(d.Seconds())
 	mv := ayame.NewMembershipVector(2)
-	bin := auth.Authorize(id, key, mv, va, vb)
-	p := authority.NewPCert(key, id, mv, bin, time.Unix(va, 0), time.Unix(vb, 0))
+	name, err := url.QueryUnescape(vals["name"][0])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	bin := auth.Authorize(id, key, name, mv, va, vb)
+	p := authority.NewPCert(key, name, id, mv, bin, time.Unix(va, 0), time.Unix(vb, 0))
 
 	pcert, _ := json.Marshal(p)
 	//db.Put([]byte(KEY_PREFIX+vals["user"][0]), pcert, nil)

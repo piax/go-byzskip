@@ -13,10 +13,11 @@ type Option func(*Config) error
 
 type Config struct {
 	Key                ayame.Key
+	Name               string
 	BootstrapAddrs     []peer.AddrInfo
 	RedundancyFactor   *int // the parameter 'k'
-	Authorizer         func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)
-	AuthValidator      func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
+	Authorizer         func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)
+	AuthValidator      func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool
 	RoutingTableMaker  func(KeyMV) RoutingTable
 	IsFailure          *bool
 	VerifyIntegrity    *bool
@@ -55,26 +56,28 @@ const (
 func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 	var assignedKey ayame.Key
 	var mv *ayame.MembershipVector
+	var name string
 	var cert []byte
 	var err error
 
 	if c.Authorizer != nil {
-		assignedKey, mv, cert, err = c.Authorizer(h.ID(), c.Key)
+		assignedKey, name, mv, cert, err = c.Authorizer(h.ID())
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// skipping authorizations.
 		assignedKey = c.Key
+		name = c.Name
 		mv = ayame.NewMembershipVector(2)
 		cert = nil
 		err = nil
 	}
 
-	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
+	parent := p2p.New(h, assignedKey, name, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
-	ret := &BSNode{key: assignedKey, mv: mv,
+	ret := &BSNode{key: assignedKey, name: name, mv: mv,
 		BootstrapAddrs:     c.BootstrapAddrs,
 		Parent:             parent,
 		QuerySeen:          make(map[string]int),

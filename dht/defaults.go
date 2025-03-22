@@ -17,10 +17,6 @@ import (
 )
 
 var DefaultAuthorizer = func(cfg *Config) error {
-	if url := os.Getenv(authority.WEBAUTH_URL); len(url) != 0 { // if environment variable is set, use webauth.
-		ayame.Log.Infof("using %s as authority", url)
-		return cfg.Apply(Authorizer(authority.WebAuthAuthorize))
-	}
 	if filename := os.Getenv(authority.CERT_FILE); len(filename) != 0 { // if environment variable is set, use cert file.
 		// file exists
 		if _, err := os.Stat(filename); err == nil {
@@ -36,11 +32,11 @@ var DefaultAuthorizer = func(cfg *Config) error {
 			panic(fmt.Sprintf("failed to determine authorization method: please check %s", authority.CERT_FILE))
 		}
 	}
-	// default
+	// default is to use the identity key and empty name.
 	ayame.Log.Infof("using empty authority")
-	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+	return cfg.Apply(Authorizer(func(pid peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
-		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2
+		return ayame.IdKey(pid), "", ayame.NewMembershipVector(2), nil, nil // alpha=2
 	}))
 }
 
@@ -49,7 +45,7 @@ var DefaultAuthValidator = func(cfg *Config) error {
 		ayame.Log.Infof("using authority public key: %s", pk)
 		return cfg.Apply(AuthValidator(authority.AuthValidate))
 	}
-	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
+	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool {
 		return true
 	}))
 }
@@ -85,6 +81,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.AuthValidator == nil },
 		opt:      DefaultAuthValidator,
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.IdFinder == nil },
+		opt:      IdFinder(MVIdFinder),
 	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.Datastore == nil },
