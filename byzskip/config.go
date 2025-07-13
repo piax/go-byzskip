@@ -2,6 +2,7 @@ package byzskip
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -12,17 +13,18 @@ import (
 type Option func(*Config) error
 
 type Config struct {
-	Key                ayame.Key
-	Name               string
-	BootstrapAddrs     []peer.AddrInfo
-	RedundancyFactor   *int // the parameter 'k'
-	Authorizer         func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)
-	AuthValidator      func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool
-	RoutingTableMaker  func(KeyMV) RoutingTable
-	IsFailure          *bool
-	VerifyIntegrity    *bool
-	DetailedStatistics *bool
-	DisableFixLowPeers *bool
+	Key                 ayame.Key
+	Name                string
+	BootstrapAddrs      []peer.AddrInfo
+	RedundancyFactor    *int // the parameter 'k'
+	Authorizer          func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)
+	AuthValidator       func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool
+	RoutingTableMaker   func(KeyMV) RoutingTable
+	IsFailure           *bool
+	VerifyIntegrity     *bool
+	DetailedStatistics  *bool
+	DisableFixLowPeers  *bool
+	FixLowPeersInterval time.Duration
 }
 
 // Apply applies the given options to this Option
@@ -78,11 +80,12 @@ func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 		*c.DetailedStatistics, PROTOCOL)
 
 	ret := &BSNode{key: assignedKey, name: name, mv: mv,
-		BootstrapAddrs:     c.BootstrapAddrs,
-		Parent:             parent,
-		QuerySeen:          make(map[string]int),
-		Procs:              make(map[string]*RequestProcess),
-		DisableFixLowPeers: *c.DisableFixLowPeers,
+		BootstrapAddrs:      c.BootstrapAddrs,
+		Parent:              parent,
+		QuerySeen:           make(map[string]int),
+		Procs:               make(map[string]*RequestProcess),
+		DisableFixLowPeers:  *c.DisableFixLowPeers,
+		FixLowPeersInterval: c.FixLowPeersInterval,
 	}
 	ret.RoutingTable = c.RoutingTableMaker(ret)
 	ret.EventForwarder = NodeEventForwarder
