@@ -19,10 +19,11 @@ type Option func(*Config) error
 
 type Config struct {
 	bs.Config
-	IdFinder        func(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error)
-	Datastore       ds.Batching
-	RecordValidator record.Validator
-	MaxRecordAge    *time.Duration
+	IdFinder           func(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error)
+	Datastore          ds.Batching
+	RecordValidator    record.Validator
+	MaxRecordAge       *time.Duration
+	DisableFixLowPeers *bool
 }
 
 type GConfig interface {
@@ -82,11 +83,12 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 			cancel:   cancel,
 			IdFinder: c.IdFinder,
 			Node: &bs.BSNode{
-				BootstrapAddrs:     c.BootstrapAddrs,
-				Parent:             parent,
-				QuerySeen:          make(map[string]int),
-				Procs:              make(map[string]*bs.RequestProcess),
-				DisableFixLowPeers: false,
+				BootstrapAddrs:      c.BootstrapAddrs,
+				Parent:              parent,
+				QuerySeen:           make(map[string]int),
+				Procs:               make(map[string]*bs.RequestProcess),
+				DisableFixLowPeers:  *c.DisableFixLowPeers,
+				FixLowPeersInterval: c.FixLowPeersInterval,
 			},
 			ProviderManager: pm,
 			RecordValidator: c.RecordValidator,
@@ -125,6 +127,13 @@ func MaxRecordAge(v time.Duration) Option {
 	}
 }
 
+func DisableFixLowPeers(v bool) Option {
+	return func(c *Config) error {
+		c.DisableFixLowPeers = &v
+		return nil
+	}
+}
+
 type NameValidator struct {
 	Name      string
 	Validator record.Validator
@@ -147,6 +156,13 @@ func NamespacedValidator(vs []NameValidator) Option {
 func RecordValidator(v record.Validator) Option {
 	return func(c *Config) error {
 		c.RecordValidator = v
+		return nil
+	}
+}
+
+func FixLowPeersInterval(v time.Duration) Option {
+	return func(c *Config) error {
+		c.FixLowPeersInterval = v
 		return nil
 	}
 }
