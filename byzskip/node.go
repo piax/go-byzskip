@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jbenet/goprocess"
-	goprocessctx "github.com/jbenet/goprocess/context"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -22,7 +20,10 @@ import (
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	"github.com/thoas/go-funk"
+	"go.uber.org/fx"
 )
+
+var FIND_NODE_PARALLELISM = 5
 
 const (
 	JOIN_TIMEOUT          = 30
@@ -30,7 +31,6 @@ const (
 	DELNODE_TIMEOUT       = 30
 	REQUEST_TIMEOUT       = 10
 	FIND_NODE_TIMEOUT     = 10
-	FIND_NODE_PARALLELISM = 5
 	FIND_NODE_INTERVAL    = 1
 	UNICAST_SEND_TIMEOUT  = 1
 	DELNODE_SEND_TIMEOUT  = 300 // millisecond
@@ -93,9 +93,10 @@ type FindRangeResponse struct {
 
 // -- find node
 type RequestProcess struct {
-	Id string
-	Ev ayame.SchedEvent //*BSFindNodeEvent
-	Ch chan interface{} //*FindNodeResponse or *FindNodeMVResponse
+	Id       string
+	Ev       ayame.SchedEvent //*BSFindNodeEvent
+	Ch       chan interface{} //*FindNodeResponse or *FindNodeMVResponse
+	Finished bool
 }
 
 type BSNode struct {
@@ -121,15 +122,16 @@ type BSNode struct {
 	messageReceiver  func(*BSNode, *BSUnicastEvent)             // a function when received a message
 	responseReceiver func(*BSNode, *BSUnicastResEvent)
 
-	proc               goprocess.Process
-	DisableFixLowPeers bool
-	app                interface{}
-	BootstrapAddrs     []peer.AddrInfo
-
-	lastPing    time.Time
-	lastRefresh time.Time
+	//	proc                goprocess.Process
+	DisableFixLowPeers  bool
+	app                 interface{}
+	BootstrapAddrs      []peer.AddrInfo
+	FixLowPeersInterval time.Duration
+	lastPing            time.Time
+	lastRefresh         time.Time
 }
 
+// for debugging
 func (n *BSNode) Key() ayame.Key {
 	return n.key
 }
@@ -188,6 +190,9 @@ func (n *BSNode) Equals(m any) bool {
 }
 
 func (n *BSNode) String() string {
+	if n.name != "" {
+		return n.name
+	}
 	if n.Key() == nil {
 		return "+"
 	}
@@ -205,12 +210,7 @@ func (n *BSNode) Encode() *pb.Peer {
 func (n *BSNode) Close() error {
 	n.NotifyDeletion(context.Background())
 	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
-	n.Parent.Close()
-	// process close
-	if n.proc == nil {
-		panic("implementation error?")
-	}
-	return n.proc.Close()
+	return n.Parent.Close()
 }
 
 func (n *BSNode) SetApp(app interface{}) {
@@ -251,6 +251,14 @@ func ksToNs(lst []KeyMV) []*BSNode {
 	return ret
 }*/
 
+// Add a cleanup mechanism
+func (n *BSNode) cleanupQuerySeen() {
+	n.seenMutex.Lock()
+	defer n.seenMutex.Unlock()
+	// Clear old entries or implement a TTL-based cleanup
+	n.QuerySeen = make(map[string]int)
+}
+
 // returns k-neighbors, the level found k-neighbors, neighbor candidates for s
 func (node *BSNode) GetNeighborsAndCandidates(key ayame.Key, mv *ayame.MembershipVector) ([]*BSNode, int, []*BSNode) {
 	ret, level := node.RoutingTable.KClosestWithKey(key)
@@ -265,7 +273,9 @@ func New(h host.Host, options ...Option) (*BSNode, error) {
 
 func NewWithoutDefaults(h host.Host, options ...Option) (*BSNode, error) {
 	var cfg Config
-
+	if h == nil {
+		return nil, errors.New("host is nil")
+	}
 	if err := cfg.Apply(options...); err != nil {
 		return nil, err
 	}
@@ -504,7 +514,7 @@ func (n *BSNode) SendRequest(ctx context.Context, node ayame.Node, req RequestEv
 	reqCh := make(chan interface{}, 1)
 	n.ProcsMutex.Lock()
 	mid := req.MessageId()
-	n.Procs[mid] = &RequestProcess{Ev: req, Id: mid, Ch: reqCh}
+	n.Procs[mid] = &RequestProcess{Ev: req, Id: mid, Ch: reqCh, Finished: false}
 	n.ProcsMutex.Unlock()
 	start := time.Now()
 	n.SendEventAsync(ctx, node, req, false)
@@ -562,7 +572,10 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 		}
 		//XXX if needed
 		//time.Sleep(time.Duration(FIND_NODE_INTERVAL) * time.Second)
-		ayame.Log.Debugf("%s: join stats=%s", n.Key(), n.stats)
+		ayame.Log.Debugf("%s: stats candidates=%s", n.Key(), n.stats.candidates)
+		ayame.Log.Debugf("%s: stats queried=%s", n.Key(), n.stats.queried)
+		ayame.Log.Debugf("%s: stats routing table=%s", n.Key(),
+			strings.ReplaceAll(n.RoutingTable.String(), "\n", ""))
 		n.lastRefresh = time.Now()
 		n.lastPing = time.Now()
 	}
@@ -583,10 +596,13 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 		return err
 	}
 
-	n.proc = goprocessctx.WithContext(ctx)
 	if !n.DisableFixLowPeers {
-		n.proc.Go(n.fixLowPeersRoutine)
+		fx.New(
+			fx.Provide(func() *BSNode { return n }),
+			fx.Invoke(LowPeersFixer(n.FixLowPeersInterval)),
+		).Start(context.Background())
 	}
+
 	return nil
 }
 
@@ -598,9 +614,11 @@ func (n *BSNode) RunBootstrap(ctx context.Context) error {
 		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 	n.RefreshRTWait(ctx)
 
-	n.proc = goprocessctx.WithContext(ctx)
 	if !n.DisableFixLowPeers {
-		n.proc.Go(n.fixLowPeersRoutine)
+		fx.New(
+			fx.Provide(func() *BSNode { return n }),
+			fx.Invoke(LowPeersFixer(n.FixLowPeersInterval)),
+		).Start(context.Background())
 	}
 	return nil
 }
@@ -1538,6 +1556,7 @@ func (n *BSNode) handleFindNodeMVResponse(ctx context.Context, ev ayame.SchedEve
 		if proc.Ch != nil { // sync
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- resp
+			proc.Finished = true
 		} else { // async
 			n.processResponseMV(resp)
 			if !ayame.IsSubsetOf(n.stats.closest, n.stats.queried) {
@@ -1580,6 +1599,7 @@ func (n *BSNode) handleFindRangeResponse(ctx context.Context, ev ayame.SchedEven
 		if proc.Ch != nil { // sync
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- resp
+			proc.Finished = true
 		} else { // async
 			n.processResponseRange(resp)
 			if !ayame.IsSubsetOf(n.stats.closest, n.stats.queried) {
@@ -1610,6 +1630,7 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 		if proc.Ch != nil { // sync
 			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- &FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
+			proc.Finished = true
 		} else { // async
 			if MODIFY_ROUTING_TABLE_BY_RESPONSE {
 				n.processResponse(&FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false})
@@ -1754,4 +1775,15 @@ func (n *BSNode) handleDelNode(sev ayame.SchedEvent) error {
 		}
 	}
 	return nil
+}
+
+// Add cleanup for completed processes
+func (n *BSNode) cleanupProcs() {
+	n.ProcsMutex.Lock()
+	defer n.ProcsMutex.Unlock()
+	for id, proc := range n.Procs {
+		if proc.Finished {
+			delete(n.Procs, id)
+		}
+	}
 }
