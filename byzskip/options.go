@@ -1,6 +1,8 @@
 package byzskip
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
@@ -59,6 +61,13 @@ func DetailedStatistics(enable bool) Option {
 func DisableFixLowPeers(enable bool) Option {
 	return func(c *Config) error {
 		c.DisableFixLowPeers = &enable
+		return nil
+	}
+}
+
+func FixLowPeersInterval(interval time.Duration) Option {
+	return func(c *Config) error {
+		c.FixLowPeersInterval = interval
 		return nil
 	}
 }
