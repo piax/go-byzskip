@@ -51,9 +51,11 @@ type P2PNode struct {
 }
 
 const (
-	CONNMGR_LOW          = 100
-	CONNMGR_HIGH         = 400
-	RECORD_BYTES_PER_KEY = true
+	CONNMGR_LOW             = 100
+	CONNMGR_HIGH            = 400
+	RECORD_BYTES_PER_KEY    = true
+	MAX_MESSAGE_AGE         = 60 // 1 minute in seconds
+	MAX_MESSAGE_FROM_FUTURE = 30 // 30 seconds
 )
 
 func New(h host.Host, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte,
@@ -245,10 +247,10 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	// get request data
 	mes := &p2p.Message{}
 	r := msgio.NewVarintReaderSize(s, network.MessageSizeMax)
-	defer s.Close()
+	defer s.Close() // Ensure stream is closed after use
+
 	buf, err := r.ReadMsg()
 	if err != nil {
-		r.ReleaseMsg(buf)
 		if err == io.EOF {
 			return
 		}
@@ -256,6 +258,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		ayame.Log.Errorf("%s: %s", n, err)
 		return
 	}
+	defer r.ReleaseMsg(buf) // Ensure buffer is released after use
 
 	ayame.Log.Debugf("receved mes len=%d", len(buf))
 	// unmarshal it
@@ -272,8 +275,6 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	}
 	n.mutex.Unlock()
 	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
-	r.ReleaseMsg(buf)
-	//ayame.Log.Infof("%s: Received from %s. size=%d\n", s.Conn().LocalPeer(), s.Conn().RemotePeer(), len(buf))
 	var valid bool = true
 	if n.VerifyIntegrity { // if failed, valid becomes false.
 		valid = n.validateMessage(mes, s)
@@ -349,6 +350,8 @@ func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) erro
 		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return err
 	}
+	defer s.Close() // Ensure stream is closed after use
+
 	ayame.Log.Debugf("%s NewStream to %s\n", n.Key(), id)
 	if err := n.sendMsgToStream(s, n.sign(ev, sign)); err != nil {
 		ayame.Log.Errorf("%s send to %s: %s\n", n.Key(), id, err)
@@ -367,6 +370,14 @@ func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) erro
 func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	// store a temp ref to signature and remove it from message data
 	data := message.Data
+
+	// Replay attack prevention: Validate timestamp (reject messages older than a certain age or from the future)
+	currentTime := time.Now().Unix()
+	messageDuration := currentTime - data.Timestamp
+	if messageDuration > MAX_MESSAGE_AGE || messageDuration < -MAX_MESSAGE_FROM_FUTURE {
+		ayame.Log.Errorf("Message timestamp is invalid: %d seconds old", messageDuration)
+		return false
+	}
 
 	senderSign := message.SenderSign
 	message.SenderSign = nil
@@ -490,7 +501,7 @@ func (n *P2PNode) verifyData(data []byte, signature []byte, peerId peer.ID, pubK
 
 	// verify that message author node id matches the provided node public key
 	if idFromKey != peerId {
-		//ayame.Log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
+		ayame.Log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
 		return false
 	}
 
@@ -563,8 +574,6 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType,
 // XXX context is not used
 func (n *P2PNode) sendMsgToStream(s network.Stream, msg proto.Message) error {
 	writer := pbio.NewDelimitedWriter(s)
-	ayame.Log.Debugf("%s: writing msg", n)
-	//fmt.Printf("%s: writing msg %s\n", n, msg)
 	err := writer.WriteMsg(msg)
 	ayame.Log.Debugf("%s: written msg", n)
 	if err != nil {
