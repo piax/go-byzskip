@@ -54,6 +54,11 @@ var DefaultRedundancyFactor = func(cfg *Config) error {
 	return cfg.Apply(RedundancyFactor(4))
 }
 
+type BlankValidator struct{}
+
+func (BlankValidator) Validate(_ string, _ []byte) error        { return nil }
+func (BlankValidator) Select(_ string, _ [][]byte) (int, error) { return 0, nil }
+
 // Complete list of default options and when to fallback on them.
 //
 // Please *DON'T* specify default options any other way. Putting this all here
@@ -91,12 +96,26 @@ var defaults = []struct {
 		opt:      Datastore(dssync.MutexWrap(ds.NewMapDatastore())),
 	},
 	{
+		fallback: func(cfg *Config) bool { return cfg.RecordValidator == nil },
+		opt: NamespacedValidator([]NameValidator{
+			{Name: "hrns", Validator: NamedValueValidator{}},
+		}),
+	},
+	{
 		fallback: func(cfg *Config) bool { return cfg.MaxRecordAge == nil },
 		opt:      MaxRecordAge(time.Hour * 36),
 	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.DetailedStatistics == nil },
 		opt:      DetailedStatistics(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.DisableFixLowPeers == nil },
+		opt:      DisableFixLowPeers(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.FixLowPeersInterval == 0 },
+		opt:      FixLowPeersInterval(1 * time.Minute),
 	},
 }
 
