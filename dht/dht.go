@@ -26,8 +26,10 @@ import (
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
+	"github.com/piax/go-byzskip/byzskip"
 	bs "github.com/piax/go-byzskip/byzskip"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/fx"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,6 +38,8 @@ var (
 	_ routing.Routing     = (*BSDHT)(nil)
 	_ madns.BasicResolver = (*BSDHT)(nil)
 )
+
+const VALID_TIME = 24 * time.Hour
 
 // many functions are imported from the FullRT in go-libp2p-kad-dht
 
@@ -83,6 +87,19 @@ func NewWithoutDefaults(h host.Host, options ...Option) (*BSDHT, error) {
 	}
 
 	return cfg.NewDHT(h)
+}
+
+func (dht *BSDHT) Id() peer.ID {
+	return dht.Node.Id()
+}
+
+func (dht *BSDHT) KnownIds() []peer.ID {
+	neighbors := []peer.ID{}
+	for _, pi := range dht.Node.RoutingTable.AllNeighbors(false, false) {
+		p := pi.(*byzskip.BSNode)
+		neighbors = append(neighbors, p.Id())
+	}
+	return neighbors
 }
 
 func (dht *BSDHT) HandlePutProviderEvent(ctx context.Context, ev *BSPutProviderEvent) error {
@@ -206,6 +223,7 @@ func (dht *BSDHT) HandlePutRequest(ctx context.Context, ev *BSPutEvent) ayame.Sc
 
 func (dht *BSDHT) getRecordFromDatastore(ctx context.Context, dskey ds.Key) (*pb.Record, error) {
 	buf, err := dht.datastore.Get(ctx, dskey)
+	ayame.Log.Debugf("getting record from datastore: key=%s, len=%d", dskey, len(buf))
 	if err == ds.ErrNotFound {
 		return nil, nil
 	}
@@ -223,6 +241,7 @@ func (dht *BSDHT) getRecordFromDatastore(ctx context.Context, dskey ds.Key) (*pb
 	if err != nil {
 		// Invalid record in datastore, probably expired but don't return an error,
 		// we'll just overwrite it
+		ayame.Log.Debugf("invalid record in datastore: key=%s, err=%s", dskey, err)
 		return nil, nil
 	}
 
@@ -241,7 +260,7 @@ func (dht *BSDHT) getLocalRaw(ctx context.Context, key string) (*pb.Record, erro
 		ayame.Log.Debugf("checking local datastore failed on %v key=%s, len=%d\n", dht.Node.Id(), key, len(rec.Value))
 		return nil, err
 	}
-	ayame.Log.Debugf("found value in datastore for key %s", key)
+	//ayame.Log.Debugf("found value in datastore for key %s, len=%d", key, len(rec.Value))
 	return rec, nil
 }
 
@@ -257,6 +276,7 @@ func (dht *BSDHT) putLocal(ctx context.Context, key string, rec *pb.Record) erro
 
 func (dht *BSDHT) putLocalRaw(ctx context.Context, key string, rec *pb.Record) error {
 	data, err := proto.Marshal(rec)
+	ayame.Log.Debugf("putting local raw key=%s, len=%d", key, len(data))
 	if err != nil {
 		return err
 	}
@@ -282,7 +302,8 @@ func MakePutRecord(key string, value []byte) *pb.Record {
 func (dht *BSDHT) makeNamedValueRecord(name string, value []byte, pcert *authority.PCert) (*pb.Record, error) {
 	record := new(pb.Record)
 	record.Key = []byte(name) //key.Encode()
-	record.TimeReceived = u.FormatRFC3339(time.Now())
+	now := time.Now()
+	record.TimeReceived = u.FormatRFC3339(now)
 	pcertBytes, err := authority.PCertToBytes(pcert)
 	if err != nil {
 		return nil, err
@@ -346,7 +367,12 @@ func (dht *BSDHT) extractNamedValue(record *pb.Record) (ayame.Key, []byte, error
 	if err := dht.verifySign(namedValue.Sign, pubKey, verifyData); err != nil {
 		return nil, nil, fmt.Errorf("signature verification failed: %w", err)
 	}
-	return pcert.Key, namedValue.Value, nil
+	//return pcert.Key, namedValue.Value, nil
+	parsed, err := ParseName(string(record.Key))
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid recorded key: %w", err)
+	}
+	return parsed, namedValue.Value, nil
 }
 
 // PutValue
@@ -508,7 +534,6 @@ const (
 	MAX_RECORD_AGE = time.Hour * 36
 )
 
-// (picked from IPFS)
 // execOnMany executes the given function on each of the peers, although it may only wait for a certain chunk of peers
 // to respond before considering the results "good enough" and returning.
 //
@@ -521,64 +546,57 @@ func (dht *BSDHT) execOnMany(ctx context.Context, fn func(context.Context, ayame
 		return 0
 	}
 
-	// having a buffer that can take all of the elements is basically a hack to allow for sloppy exits that clean up
-	// the goroutines after the function is done rather than before
+	// Create a buffered channel to avoid goroutine leaks
 	errCh := make(chan error, len(peers))
 	numSuccessfulToWaitFor := int(float64(len(peers)) * WAIT_FRAC)
 
+	// Create a timeout context for the entire operation
 	putctx, cancel := context.WithTimeout(ctx, TIMEOUT_PER_OP)
 	defer cancel()
 
+	// Launch goroutines for each peer
 	for _, p := range peers {
 		go func(p ayame.Node) {
-			errCh <- fn(putctx, p)
+			// Create a new context for each operation to ensure proper timeout handling
+			opCtx, opCancel := context.WithTimeout(putctx, TIMEOUT_PER_OP)
+			defer opCancel()
+
+			err := fn(opCtx, p)
+			select {
+			case errCh <- err:
+			case <-putctx.Done():
+				// Context was cancelled, don't block on sending error
+			}
 		}(p)
 	}
 
-	var numDone, numSuccess, successSinceLastTick int
-	var ticker *time.Ticker
-	var tickChan <-chan time.Time
+	var numDone, numSuccess int
 
+	// Wait for either enough successes or all operations to complete
 	for numDone < len(peers) {
-		ayame.Log.Debugf("numDone=%d < len(peers)=%d", numDone, len(peers))
 		select {
 		case err := <-errCh:
 			numDone++
 			if err == nil {
 				numSuccess++
-				if numSuccess >= numSuccessfulToWaitFor && ticker == nil {
-					// Once there are enough successes, wait a little longer
-					ticker = time.NewTicker(time.Millisecond * 500)
-					defer ticker.Stop()
-					tickChan = ticker.C
-					successSinceLastTick = numSuccess
-				}
-				ayame.Log.Debugf("numSuccess=%d numDone=%d len=%d", numSuccess, successSinceLastTick, len(peers))
-				// This is equivalent to numSuccess * 2 + numFailures >= len(peers) and is a heuristic that seems to be
-				// performing reasonably.
-				// TODO: Make this metric more configurable
-				// TODO: Have better heuristics in this function whether determined from observing static network
-				// properties or dynamically calculating them
-				if numSuccess+numDone >= len(peers) {
-					cancel()
-					if sloppyExit {
-						return numSuccess
-					}
-				}
-			}
-		case <-tickChan:
-			if numSuccess > successSinceLastTick {
-				// If there were additional successes, then wait another tick
-				ayame.Log.Debugf("numSuccess=%d successLastTick=%d ", numSuccess, successSinceLastTick)
-				successSinceLastTick = numSuccess
-			} else {
-				cancel()
-				if sloppyExit {
+				// If we have enough successes and sloppyExit is true, we can return early
+				if sloppyExit && numSuccess >= numSuccessfulToWaitFor {
 					return numSuccess
 				}
 			}
+		case <-putctx.Done():
+			// Context was cancelled or timed out
+			if putctx.Err() == context.DeadlineExceeded {
+				ayame.Log.Debugf("execOnMany timed out after %v", TIMEOUT_PER_OP)
+			} else {
+				ayame.Log.Debugf("execOnMany cancelled: %v", putctx.Err())
+			}
+			return numSuccess
 		}
+		ayame.Log.Debugf("execOnMany loop, numDone=%d, numSuccess=%d", numDone, numSuccess)
 	}
+	ayame.Log.Debugf("execOnMany done, numSuccess=%d", numSuccess)
+
 	return numSuccess
 }
 
@@ -896,7 +914,7 @@ func (dht *BSDHT) Provide(ctx context.Context, key cid.Cid, brdcst bool) error {
 
 // FindProvidersAsync
 func (dht *BSDHT) FindProvidersAsync(ctx context.Context, key cid.Cid, count int) <-chan peer.AddrInfo {
-	ayame.Log.Debugf("Find Provider key=%s", key)
+	ayame.Log.Debugf("Find Provider key=%s, count=%d", key, count)
 	if !key.Defined() {
 		peerOut := make(chan peer.AddrInfo)
 		close(peerOut)
@@ -946,6 +964,7 @@ func (dht *BSDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash.M
 	for _, p := range provs {
 		// NOTE: Assuming that this list of peers is unique
 		if psTryAdd(p.ID) {
+			ayame.Log.Debugf("using provider: %s", p)
 			select {
 			case peerOut <- p:
 			case <-ctx.Done():
@@ -956,8 +975,10 @@ func (dht *BSDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash.M
 		// If we have enough peers locally, don't bother with remote RPC
 		// TODO: is this a DOS vector?
 		if !findAll && psSize() >= count {
+			ayame.Log.Debugf("got enough providers (%d/%d)", psSize(), count)
 			return
 		}
+		ayame.Log.Debugf("found %d/%d providers on local", psSize(), count)
 	}
 
 	//idKey := ayame.NewStringIdKey(string(key))
@@ -988,12 +1009,15 @@ func (dht *BSDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash.M
 					ayame.Log.Debug("context timed out sending more providers")
 					return ctx.Err()
 				}
+			} else {
+				ayame.Log.Debugf("already have provider: %s", prov)
 			}
 			if !findAll && psSize() >= count {
 				ayame.Log.Debugf("got enough providers (%d/%d)", psSize(), count)
 				cancelquery()
 				return nil
 			}
+			ayame.Log.Debugf("found %d/%d providers on remote", psSize(), count)
 		}
 		return nil
 	}
@@ -1111,4 +1135,23 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 
 	}
 	return bs.ConvertMessage(mes, self, valid)
+}
+
+// a DNS resolver by BSDHT, replace the default	resolver by decorating the original resolver
+func WithBSDHTResolver() fx.Option {
+	return fx.Decorate(func(original *madns.Resolver, bs *BSDHT) (*madns.Resolver, error) {
+		if bs == nil {
+			return original, nil
+		}
+
+		// Create a new resolver instance that delegates to BSDHT
+		newResolver, err := madns.NewResolver(
+			madns.WithDefaultResolver(bs),
+		)
+		if err != nil {
+			return original, nil // Fall back to original on error
+		}
+
+		return newResolver, nil
+	})
 }
