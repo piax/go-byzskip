@@ -23,6 +23,9 @@ func NewEventExecutor() *EventExecutor {
 
 func (ee *EventExecutor) Reset() {
 	ee.EventCount = 0
+	if ee.finishCh != nil {
+		close(ee.finishCh)
+	}
 	ee.finishCh = make(chan bool)
 	ee.time = 0
 }
