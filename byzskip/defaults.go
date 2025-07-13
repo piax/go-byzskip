@@ -3,6 +3,8 @@ package byzskip
 // This file contains all the default configuration options.
 
 import (
+	"time"
+
 	"github.com/piax/go-byzskip/ayame"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -61,6 +63,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.DisableFixLowPeers == nil },
 		opt:      DisableFixLowPeers(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.FixLowPeersInterval == 0 },
+		opt:      FixLowPeersInterval(1 * time.Minute),
 	},
 }
 
