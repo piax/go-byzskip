@@ -83,6 +83,10 @@ func (dht *BSDHT) LookupTXT(ctx context.Context, name string) (values []string, 
 
 // Not compatible with BasicResolver
 func (dht *BSDHT) LookupNames(ctx context.Context, name string, isPrefix bool) ([]string, []string, error) {
+	ayame.Log.Debugf("LookupNames %s %v", name, isPrefix)
+	// DNSLink specific handling
+	name = strings.TrimPrefix(name, "_dnslink.")
+	name = strings.TrimSuffix(name, ".")
 	rslt, err := dht.GetNamedValues(ctx, name, isPrefix)
 	var keys []string = []string{}
 	var values []string = []string{}
@@ -158,7 +162,7 @@ func (dht *BSDHT) sendMultiPutValue(ctx context.Context, p ayame.Node, rec *pb.R
 			ayame.Log.Info(errStr, "put-message", rec, "get-message", ev.Record)
 			return errors.New(errStr)
 		}
-		ayame.Log.Debugf("exec multi put successfully on: %s", p.Id())
+		ayame.Log.Debugf("exec multi put %s=%s successfully on: %s", rec.Key, rec.Value, p.Id())
 		return nil
 	}
 	if ev, ok := resp.(*bs.FailureResponse); ok {
@@ -194,10 +198,6 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 	}
 
 	ayame.Log.Debugf("Put key=%s, value len=%d", recordKey, len(value))
-	if err := dht.RecordValidator.Validate(recordKey, value); err != nil {
-		ayame.Log.Debugf("validation failure key=%s, value len=%d", key, len(value))
-		return err
-	}
 	/*
 		rec := MakePutRecord(recordKey, value)
 		rec.TimeReceived = u.FormatRFC3339(time.Now())
@@ -211,7 +211,13 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 	if err != nil {
 		return err
 	}
-	/* XXXX Is it necessary to put on local?
+
+	err = dht.RecordValidator.Validate(string(rec.GetKey()), rec.GetValue())
+	if err != nil {
+		ayame.Log.Debugf("before local put, validate failure key=%s, %s", key, err)
+		return err
+	}
+
 	// put to local
 	old, err := dht.getLocalRaw(ctx, recordKey)
 	if err != nil {
@@ -220,6 +226,7 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 	}
 	// Check if we have an old value that's not the same as the new one.
 	if old != nil && !bytes.Equal(old.GetValue(), value) {
+		ayame.Log.Debugf("comparing local value, old len=%d, new len=%d", len(old.GetValue()), len(value))
 		// Check to see if the new one is better.
 		i, err := dht.RecordValidator.Select(recordKey, [][]byte{value, old.GetValue()})
 		if err != nil {
@@ -229,24 +236,22 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 		if i != 0 {
 			return fmt.Errorf("can't replace a newer value with an older value")
 		}
-	}*/
+	}
 
-	/*
-		err = dht.putLocalRaw(ctx, recordKey, rec)
-		if err != nil {
-			ayame.Log.Debugf("put local failure key=%s, %s", key, err)
-			return err
-		}
-	*/
+	err = dht.putLocalRaw(ctx, recordKey, rec)
+	if err != nil {
+		ayame.Log.Debugf("put local failure key=%s, %s", key, err)
+		return err
+	}
 
-	peers, err := dht.Node.Lookup(ctx, key)
+	ps, err := dht.IdFinder(ctx, dht, recordKey)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("key lookup done: for %s, %v\n", key, peers)
+	ayame.Log.Debugf("lookup done: %v", ps)
 
 	wg := sync.WaitGroup{}
-	for _, p := range peers {
+	for _, p := range ps {
 		wg.Add(1)
 		go func(p ayame.Node) {
 			ctx, cancel := context.WithCancel(ctx)
@@ -259,7 +264,12 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 		}(p)
 	}
 	wg.Wait()
+	/*	peers := nsToIs(ps)
 
+		numSuccess := dht.execOnManyMulti(ctx, func(ctx context.Context, p ayame.Node) error {
+			return dht.sendMultiPutValue(ctx, p, rec)
+		}, peers)
+		ayame.Log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess) */
 	return nil
 }
 
@@ -293,34 +303,64 @@ func (dht *BSDHT) execOnManyMulti(ctx context.Context, fn func(context.Context, 
 		return 0
 	}
 
-	// having a buffer that can take all of the elements is basically a hack to allow for sloppy exits that clean up
-	// the goroutines after the function is done rather than before
+	// Create a buffered channel to avoid goroutine leaks
 	errCh := make(chan error, len(peers))
+	numSuccessfulToWaitFor := int(float64(len(peers)) * WAIT_FRAC)
 
+	// Create a timeout context for the entire operation
 	putctx, cancel := context.WithTimeout(ctx, TIMEOUT_PER_OP)
 	defer cancel()
 
+	// Use a WaitGroup to track goroutines
+	var wg sync.WaitGroup
+	wg.Add(len(peers))
+
+	// Launch goroutines for each peer
 	for _, p := range peers {
 		go func(p ayame.Node) {
-			errCh <- fn(putctx, p)
+			defer wg.Done()
+			// Create a new context for each operation
+			opCtx, opCancel := context.WithTimeout(putctx, TIMEOUT_PER_OP)
+			defer opCancel()
+
+			err := fn(opCtx, p)
+			select {
+			case errCh <- err:
+			case <-putctx.Done():
+				// Context was cancelled, don't block on sending error
+			}
 		}(p)
 	}
 
 	var numDone, numSuccess int
 
+	// Wait for either enough successes or all operations to complete
 	for numDone < len(peers) {
-		ayame.Log.Debugf("numDone=%d < len(peers)=%d", numDone, len(peers))
 		select {
 		case err := <-errCh:
 			numDone++
 			if err == nil {
 				numSuccess++
-				ayame.Log.Debugf("numSuccess=%d numDone=%d len=%d", numSuccess, numDone, len(peers))
+				// If we have enough successes, we can return early
+				if numSuccess >= numSuccessfulToWaitFor {
+					return numSuccess
+				}
 			}
-		case <-ctx.Done():
-			ayame.Log.Debugf("execution ended with:%s", ctx.Err())
+		case <-putctx.Done():
+			// Context was cancelled or timed out
+			if putctx.Err() == context.DeadlineExceeded {
+				ayame.Log.Debugf("execOnManyMulti timed out after %v", TIMEOUT_PER_OP)
+			} else {
+				ayame.Log.Debugf("execOnManyMulti cancelled: %v", putctx.Err())
+			}
+			return numSuccess
 		}
+		ayame.Log.Debugf("execOnManyMulti loop, numDone=%d, numSuccess=%d", numDone, numSuccess)
 	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	ayame.Log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess)
 	return numSuccess
 }
 
@@ -328,7 +368,7 @@ func (dht *BSDHT) execOnManyMulti(ctx context.Context, fn func(context.Context, 
 // /hrns/<name>[:<peerID>]
 func (dht *BSDHT) GetNamedValues(ctx context.Context, key string, isPrefix bool, opts ...routing.Option) ([]RecvdVal, error) {
 	// normalize the key
-	key, err := Normalize(key)
+	key, err := Normalize(url.QueryEscape(key))
 	if err != nil {
 		return nil, err
 	}
@@ -467,37 +507,10 @@ func (dh *BSDHT) searchNamedValue(ctx context.Context, key string, isPrefix bool
 }
 
 func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool, stopQuery chan struct{}) (<-chan RecvdVal, <-chan *lookupWithFollowupResult) {
-	//key := "/v/" + ukey.String()
 	valCh := make(chan RecvdVal, 1)
 	lookupResCh := make(chan *lookupWithFollowupResult, 1)
-	/* XXX local repository is not yet.
-	fn := func() {
-		ayame.Log.Debugf("finding value with prefix %s", key)
-		if recs, err := dh.getNamedLocal(ctx, key); recs != nil && err == nil {
-			for _, rec := range recs {
-				ayame.Log.Debugf("found local value for key=%s: %s", key, rec)
-				if rec != nil && rec.GetValue() != nil {
-					rv := RecvdVal{
-						Key:  rec.GetKey(),
-						Val:  rec.GetValue(),
-						From: dh.Node.Id(),
-					}
-					select {
-					case valCh <- rv:
-						ayame.Log.Debugf("sent to channel local value for key=%s: %s", key, rec)
-					case <-ctx.Done():
-						ayame.Log.Debugf("context done.")
-					}
-				}
-			}
-		}
-	}
-	// find local
-	go fn()
-	*/
+
 	var ps []*bs.BSNode
-	//idKey := ayame.NewStringIdKey(key)
-	//ps, _ := dh.Node.Lookup(ctx, &idKey)
 	pkey, err := ParseName(key)
 	if err == nil {
 		ukey := pkey
@@ -522,44 +535,131 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 	}
 
 	peers := nsToIs(ps)
+	if len(peers) == 0 {
+		close(valCh)
+		close(lookupResCh)
+		return valCh, lookupResCh
+	}
 
 	fmt.Printf("get range done: for %s, %v\n", key, peers)
 
+	// Create channels and mutex for synchronization
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var channelsClosed bool
+
+	wg.Add(1)
 	go func() {
-		defer close(valCh)
-		defer close(lookupResCh)
-		queryFn := func(ctx context.Context, p ayame.Node) error {
-			recs, err := dht.sendGetValues(ctx, p, key)
-			if err != nil {
-				return err
+		defer wg.Done()
+		defer func() {
+			mu.Lock()
+			if !channelsClosed {
+				close(valCh)
+				close(lookupResCh)
+				channelsClosed = true
 			}
-			// TODO: What should happen if the record is invalid?
-			// Pre-existing code counted it towards the quorum, but should it?
-			for _, rec := range recs {
-				key, value, err := dht.extractNamedValue(rec)
+			mu.Unlock()
+		}()
+
+		queryCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+		defer cancel()
+
+		queryFn := func(ctx context.Context, p ayame.Node) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-done:
+				return nil
+			default:
+				recs, err := dht.sendGetValues(ctx, p, key)
 				if err != nil {
-					ayame.Log.Warningf("invalid record: %s", err)
-					continue
+					return err
 				}
-				if rec != nil && rec.GetValue() != nil {
-					rv := RecvdVal{
-						Key:  []byte(key.String()),
-						Val:  value,
-						From: p.Id(),
-					}
+				for _, rec := range recs {
 					select {
-					case valCh <- rv:
 					case <-ctx.Done():
 						return ctx.Err()
+					case <-done:
+						return nil
+					default:
+						key, value, err := dht.extractNamedValue(rec)
+						if err != nil {
+							ayame.Log.Warningf("invalid record: %s", err)
+							continue
+						}
+						if rec != nil && rec.GetValue() != nil {
+							rv := RecvdVal{
+								Key:  []byte(key.String()),
+								Val:  value,
+								From: p.Id(),
+							}
+
+							// Check if channels are closed before sending
+							mu.Lock()
+							if channelsClosed {
+								mu.Unlock()
+								return nil
+							}
+
+							// Non-blocking send with timeout
+							timer := time.NewTimer(100 * time.Millisecond)
+							select {
+							case valCh <- rv:
+								timer.Stop()
+								ayame.Log.Debugf("Successfully sent value to channel")
+							case <-timer.C:
+								ayame.Log.Debugf("Timeout while sending value to channel")
+							case <-ctx.Done():
+								timer.Stop()
+								mu.Unlock()
+								return ctx.Err()
+							case <-done:
+								timer.Stop()
+								mu.Unlock()
+								return nil
+							}
+							mu.Unlock()
+						}
 					}
 				}
+				return nil
 			}
-			return nil
 		}
 
-		dht.execOnManyMulti(ctx, queryFn, peers)
-		lookupResCh <- &lookupWithFollowupResult{peers: peers}
+		success := dht.execOnManyMulti(queryCtx, queryFn, peers)
+		ayame.Log.Debugf("execOnManyMulti completed with %d successes", success)
+
+		// Check if channels are closed before sending lookup result
+		mu.Lock()
+		if !channelsClosed {
+			// Non-blocking send for lookup result
+			timer := time.NewTimer(100 * time.Millisecond)
+			select {
+			case lookupResCh <- &lookupWithFollowupResult{peers: peers}:
+				timer.Stop()
+				ayame.Log.Debugf("Successfully sent lookup result")
+			case <-timer.C:
+				ayame.Log.Debugf("Timeout while sending lookup result")
+			case <-ctx.Done():
+				timer.Stop()
+				ayame.Log.Debugf("Context cancelled while sending lookup result")
+			}
+		}
+		mu.Unlock()
 	}()
+
+	// Start a goroutine to handle cleanup
+	go func() {
+		select {
+		case <-ctx.Done():
+			close(done)
+		case <-stopQuery:
+			close(done)
+		}
+		wg.Wait()
+	}()
+
 	return valCh, lookupResCh
 }
 
@@ -613,16 +713,34 @@ func (dht *BSDHT) HandleMultiPutRequest(ctx context.Context, ev *BSMultiPutEvent
 	if !dht.ValidateRecord(ev.Record, ev.Sender()) {
 		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
 	}
-	dht.putLocalRaw(ctx, string(ev.Record.GetKey()), ev.Record)
+	err := dht.putLocalRaw(ctx, string(ev.Record.GetKey()), ev.Record)
+	if err != nil {
+		ayame.Log.Warningf("failed to put local raw: %s", err)
+		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
+	}
 	ayame.Log.Debugf("handle multi-put finished on %s@%v from=%v, key=%s, len=%d\n", dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
 
 	rec, err := dht.getLocalRaw(ctx, string(ev.Record.GetKey()))
 	if err != nil {
 		rec = nil
 	}
+	recs, err := dht.getRecordWithPrefixFromDatastore(ctx, string(ev.Record.GetKey()))
+	ayame.Log.Debugf("got prefixed recs after put=%v", recs)
+	if err != nil {
+		ayame.Log.Warningf("failed to get record with prefix from datastore: %s", err)
+		rec = nil
+	}
+	if rec == nil {
+		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
+	}
+	if rec.GetValue() != nil && ev.Record.GetValue() != nil && bytes.Equal(rec.GetValue(), ev.Record.GetValue()) {
+		ayame.Log.Debugf("Record is correctly stored")
+		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, rec)
+	}
 
 	ret := NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, rec)
-	ayame.Log.Debugf("returning multi-put record on %s@%v to=%v, key=%s, len=%d\n", dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ret.Record.GetKey()), len(ret.Record.Value))
+	ayame.Log.Debugf("returning multi-put record on %s@%v to=%v, key=%s, len=%d\n",
+		dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ret.Record.GetKey()), len(ret.Record.GetValue()))
 	return ret
 }
 
