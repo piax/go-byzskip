@@ -48,12 +48,12 @@ func TestSim(t *testing.T) {
 func TestP2P(t *testing.T) {
 	numberOfPeers := 100
 	peers := make([]*bs.BSNode, numberOfPeers)
-	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic"))
+	h, _ := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/9000/quic-v1"))
 	peers[0], _ = bs.New(h, bs.Key(ayame.IntKey(0)))
-	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic/p2p/%s", peers[0].Id())
+	locator := fmt.Sprintf("/ip4/127.0.0.1/udp/9000/quic-v1/p2p/%s", peers[0].Id())
 
 	for i := 1; i < numberOfPeers/2; i++ {
-		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic-v1", 9000+i)))
 		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)), bs.Bootstrap(locator))
 		go func(pos int) {
 			peers[pos].Join(context.Background())
@@ -61,7 +61,7 @@ func TestP2P(t *testing.T) {
 	}
 	time.Sleep(time.Duration(10) * time.Second)
 	for i := numberOfPeers / 2; i < numberOfPeers; i++ {
-		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic", 9000+i)))
+		h, _ := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/quic-v1", 9000+i)))
 		peers[i], _ = bs.New(h, bs.Key(ayame.IntKey(i)), bs.Bootstrap(locator))
 		go func(pos int) {
 			peers[pos].Join(context.Background())
