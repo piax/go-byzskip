@@ -331,7 +331,57 @@ func addr(port int, quic bool) string {
 	}
 }
 
-func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+func setupIntKeyNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
+	auth := authority.NewAuthorizer()
+	numberOfPeers := num
+	keys := []int{}
+	for i := 0; i < numberOfPeers; i++ {
+		keys = append(keys, i)
+	}
+	if shuffle {
+		rand.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+	}
+	count := 0
+	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		mv := ayame.NewMembershipVector(2)
+		key := ayame.IntKey(keys[count]) // Using IntKey instead of IdKey
+		count++
+		name := ""
+		bin := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, bin, nil
+	}
+	validateFunc := func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		return authority.VerifyJoinCert(id, key, name, mv, cert, auth.PublicKey())
+	}
+	peers := make([]*BSNode, numberOfPeers)
+	var err error
+	h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000, useQuic))}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval), DisableFixLowPeers(true)}...)
+	if err != nil {
+		panic(err)
+	}
+	peers[0].RunBootstrap(context.Background())
+	locator := fmt.Sprintf("%s/p2p/%s", addr(9000, useQuic), peers[0].Id())
+
+	for i := 1; i < numberOfPeers; i++ {
+		h, err := libp2p.New([]libp2p.Option{libp2p.ListenAddrStrings(addr(9000+i, useQuic))}...)
+		if err != nil {
+			panic(err)
+		}
+		peers[i], err = New(h, []Option{Bootstrap(locator), Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval), DisableFixLowPeers(true)}...)
+		if err != nil {
+			panic(err)
+		}
+		peers[i].Join(context.Background())
+	}
+	time.Sleep(time.Duration(5) * time.Second)
+	return peers
+}
+
+func setupNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
 	auth := authority.NewAuthorizer()
 	numberOfPeers := num
 	keys := []int{}
@@ -357,7 +407,7 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	if err != nil {
 		panic(err)
 	}
-	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{Key(ayame.IntKey(keys[0])), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -369,7 +419,7 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 		if err != nil {
 			panic(err)
 		}
-		peers[i], err = New(h, []Option{Bootstrap(locator), Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Key(ayame.IntKey(keys[i])), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -391,7 +441,7 @@ func setupNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+func setupNamedNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
 	auth := authority.NewAuthorizer()
 	numberOfPeers := num
 	keys := []int{}
@@ -419,7 +469,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	if err != nil {
 		panic(err)
 	}
-	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -431,7 +481,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 		if err != nil {
 			panic(err)
 		}
-		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -453,7 +503,7 @@ func setupNamedNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
 	auth := authority.NewAuthorizer()
 	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		mv := ayame.NewMembershipVectorFromBinary([]byte(id))
@@ -474,7 +524,7 @@ func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 
 	// Root node uses IdKey
 	rkey := ayame.NewIdKey(h.ID())
-	peers[0], err = New(h, []Option{Key(rkey), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{Key(rkey), RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -488,7 +538,7 @@ func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 		}
 
 		// All nodes use IdKey
-		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -508,7 +558,7 @@ func setupIdKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
 	auth := authority.NewAuthorizer()
 	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		key := ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(id))
@@ -528,7 +578,7 @@ func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	}
 
 	// Root node uses UnifiedKey from ID
-	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -542,7 +592,7 @@ func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 		}
 
 		// All nodes use UnifiedKey from ID
-		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -562,7 +612,7 @@ func setupUnifiedIdNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	return peers
 }
 
-func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
+func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool, fixLowPeersInterval time.Duration) []*BSNode {
 	auth := authority.NewAuthorizer()
 	count := 0
 	authFunc := func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
@@ -590,7 +640,7 @@ func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 	}
 
 	// Root node uses UnifiedKey
-	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+	peers[0], err = New(h, []Option{RedundancyFactor(k), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 	if err != nil {
 		panic(err)
 	}
@@ -603,7 +653,7 @@ func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 			panic(err)
 		}
 
-		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc)}...)
+		peers[i], err = New(h, []Option{Bootstrap(locator), Authorizer(authFunc), AuthValidator(validateFunc), FixLowPeersInterval(fixLowPeersInterval)}...)
 		if err != nil {
 			panic(err)
 		}
@@ -618,17 +668,27 @@ func setupMixedKeyNodes(k int, num int, shuffle bool, useQuic bool) []*BSNode {
 
 func TestJoin(t *testing.T) {
 	numberOfPeers := 32
-	nodes := setupNodes(4, numberOfPeers, true, true)
+	nodes := setupNodes(4, numberOfPeers, true, true, 20*time.Second)
 	for _, node := range nodes {
 		node.Close()
 	}
 }
 
+func TestIntKeyJoin(t *testing.T) {
+	InitK(3)
+	numberOfPeers := 32
+	FIND_NODE_PARALLELISM = 1
+	setupIntKeyNodes(4, numberOfPeers, false, true, 20*time.Second)
+	//	for _, node := range nodes {
+	//		node.Close()
+	//	}
+}
+
 func TestFix(t *testing.T) { // 30 sec long test
 
 	numberOfPeers := 32
-	periodicBootstrapInterval = 20 * time.Second
-	peers := setupNodes(4, numberOfPeers, false, true)
+	//periodicBootstrapInterval = 20 * time.Second
+	peers := setupNodes(4, numberOfPeers, false, true, 20*time.Second)
 	time.Sleep(2 * time.Second)
 	peers[2].Close()
 	peers[20].Close()
@@ -641,7 +701,7 @@ func TestFix(t *testing.T) { // 30 sec long test
 
 func TestLookup(t *testing.T) {
 	numberOfPeers := 32
-	peers := setupNodes(4, numberOfPeers, true, true)
+	peers := setupNodes(4, numberOfPeers, true, true, 20*time.Second)
 	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -666,7 +726,7 @@ func TestLookup(t *testing.T) {
 
 func TestLookupMV(t *testing.T) {
 	numberOfPeers := 32
-	peers := setupNodes(4, numberOfPeers, false, true)
+	peers := setupNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -707,7 +767,7 @@ func TestLookupMV(t *testing.T) {
 func TestLookupRange(t *testing.T) {
 	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
-	peers := setupNodes(4, numberOfPeers, false, true)
+	peers := setupNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- LOOKUP RANGE STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -770,7 +830,7 @@ func TestDualDHT(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 320
-	peers := setupNamedNodes(4, numberOfPeers, false, true)
+	peers := setupNamedNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- DUAL DHT SEARCH STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -825,7 +885,7 @@ func TestLookupName(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 320
-	peers := setupNamedNodes(4, numberOfPeers, false, true)
+	peers := setupNamedNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- LOOKUP NAME STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
@@ -856,7 +916,7 @@ func TestUnifiedId(t *testing.T) {
 	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	ayame.MembershipVectorSize = 320
-	peers := setupUnifiedIdNodes(4, numberOfPeers, false, true)
+	peers := setupUnifiedIdNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- UNIFIED ID LOOKUP STARTS ---------")
 
 	// Reset counters
@@ -896,7 +956,7 @@ func TestIdKey(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 320
-	peers := setupIdKeyNodes(4, numberOfPeers, false, true)
+	peers := setupIdKeyNodes(4, numberOfPeers, false, true, 20*time.Second)
 	ayame.Log.Debugf("------- ID KEY LOOKUP STARTS ---------")
 
 	// Reset counters
@@ -938,7 +998,7 @@ func TestMixed(t *testing.T) {
 	ayame.MembershipVectorSize = 320
 
 	// Create mix of nodes - half with IdKey, half with string keys
-	peers := setupMixedKeyNodes(4, numberOfPeers, false, true) // Create all nodes at once
+	peers := setupMixedKeyNodes(4, numberOfPeers, false, true, 20*time.Second) // Create all nodes at once
 
 	ayame.Log.Debugf("------- MIXED KEY LOOKUP STARTS ---------")
 
@@ -995,7 +1055,7 @@ func TestMixed(t *testing.T) {
 func TestUnicast(t *testing.T) {
 	numberOfPeers := 32
 	useQuic := true
-	peers := setupNodes(4, numberOfPeers, true, useQuic)
+	peers := setupNodes(4, numberOfPeers, true, useQuic, 20*time.Second)
 	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
@@ -1049,7 +1109,7 @@ func TestUnicast(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	numberOfPeers := 16
-	peers := setupNodes(4, numberOfPeers, true, true)
+	peers := setupNodes(4, numberOfPeers, true, true, 20*time.Second)
 	ayame.Log.Debugf("------- Closing nodes ---------")
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
@@ -1085,7 +1145,7 @@ func Example() {
 
 func TestTCP(t *testing.T) {
 	numberOfPeers := 100
-	peers := setupNodes(4, numberOfPeers, true, false)
+	peers := setupNodes(4, numberOfPeers, true, false, 20*time.Second)
 	for _, peer := range peers {
 		peer.Close()
 	}
