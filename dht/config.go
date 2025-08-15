@@ -59,7 +59,7 @@ const (
 )
 
 func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
-	ayame.InitLogger(logging.DEBUG) // set log level to error so that surpress messages.
+	ayame.InitLogger(logging.ERROR) // set log level to error so that surpress messages.
 	//key := ayame.NewIdKey(h.ID())
 	assignedKey, name, mv, cert, err := c.Authorizer(h.ID())
 	if err != nil {

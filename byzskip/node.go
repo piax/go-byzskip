@@ -21,6 +21,7 @@ import (
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	"github.com/thoas/go-funk"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 )
 
 var FIND_NODE_PARALLELISM = 5
@@ -600,6 +601,9 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 		fx.New(
 			fx.Provide(func() *BSNode { return n }),
 			fx.Invoke(LowPeersFixer(n.FixLowPeersInterval)),
+			fx.WithLogger(func() fxevent.Logger {
+				return fxevent.NopLogger // suppress logging
+			}),
 		).Start(context.Background())
 	}
 
@@ -618,6 +622,9 @@ func (n *BSNode) RunBootstrap(ctx context.Context) error {
 		fx.New(
 			fx.Provide(func() *BSNode { return n }),
 			fx.Invoke(LowPeersFixer(n.FixLowPeersInterval)),
+			fx.WithLogger(func() fxevent.Logger {
+				return fxevent.NopLogger // supress logging
+			}),
 		).Start(context.Background())
 	}
 	return nil

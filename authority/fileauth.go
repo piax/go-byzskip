@@ -37,7 +37,7 @@ func FileAuthAuthorize(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, 
 	if AuthPubKey == nil {
 		pk := os.Getenv(AUTH_PUBKEY)
 		if pk == "" {
-			panic("CERT_PUBKEY is empty")
+			panic(AUTH_PUBKEY + " is empty")
 		} else {
 			p, err := UnmarshalStringToPubKey(pk)
 			if err != nil {
