@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"strconv"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/montanaflynn/stats"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
 	flag "github.com/spf13/pflag"
 	funk "github.com/thoas/go-funk"
@@ -17,6 +17,7 @@ var numberOfNodes *int
 var trials *int
 var seed *int64
 var verbose *bool
+var log = logging.Logger("sgsim")
 
 func ConstructOverlay(numberOfNodes int, fast bool) []*SGNode {
 	nodes := make([]*SGNode, 0, numberOfNodes)
@@ -29,7 +30,7 @@ func ConstructOverlay(numberOfNodes int, fast bool) []*SGNode {
 	}
 	FastJoinAll(nodes)
 	ave, _ := stats.Mean(funk.Map(nodes, func(n *SGNode) float64 { return float64(n.routingTableHeight()) }).([]float64))
-	ayame.Log.Debugf("avg. routing table height: %f\n", ave)
+	log.Debugf("avg. routing table height: %f\n", ave)
 	return nodes
 }
 
@@ -48,9 +49,13 @@ func main() {
 	flag.Parse()
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("sgsim", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("sgsim", "info")
 	}
 
 	rand.Seed(*seed)
@@ -70,19 +75,19 @@ func main() {
 		msg := NewUnicastEvent(nodes[src], dst)
 		msgs = append(msgs, msg)
 		if *verbose {
-			ayame.Log.Debugf("id=%d,src=%d, dst=%d\n", msg.messageId, src, dst)
+			log.Debugf("id=%d,src=%d, dst=%d\n", msg.messageId, src, dst)
 		}
 		ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
 	}
 	for _, msg := range msgs {
 		go func(msg *UnicastEvent) {
 			<-msg.root.channel
-			ayame.Log.Debugf("%d: %d, hops %d\n", msg.messageId, msg.Time(), len(msg.path))
+			log.Debugf("%d: %d, hops %d\n", msg.messageId, msg.Time(), len(msg.path))
 		}(msg)
 	}
 	ayame.GlobalEventExecutor.Sim(int64(*trials*1000*2), true)
 	ayame.GlobalEventExecutor.AwaitFinish()
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *UnicastEvent) float64 { return float64(len(msg.path)) }).([]float64))
-	ayame.Log.Infof("avg-match-hops: %f\n", ave)
+	log.Infof("avg-match-hops: %f\n", ave)
 }

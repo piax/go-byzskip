@@ -5,10 +5,14 @@ package dht
 import (
 	"fmt"
 	"os"
+	"os/user"
+	"strings"
 	"time"
 
+	record "github.com/libp2p/go-libp2p-record"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/ipfs/boxo/ipns"
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/piax/go-byzskip/authority"
@@ -16,12 +20,24 @@ import (
 	bs "github.com/piax/go-byzskip/byzskip"
 )
 
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		currentUser, err := user.Current()
+		if err != nil {
+			return path
+		}
+		return strings.Replace(path, "~", currentUser.HomeDir, 1)
+	}
+	return path
+}
+
 var DefaultAuthorizer = func(cfg *Config) error {
 	if filename := os.Getenv(authority.CERT_FILE); len(filename) != 0 { // if environment variable is set, use cert file.
 		// file exists
+		filename = expandPath(filename)
 		if _, err := os.Stat(filename); err == nil {
-			ayame.Log.Infof("using %s as the cert file", filename)
-			return cfg.Apply(Authorizer(authority.FileAuthAuthorize))
+			log.Infof("using %s as the cert file", filename)
+			return cfg.Apply(Authorizer(authority.FileAuthAuthorizer(filename)))
 		} else {
 			if *cfg.VerifyIntegrity {
 				panic(fmt.Errorf("failed to determine authorization method: %w", err))
@@ -33,7 +49,7 @@ var DefaultAuthorizer = func(cfg *Config) error {
 		}
 	}
 	// default is to use the identity key and empty name.
-	ayame.Log.Infof("using empty authority")
+	log.Infof("using empty authority")
 	return cfg.Apply(Authorizer(func(pid peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
 		return ayame.IdKey(pid), "", ayame.NewMembershipVector(2), nil, nil // alpha=2
@@ -42,8 +58,8 @@ var DefaultAuthorizer = func(cfg *Config) error {
 
 var DefaultAuthValidator = func(cfg *Config) error {
 	if pk := os.Getenv(authority.AUTH_PUBKEY); len(pk) != 0 { // if environment variable is set, use the publickey
-		ayame.Log.Infof("using authority public key: %s", pk)
-		return cfg.Apply(AuthValidator(authority.AuthValidate))
+		log.Infof("using authority public key: %s", pk)
+		return cfg.Apply(AuthValidator(authority.AuthValidator(pk)))
 	}
 	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool {
 		return true
@@ -98,7 +114,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.RecordValidator == nil },
 		opt: NamespacedValidator([]NameValidator{
+			{Name: "pk", Validator: record.PublicKeyValidator{}},
+			{Name: "ipns", Validator: ipns.Validator{KeyBook: nil}},
 			{Name: "hrns", Validator: NamedValueValidator{}},
+			{Name: "v", Validator: BlankValidator{}},
 		}),
 	},
 	{

@@ -71,7 +71,7 @@ func (n *RemoteNode) Encode() *pb.Peer {
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
 		Cert:       IfNeededSign(n.self.VerifyIntegrity, n.cert),
-		Connection: ConnectionType(n.self.Network().Connectedness(n.id)),
+		Connection: ConnectionType(n.self.Host.Network().Connectedness(n.id)),
 	}
 }
 
@@ -105,7 +105,7 @@ func Addresses(addrs [][]byte) []ma.Multiaddr {
 	for _, addr := range addrs {
 		maddr, err := ma.NewMultiaddrBytes(addr)
 		if err != nil {
-			ayame.Log.Debugf("error decoding multiaddr for peer %s\n", err)
+			log.Debugf("error decoding multiaddr for peer %s\n", err)
 			continue
 		}
 
@@ -148,7 +148,7 @@ func Connectedness(c pb.ConnectionType) network.Connectedness {
 func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 	// store to peerstore on self.
 	id, _ := peer.Decode(p.Id)
-	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.AddressTTL)
+	self.Host.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.AddressTTL)
 	return &RemoteNode{
 		self:  self,
 		id:    id,
@@ -162,7 +162,7 @@ func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 
 func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *RemoteNode {
 	// store to peerstore on self.
-	self.Peerstore().AddAddrs(id, addrs, peerstore.AddressTTL)
+	self.Host.Peerstore().AddAddrs(id, addrs, peerstore.AddressTTL)
 	return &RemoteNode{
 		self: self,
 		id:   id,

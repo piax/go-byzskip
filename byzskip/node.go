@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -24,6 +25,7 @@ import (
 	"go.uber.org/fx/fxevent"
 )
 
+var log = logging.Logger("byzskip")
 var FIND_NODE_PARALLELISM = 5
 
 const (
@@ -345,7 +347,7 @@ func (node *BSNode) RoutingTableString() string {
 			ret = append(ret, n)
 		}
 	}
-	//ayame.Log.Debugf("%d/%d queried\n", found, len(curKNodes))
+	//log.Debugf("%d/%d queried\n", found, len(curKNodes))
 	return ret
 }*/
 
@@ -354,13 +356,13 @@ func AllContained2(curKNodes []*BSNode, queried []*BSNode) bool {
 		contained := false
 		for _, m := range queried {
 			if n.Equals(m) {
-				//				ayame.Log.Debugf("%s is contained", n)
+				//				log.Debugf("%s is contained", n)
 				contained = true
 				break
 			}
 		}
 		if !contained {
-			//			ayame.Log.Debugf("%s is NOT contained", n)
+			//			log.Debugf("%s is NOT contained", n)
 			return false
 		}
 	}
@@ -521,10 +523,10 @@ func (n *BSNode) SendRequest(ctx context.Context, node ayame.Node, req RequestEv
 	n.SendEventAsync(ctx, node, req, false)
 	select {
 	case <-reqCtx.Done(): // after REQUEST_TIMEOUT
-		ayame.Log.Debugf("%s: request ended with %s", n, reqCtx.Err())
+		log.Debugf("%s: request ended with %s", n, reqCtx.Err())
 	case res := <-reqCh: // request finished
 		n.Parent.(*p2p.P2PNode).Host.Peerstore().RecordLatency(node.Id(), time.Since(start))
-		ayame.Log.Debugf("%s: request ended normally", n)
+		log.Debugf("%s: request ended normally", n)
 		return res
 	}
 	return &FailureResponse{Err: reqCtx.Err()}
@@ -561,10 +563,10 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 			// continue to simulation for the responses reqCount n.ch<-
 			select {
 			case <-joinCtx.Done(): // after JOIN_TIMEOUT
-				ayame.Log.Debugf("%s: Join process ended with %s\n", n, joinCtx.Err())
+				log.Debugf("%s: Join process ended with %s\n", n, joinCtx.Err())
 				break L
 			case response := <-findCh: // FindNode finished
-				ayame.Log.Debugf("%s: %d th/ %d FindNode for %s to %s finished", n, i+1, reqCount, response.id, response.sender)
+				log.Debugf("%s: %d th/ %d FindNode for %s to %s finished", n, i+1, reqCount, response.id, response.sender)
 				err := n.processResponse(response)
 				if err != nil {
 					return err // fatal error occured during the process
@@ -573,9 +575,9 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 		}
 		//XXX if needed
 		//time.Sleep(time.Duration(FIND_NODE_INTERVAL) * time.Second)
-		ayame.Log.Debugf("%s: stats candidates=%s", n.Key(), n.stats.candidates)
-		ayame.Log.Debugf("%s: stats queried=%s", n.Key(), n.stats.queried)
-		ayame.Log.Debugf("%s: stats routing table=%s", n.Key(),
+		log.Debugf("%s: stats candidates=%s", n.Key(), n.stats.candidates)
+		log.Debugf("%s: stats queried=%s", n.Key(), n.stats.queried)
+		log.Debugf("%s: stats routing table=%s", n.Key(),
 			strings.ReplaceAll(n.RoutingTable.String(), "\n", ""))
 		n.lastRefresh = time.Now()
 		n.lastPing = time.Now()
@@ -637,9 +639,9 @@ func (n *BSNode) JoinSim(ctx context.Context, introducer *BSNode) {
 
 	if !n.allQueried() {
 		n.sendNextParalellRequest(ctx, 1) // XXX one failure kills the join process
-		ayame.Log.Debugf("%s: join stats=%s", n.Key(), n.stats)
+		log.Debugf("%s: join stats=%s", n.Key(), n.stats)
 	} else {
-		ayame.Log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
+		log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
 	}
 }
 
@@ -739,11 +741,11 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 		return nil
 	}
 	if response.level == 0 {
-		ayame.Log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
+		log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
 		initialNodes := append(n.stats.candidates, n.stats.closest...)
-		//ayame.Log.Infof("initial nodes size: %d\n", len(initialNodes))
+		//log.Infof("initial nodes size: %d\n", len(initialNodes))
 		if !n.IsFailure && isFaultySet(initialNodes) {
-			ayame.Log.Infof("initial nodes hijacked: %s\n", initialNodes)
+			log.Infof("initial nodes hijacked: %s\n", initialNodes)
 		}
 		for _, m := range response.closest {
 			if m.Key().Equals(n.Key()) {
@@ -753,7 +755,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	}
 	n.rtMutex.Lock()
 	n.RoutingTable.Add(response.sender, true) // XXX lock
-	ayame.Log.Debugf("%s: added response sender %s", n, response.sender)
+	log.Debugf("%s: added response sender %s", n, response.sender)
 	n.rtMutex.Unlock()
 	/*
 		for _, c := range response.candidates {
@@ -778,19 +780,19 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	/*
 		for _, c := range response.candidates {
 			if n.RoutingTable.PossiblyBeAdded(c) {
-				ayame.Log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+				log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
 				n.stats.candidates = AppendNodeIfMissing(n.stats.candidates, c)
 			} else {
-				ayame.Log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+				log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
 			}
 		}
 		if EXCLUDE_CLOSEST_IN_NEIGHBORS {
 			for _, c := range response.closest {
 				if n.RoutingTable.PossiblyBeAdded(c) {
-					ayame.Log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+					log.Debugf("%s possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
 					n.stats.candidates = AppendNodeIfMissing(n.stats.candidates, c)
 				} else {
-					ayame.Log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
+					log.Debugf("%s NOT possibly be added to {%s}%s\n", c.Key(), n.Key(), n.RoutingTable)
 				}
 			}
 		}*/
@@ -804,7 +806,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 
 	n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 
-	ayame.Log.Debugf("%s: received closest=%s, level=%d, candidates=%s,  candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
+	log.Debugf("%s: received closest=%s, level=%d, candidates=%s,  candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
 		ayame.SliceString(response.candidates),
 		ayame.SliceString(n.stats.candidates))
 	n.ProcsMutex.Lock()
@@ -812,7 +814,7 @@ func (n *BSNode) processResponseIndirect(response *FindNodeResponse) error {
 	n.ProcsMutex.Unlock()
 
 	if response.level == 0 { // just for debug
-		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
+		log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
 			ayame.SliceString(ayame.Exclude(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
@@ -863,7 +865,7 @@ func (n *BSNode) processResponseMV(response *FindNodeMVResponse) error {
 	if ADD_NODES_IN_LOOKUP {
 		n.rtMutex.Lock()
 		n.RoutingTable.Add(response.sender, true) // XXX lock
-		ayame.Log.Debugf("%s: added response sender %s", n, response.sender)
+		log.Debugf("%s: added response sender %s", n, response.sender)
 		n.rtMutex.Unlock()
 	}
 	//	n.rtMutex.RLock()
@@ -892,10 +894,10 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 		return nil
 	}
 	if response.level == 0 {
-		ayame.Log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
+		log.Debugf("reached matched nodes %s", ayame.SliceString(response.candidates))
 		initialNodes := append(n.stats.candidates, n.stats.closest...)
 		if !n.IsFailure && isFaultySet(initialNodes) {
-			ayame.Log.Infof("initial nodes hijacked: %s\n", initialNodes)
+			log.Infof("initial nodes hijacked: %s\n", initialNodes)
 		}
 		for _, m := range response.closest {
 			if m.Key().Equals(n.Key()) {
@@ -905,7 +907,7 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	}
 	n.rtMutex.Lock()
 	n.RoutingTable.Add(response.sender, true) // XXX lock
-	ayame.Log.Debugf("%s: added response sender %s", n, response.sender)
+	log.Debugf("%s: added response sender %s", n, response.sender)
 	n.rtMutex.Unlock()
 
 	for _, c := range response.candidates {
@@ -930,7 +932,7 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 
 	n.stats.queried = ayame.AppendIfAbsent(n.stats.queried, response.sender)
 
-	ayame.Log.Debugf("%s: received closest=%s, level=%d, candidates=%s, next candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
+	log.Debugf("%s: received closest=%s, level=%d, candidates=%s, next candidates=%s\n", n.Key(), ayame.SliceString(response.closest), response.level,
 		ayame.SliceString(response.candidates),
 		ayame.SliceString(n.stats.candidates))
 	n.ProcsMutex.Lock()
@@ -938,7 +940,7 @@ func (n *BSNode) processResponse(response *FindNodeResponse) error {
 	n.ProcsMutex.Unlock()
 
 	if response.level == 0 { // just for debug
-		ayame.Log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
+		log.Debugf("%s: start neighbor collection from %s, queried=%s\n", n.Key(),
 			ayame.SliceString(ayame.Exclude(n.stats.candidates, n.stats.queried)),
 			ayame.SliceString(n.stats.queried))
 	}
@@ -959,9 +961,9 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 	for pos < len(entries) {
 		reqCount := 0
 		for i := 0; i < FIND_NODE_PARALLELISM; i++ {
-			ayame.Log.Debugf("%s: %d/%d\n", n.Key(), pos, len(entries))
+			log.Debugf("%s: %d/%d\n", n.Key(), pos, len(entries))
 			if pos == len(entries) {
-				ayame.Log.Debugf("%d/%d break!\n", pos, len(entries))
+				log.Debugf("%d/%d break!\n", pos, len(entries))
 				break
 			}
 			ev := NewBSDelNodeEvent(n, NextId(), n.Key())
@@ -975,15 +977,15 @@ func (n *BSNode) NotifyDeletion(ctx context.Context) {
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-deleteCtx.Done(): // after UNICAST_SEND_TIMEOUT
-				ayame.Log.Debugf("DelNode %s ended with %s during %d/%d\n", n.Key(), deleteCtx.Err(), i, reqCount)
+				log.Debugf("DelNode %s ended with %s during %d/%d\n", n.Key(), deleteCtx.Err(), i, reqCount)
 				break L
 			case <-ch:
 				total++
-				ayame.Log.Debugf("%s: DelNode sent %d/%d\n", n.Key(), total, len(entries))
+				log.Debugf("%s: DelNode sent %d/%d\n", n.Key(), total, len(entries))
 			}
 		}
 	}
-	ayame.Log.Debugf("%s: DelNode process finished %d/%d\n", n.Key(), total, len(entries))
+	log.Debugf("%s: DelNode process finished %d/%d\n", n.Key(), total, len(entries))
 }
 
 func (n *BSNode) LevelZeroNodes() []*BSNode {
@@ -1031,7 +1033,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 
 	closers, level := n.GetClosestNodes(key)
 	if level == 0 {
-		ayame.Log.Debugf("FindNode ended locally")
+		log.Debugf("FindNode ended locally")
 		return closers, nil
 	}
 	queried := []*BSNode{}
@@ -1052,7 +1054,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-lookupCtx.Done(): // after JOIN_TIMEOUT
-				ayame.Log.Debugf("FindNode ended with %s", lookupCtx.Err())
+				log.Debugf("FindNode ended with %s", lookupCtx.Err())
 				break L
 			case res := <-lookupCh: // FindNode finished
 				response := res.(*FindNodeResponse)
@@ -1074,7 +1076,7 @@ func (n *BSNode) Lookup(ctx context.Context, key ayame.Key) ([]*BSNode, error) {
 					//	return results, nil // cancel other FindNode
 					//}
 				}
-				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
+				log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
 				queried = ayame.AppendIfAbsent(queried, response.sender)
 				closers = ayame.AppendIfAbsent(closers, response.closest...)
 			}
@@ -1102,7 +1104,7 @@ func (n *BSNode) LookupRange(ctx context.Context, rng *ayame.RangeKey) ([]*BSNod
 	if len(closests) == 0 {
 		return nil, fmt.Errorf("no closests found")
 	}
-	ayame.Log.Debugf("scan starts from: %s to: %s", closests[0].Key(), rng.End())
+	log.Debugf("scan starts from: %s to: %s", closests[0].Key(), rng.End())
 	return n.Scan(ctx, closests, rng)
 }
 
@@ -1131,7 +1133,7 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey)
 			node := c
 			reqCount++
 			id := NextId()
-			ayame.Log.Debugf("sending FindRange to %s, with range %s", node, curRange)
+			log.Debugf("sending FindRange to %s, with range %s", node, curRange)
 			go func() { n.findRange(lookupCtx, lookupCh, node, curRange, id) }()
 		}
 
@@ -1139,7 +1141,7 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey)
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-lookupCtx.Done(): // after JOIN_TIMEOUT
-				ayame.Log.Debugf("FindRange ended with %s", lookupCtx.Err())
+				log.Debugf("FindRange ended with %s", lookupCtx.Err())
 				break L
 			case res := <-lookupCh: // FindNode finished
 				response := res.(*FindRangeResponse)
@@ -1155,7 +1157,7 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey)
 					n.rtMutex.Unlock()
 					continue L
 				}
-				ayame.Log.Debugf("%s: got response from %s: %s", n.Key(), response.sender.Key(), ayame.SliceString(response.targets))
+				log.Debugf("%s: got response from %s: %s", n.Key(), response.sender.Key(), ayame.SliceString(response.targets))
 
 				// XXX need a filter?
 				filtered := response.targets
@@ -1166,13 +1168,13 @@ func (n *BSNode) Scan(ctx context.Context, start []*BSNode, rng *ayame.RangeKey)
 				et := EndExtentIn(curRange, results)
 				if et != nil {
 					endExtent = et
-					ayame.Log.Debugf("got end extent %s: %s", et, ayame.SliceString(results))
+					log.Debugf("got end extent %s: %s", et, ayame.SliceString(results))
 				}
 				//}
 				//if ContainsMV(mv, response.neighbors) {
 				//	results = ayame.AppendIfAbsent(results, response.neighbors...)
 				//}
-				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
+				log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
 				queried = ayame.AppendIfAbsent(queried, response.sender)
 				targets = ayame.AppendIfAbsent(targets, filtered...)
 			}
@@ -1189,7 +1191,7 @@ func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector) ([]*B
 	results := []*BSNode{}
 	if fin {
 		results = neighbors
-		ayame.Log.Debugf("directly found on %s, results=%s\n", n.Key(), ayame.SliceString(results))
+		log.Debugf("directly found on %s, results=%s\n", n.Key(), ayame.SliceString(results))
 		return results, nil
 	}
 
@@ -1199,7 +1201,7 @@ func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector) ([]*B
 	for !ayame.IsSubsetOf(neighbors, queried) {
 		reqCount := 0
 		nexts := ayame.Exclude(neighbors, queried)
-		ayame.Log.Debugf("nexts = %s\n", ayame.SliceString(nexts))
+		log.Debugf("nexts = %s\n", ayame.SliceString(nexts))
 
 		for _, c := range nexts {
 			node := c // candidate
@@ -1211,7 +1213,7 @@ func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector) ([]*B
 		for i := 0; i < reqCount; i++ {
 			select {
 			case <-lookupCtx.Done(): // after JOIN_TIMEOUT
-				ayame.Log.Debugf("FindNode ended with %s", lookupCtx.Err())
+				log.Debugf("FindNode ended with %s", lookupCtx.Err())
 				break L
 			case res := <-lookupCh: // FindNode finished
 				response := res.(*FindNodeMVResponse)
@@ -1228,13 +1230,13 @@ func (n *BSNode) LookupMV(ctx context.Context, mv *ayame.MembershipVector) ([]*B
 					continue L
 				}
 				if response.isTopmost { // finished the search
-					ayame.Log.Debugf("got topmost response: %s", ayame.SliceString(response.neighbors))
+					log.Debugf("got topmost response: %s", ayame.SliceString(response.neighbors))
 					results = ayame.AppendIfAbsent(results, response.neighbors...)
 				}
 				//if ContainsMV(mv, response.neighbors) {
 				//	results = ayame.AppendIfAbsent(results, response.neighbors...)
 				//}
-				ayame.Log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
+				log.Debugf("%d th/ %d FindNode finished", i+1, reqCount)
 				queried = ayame.AppendIfAbsent(queried, response.sender)
 				neighbors = ayame.AppendIfAbsent(neighbors, response.neighbors...)
 			}
@@ -1265,7 +1267,7 @@ func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, mid string, payload
 	//unicastCtx, cancel := context.WithTimeout(ctx, time.Duration(UNICAST_SEND_TIMEOUT)*time.Second) // all request should be ended within
 	//defer cancel()
 	closers, level := n.GetClosestNodes(key)
-	ayame.Log.Debugf("from=%s,to=%s,first level=%d %s\n", n.Key(), key, level, ayame.SliceString(closers))
+	log.Debugf("from=%s,to=%s,first level=%d %s\n", n.Key(), key, level, ayame.SliceString(closers))
 	//ch := make(chan struct{}, 1)
 
 	for _, c := range closers {
@@ -1278,10 +1280,10 @@ func (n *BSNode) Unicast(ctx context.Context, key ayame.Key, mid string, payload
 	for i := 0; i < len(closers); i++ {
 		select {
 		case <-unicastCtx.Done(): // after UNICAST_SEND_TIMEOUT ;; perhaps during corrupted connection attempt
-			ayame.Log.Debugf("A unicast ended with %s\n", unicastCtx.Err())
+			log.Debugf("A unicast ended with %s\n", unicastCtx.Err())
 			break L
 		case <-ch:
-			ayame.Log.Debugf("A unicast sent %d/%d at %s\n", i, len(closers), time.Now().String())
+			log.Debugf("A unicast sent %d/%d at %s\n", i, len(closers), time.Now().String())
 		}
 	}
 	*/
@@ -1292,13 +1294,13 @@ func (n *BSNode) sendDelNodeEvent(ctx context.Context, ch chan struct{}, node *B
 	defer cancel()
 	sch := make(chan struct{}, 1)
 	go func() {
-		ayame.Log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
+		log.Debugf("sending delete %s => %s\n", ev.TargetKey, node.Key())
 		n.SendEventAsync(ctx, node, ev, false) // ignore errors
 		sch <- struct{}{}
 	}()
 	select {
 	case <-sendCtx.Done():
-		ayame.Log.Debugf("%s: delnode ended with %s, continue anyway\n", n.Key(), sendCtx.Err())
+		log.Debugf("%s: delnode ended with %s, continue anyway\n", n.Key(), sendCtx.Err())
 	case <-sch:
 	}
 	ch <- struct{}{}
@@ -1309,7 +1311,7 @@ func (n *BSNode) sendUnicastEvent(ctx context.Context, ch chan struct{}, node *B
 	if node.Equals(n) {
 		n.handleUnicast(ctx, ev, true)
 	} else {
-		ayame.Log.Debugf("sent event %s from=%s,to=%s %s\n", ev.MessageId, n.Key(), node.Key(), time.Now().String())
+		log.Debugf("sent event %s from=%s,to=%s %s\n", ev.MessageId, n.Key(), node.Key(), time.Now().String())
 		n.SendEventAsync(ctx, node, ev, true)
 	}
 	//if ch != nil {
@@ -1365,7 +1367,7 @@ func (n *BSNode) findRange(ctx context.Context, findCh chan interface{}, node *B
 	}
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
+		log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindRangeResponse{sender: node, isFailure: true}
@@ -1373,7 +1375,7 @@ func (n *BSNode) findRange(ctx context.Context, findCh chan interface{}, node *B
 			findCh <- &FindRangeResponse{}
 		}
 	case response := <-ch: // FindNode finished
-		ayame.Log.Debugf("%s: FindNode ended normally", n)
+		log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 }
@@ -1394,7 +1396,7 @@ func (n *BSNode) findNodeMV(ctx context.Context, findCh chan interface{}, node *
 	}
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
+		log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindNodeMVResponse{sender: node, isFailure: true}
@@ -1402,7 +1404,7 @@ func (n *BSNode) findNodeMV(ctx context.Context, findCh chan interface{}, node *
 			findCh <- &FindNodeMVResponse{}
 		}
 	case response := <-ch: // FindNode finished
-		ayame.Log.Debugf("%s: FindNode ended normally", n)
+		log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 }
@@ -1424,7 +1426,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, n
 	}
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
+		log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindNodeResponse{sender: node, isFailure: true}
@@ -1432,7 +1434,7 @@ func (n *BSNode) findNodeWithKey(ctx context.Context, findCh chan interface{}, n
 			findCh <- &FindNodeResponse{}
 		}
 	case response := <-ch: // FindNode finished
-		ayame.Log.Debugf("%s: FindNode ended normally", n)
+		log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 }
@@ -1445,7 +1447,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 		return
 	}
 	if fr, ok := resp.(*FailureResponse); ok {
-		ayame.Log.Debugf("%s: FindNode ended with %s", n, fr.Err)
+		log.Debugf("%s: FindNode ended with %s", n, fr.Err)
 		findCh <- &FindNodeResponse{sender: node, isFailure: true}
 		return
 	}
@@ -1460,14 +1462,14 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	//n.Procs[requestId] = &FindNodeProc{ev: ev, id: requestId, ch: ch}
 	n.Procs[requestId] = &RequestProcess{Ev: ev, Id: requestId, Ch: ch}
 	n.ProcsMutex.Unlock()
-	//ayame.Log.Infof("%s: registered msgid=%s to %s\n", n, requestId, node)
-	ayame.Log.Debugf("%s: FindNode to %s started", n, node)
+	//log.Infof("%s: registered msgid=%s to %s\n", n, requestId, node)
+	log.Debugf("%s: FindNode to %s started", n, node)
 	start := time.Now()
 	n.SendEventAsync(ctx, node, ev, false) // ignore errors (detect by timeout)
 	// wait for the next event happens
 	select {
 	case <-findCtx.Done(): // after FIND_NODE_TIMEOUT
-		ayame.Log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
+		log.Debugf("%s: FindNode ended with %s", n, findCtx.Err())
 		if findCtx.Err() == context.DeadlineExceeded {
 			// set the node as failure
 			findCh <- &FindNodeResponse{sender: node, isFailure: true}
@@ -1477,7 +1479,7 @@ func (n *BSNode) FindNode(ctx context.Context, findCh chan *FindNodeResponse, no
 	case res := <-ch: // FindNode finished
 		n.Parent.(*p2p.P2PNode).Host.Peerstore().RecordLatency(node.Id(), time.Since(start))
 		response := res.(*FindNodeResponse)
-		ayame.Log.Debugf("%s: FindNode ended normally", n)
+		log.Debugf("%s: FindNode ended normally", n)
 		findCh <- response
 	}
 } */
@@ -1511,10 +1513,10 @@ func (n *BSNode) handleFindNodeMV(ctx context.Context, ev ayame.SchedEvent) erro
 
 func (n *BSNode) handleUnicastResponse(ctx context.Context, ev ayame.SchedEvent, sendToSelf bool) error {
 	if !sendToSelf && !ev.IsVerified() {
-		ayame.Log.Debugf("verify error. thrwon away")
+		log.Debugf("verify error. thrwon away")
 		return fmt.Errorf("%s: failed to verify a message, throw it away", n)
 	}
-	ayame.Log.Debugf("verified")
+	log.Debugf("verified")
 	if ev.IsResponse() {
 		n.responseReceiver(n, ev.(*BSUnicastResEvent))
 	}
@@ -1532,11 +1534,11 @@ func (n *BSNode) handleFindNodeMVRequest(ctx context.Context, ev ayame.SchedEven
 	n.rtMutex.RLock()
 	neighbors, fin := n.RoutingTable.KClosestWithMV(ue.mv, ue.src)
 	if fin {
-		ayame.Log.Debugf("reached to topmost level")
+		log.Debugf("reached to topmost level")
 	}
 	ret = ksToNs(neighbors)
 	n.rtMutex.RUnlock()
-	ayame.Log.Debugf("%s returns neighbors=%s\n", n.key, ayame.SliceString(neighbors))
+	log.Debugf("%s returns neighbors=%s\n", n.key, ayame.SliceString(neighbors))
 	if ADD_NODES_IN_LOOKUP {
 		n.rtMutex.Lock()
 		n.RoutingTable.Add(ue.Sender().(*BSNode), true)
@@ -1549,8 +1551,8 @@ func (n *BSNode) handleFindNodeMVRequest(ctx context.Context, ev ayame.SchedEven
 
 func (n *BSNode) handleFindNodeMVResponse(ctx context.Context, ev ayame.SchedEvent) error {
 	ue := ev.(*BSFindNodeMVEvent)
-	ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
-	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
+	log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
+	//log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	n.ProcsMutex.RLock()
 	proc, exists := n.Procs[ue.messageId]
 	n.ProcsMutex.RUnlock()
@@ -1561,16 +1563,16 @@ func (n *BSNode) handleFindNodeMVResponse(ctx context.Context, ev ayame.SchedEve
 	if exists {
 		resp := &FindNodeMVResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), neighbors: ue.neighbors, isFailure: false, isTopmost: ue.isTopmost}
 		if proc.Ch != nil { // sync
-			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
+			log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- resp
 			proc.Finished = true
 		} else { // async
 			n.processResponseMV(resp)
 			if !ayame.IsSubsetOf(n.stats.closest, n.stats.queried) {
-				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
 				n.sendNextParalellRequest(ctx, 1)
 			} else {
-				ayame.Log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
 			}
 		}
 	} else {
@@ -1586,7 +1588,7 @@ func (n *BSNode) handleFindRangeRequest(ctx context.Context, ev ayame.SchedEvent
 	// CASE1: start, ... end, ... key
 	// CASE2: end, ... key
 	rng := ue.rng.(*ayame.RangeKey)
-	//ayame.Log.Infof("%s: rng=%s right neighbors=%s\n", n.key, ue.rng, ayame.SliceString(targets))
+	//log.Infof("%s: rng=%s right neighbors=%s\n", n.key, ue.rng, ayame.SliceString(targets))
 	targets = pickRangeFrom(n.Key(), rng, targets)
 	n.rtMutex.RUnlock()
 	res := NewBSFindRangeResEvent(n, ue, ksToNs(targets))
@@ -1596,24 +1598,24 @@ func (n *BSNode) handleFindRangeRequest(ctx context.Context, ev ayame.SchedEvent
 
 func (n *BSNode) handleFindRangeResponse(ctx context.Context, ev ayame.SchedEvent) error {
 	ue := ev.(*BSFindRangeEvent)
-	ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
-	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
+	log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
+	//log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	n.ProcsMutex.RLock()
 	proc, exists := n.Procs[ue.messageId]
 	n.ProcsMutex.RUnlock()
 	if exists {
 		resp := &FindRangeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), targets: ue.targets, isFailure: false}
 		if proc.Ch != nil { // sync
-			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
+			log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- resp
 			proc.Finished = true
 		} else { // async
 			n.processResponseRange(resp)
 			if !ayame.IsSubsetOf(n.stats.closest, n.stats.queried) {
-				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
 				n.sendNextParalellRequest(ctx, 1)
 			} else {
-				ayame.Log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
 			}
 		}
 	} else {
@@ -1624,8 +1626,8 @@ func (n *BSNode) handleFindRangeResponse(ctx context.Context, ev ayame.SchedEven
 
 func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent) error {
 	ue := ev.(*BSFindNodeEvent)
-	ayame.Log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
-	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
+	log.Debugf("find node response from=%v\n", ue.Sender().(*BSNode))
+	//log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	n.ProcsMutex.RLock()
 	proc, exists := n.Procs[ue.messageId]
 	n.ProcsMutex.RUnlock()
@@ -1635,7 +1637,7 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 	}
 	if exists {
 		if proc.Ch != nil { // sync
-			ayame.Log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
+			log.Debugf("find node finished from=%v\n", ue.Sender().(*BSNode))
 			proc.Ch <- &FindNodeResponse{id: ue.messageId, sender: ue.Sender().(*BSNode), closest: ue.closers, candidates: ue.candidates, level: ue.level, isFailure: false}
 			proc.Finished = true
 		} else { // async
@@ -1648,10 +1650,10 @@ func (n *BSNode) handleFindNodeResponse(ctx context.Context, ev ayame.SchedEvent
 
 			if !n.allQueried() {
 				//if !n.filledTopmostLevel() {
-				ayame.Log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: not finished\n%s", n.Key(), n.RoutingTable)
 				n.sendNextParalellRequest(ctx, 1)
 			} else {
-				ayame.Log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
+				log.Debugf("%s: finish\n%s", n.Key(), n.RoutingTable)
 			}
 		}
 	} else {
@@ -1685,7 +1687,8 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 		}
 		n.rtMutex.RUnlock()
 	}
-	ayame.Log.Debugf("returns closest=%s, level=%d, candidates=%s\n", ayame.SliceString(closest), level, ayame.SliceString(candidates))
+	log.Debugf("returns closest=%s, level=%d, candidates=%s\n%s", ayame.SliceString(closest), level,
+		ayame.SliceString(candidates), n.RoutingTable.String())
 	n.rtMutex.Lock()
 	n.RoutingTable.Add(ue.Sender().(*BSNode), true)
 	n.rtMutex.Unlock()
@@ -1696,7 +1699,7 @@ func (n *BSNode) handleFindNodeRequest(ctx context.Context, ev ayame.SchedEvent)
 
 func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendToSelf bool) error {
 	msg := sev.(*BSUnicastEvent)
-	ayame.Log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
+	log.Debugf("handling msg to %d on %s level %d\n", msg.TargetKey, n, msg.level)
 
 	if !sendToSelf && !msg.IsVerified() {
 		return fmt.Errorf("%s: failed to verify message %s, throw it all away", n, msg.MessageId)
@@ -1707,12 +1710,12 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		if n.unicastHandler != nil {
 			n.unicastHandler(n, msg, true, false)
 		}
-		ayame.Log.Debugf("called already seen handler on %s, seen=%s\n", n, msg.MessageId)
+		log.Debugf("called already seen handler on %s, seen=%s\n", n, msg.MessageId)
 		return nil
 	}
 	if (RoutingType != SKIP_GRAPH && msg.level == 0) || (RoutingType == SKIP_GRAPH && msg.level < 0) { // level 0 means destination
 		msg.SetAlreadySeen(n)
-		//ayame.Log.Debugf("node: %d, m: %s\n", n, msg)
+		//log.Debugf("node: %d, m: %s\n", n, msg)
 		if n.unicastHandler != nil {
 			n.unicastHandler(n, msg, false, false)
 		}
@@ -1721,14 +1724,14 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 		}
 	} else {
 		nextMsgs := msg.findNextHops(n)
-		//ayame.Log.Debugf("next msgs: %v\n", nextMsgs)
+		//log.Debugf("next msgs: %v\n", nextMsgs)
 		for _, next := range nextMsgs {
 			node := next.Receiver().(*BSNode)
-			ayame.Log.Debugf("node: %d, m: %d\n", node.key, n.key)
+			log.Debugf("node: %d, m: %d\n", node.key, n.key)
 			// already via the path.
 			if node.Equals(n) {
 				// myself
-				ayame.Log.Debugf("I, %d, am one of the dest: %d, pass to myself\n", n.key, node.key)
+				log.Debugf("I, %d, am one of the dest: %d, pass to myself\n", n.key, node.key)
 				n.handleUnicast(ctx, next, true)
 			} else {
 				if Contains(node, funk.Map(msg.Path, func(pe PathEntry) *BSNode { return pe.Node.(*BSNode) }).([]*BSNode)) {
@@ -1737,7 +1740,7 @@ func (n *BSNode) handleUnicast(ctx context.Context, sev ayame.SchedEvent, sendTo
 					}
 				} else {
 					msg.SetAlreadySeen(n)
-					ayame.Log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
+					log.Debugf("I, %d@%d, am not one of the dest: %d, forward\n", n.key, msg.level, node.key)
 					//ev := msg.createSubMessage(n)
 					//fmt.Printf("sent event %s from=%s,to=%s %s\n", next.MessageId, n.Key(), node.Key(), time.Now().String())
 					//n.SendEventAsync(ctx, node, next, true)
@@ -1762,11 +1765,11 @@ func (n *BSNode) handleDelNode(sev ayame.SchedEvent) error {
 		n.rtMutex.RLock()
 		levelZeroSize := len(n.LevelZeroNodes())
 		n.rtMutex.RUnlock()
-		ayame.Log.Debugf("%s: Afer deletion, level zero size is %d ", n.Key(), levelZeroSize)
+		log.Debugf("%s: Afer deletion, level zero size is %d ", n.Key(), levelZeroSize)
 		// If we have too few nodes at level zero, refresh the routing table
 		minThreshold := (K - 1) * 2
 		if levelZeroSize < minThreshold {
-			ayame.Log.Debugf("%s: Level zero size %d is below threshold %d, refreshing routing table",
+			log.Debugf("%s: Level zero size %d is below threshold %d, refreshing routing table",
 				n.Key(), levelZeroSize, minThreshold)
 
 			// Create a new context for the refresh operation
@@ -1775,7 +1778,7 @@ func (n *BSNode) handleDelNode(sev ayame.SchedEvent) error {
 
 			// Use fixLowPeers to repair the routing table after node deletion
 			go func() {
-				ayame.Log.Debugf("%s: Initiating fixLowPeers after node deletion", n.Key())
+				log.Debugf("%s: Initiating fixLowPeers after node deletion", n.Key())
 				n.fixLowPeers(refreshCtx)
 			}()
 

@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 )
@@ -22,6 +22,7 @@ var port *int
 var keystore *string
 
 var auth *authority.Authorizer
+var log = logging.Logger("authsrv")
 
 const (
 	SEQ_NO              = "_seq"
@@ -64,7 +65,7 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 	pcert, _ := json.Marshal(p)
 	//db.Put([]byte(KEY_PREFIX+vals["user"][0]), pcert, nil)
 
-	ayame.Log.Infof("issueing: id=%s, key=%s", vals["id"][0], key)
+	log.Infof("issueing: id=%s, key=%s", vals["id"][0], key)
 
 	fmt.Fprintf(w, "%s", pcert)
 }
@@ -77,9 +78,13 @@ func main() {
 	flag.Parse()
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("authsrv", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("authsrv", "info")
 	}
 
 	ks, err := ayame.NewFSKeystore(*keystore)

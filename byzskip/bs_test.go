@@ -12,7 +12,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -702,7 +701,7 @@ func TestFix(t *testing.T) { // 30 sec long test
 func TestLookup(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, true, true, 20*time.Second)
-	ayame.Log.Debugf("------- LOOKUP STARTS ---------")
+	log.Debugf("------- LOOKUP STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
@@ -727,28 +726,28 @@ func TestLookup(t *testing.T) {
 func TestLookupMV(t *testing.T) {
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- LOOKUP MV STARTS ---------")
+	log.Debugf("------- LOOKUP MV STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 	numberOfLookups := numberOfPeers
 	// Test lookups from all nodes to a fixed destination
 	dst := 0
 	for src := 0; src < numberOfPeers; src++ {
-		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
+		log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
 		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV())
-		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
+		log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
 		ast.Equal(t, 4, len(nodes), "number of nodes should match K=4")
 		ast.Equal(t, true, Contains(peers[dst], nodes))
 	}
 	// Test lookups from a fixed source to all destinations
 	src := 0
 	for dst := 0; dst < numberOfPeers; dst++ {
-		ayame.Log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
+		log.Debugf("src=%d, dst=%s, search=%d", src, peers[dst].MV(), dst)
 		nodes, _ := peers[src].LookupMV(context.Background(), peers[dst].MV())
-		ayame.Log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
+		log.Debugf("src=%d, dst=%s, searched=%s", src, peers[dst].MV(), ayame.SliceString(nodes))
 		ast.Equal(t, 4, len(nodes), "number of nodes should match K=4")
 		ast.Equal(t, true, Contains(peers[dst], nodes))
 	}
@@ -765,14 +764,14 @@ func TestLookupMV(t *testing.T) {
 }
 
 func TestLookupRange(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
+	//ayame.InitLogger(ayame.INFO)
 	numberOfPeers := 32
 	peers := setupNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- LOOKUP RANGE STARTS ---------")
+	log.Debugf("------- LOOKUP RANGE STARTS ---------")
 	for i := range numberOfPeers { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 	numberOfLookups := numberOfPeers
 	// Test lookups from all nodes to a fixed range
@@ -823,7 +822,7 @@ func TestLookupRange(t *testing.T) {
 }
 
 func TestDualDHT(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
+	//ayame.InitLogger(ayame.INFO)
 	numberOfPeers := 32
 	bak := ayame.MembershipVectorSize
 	defer func() {
@@ -831,11 +830,11 @@ func TestDualDHT(t *testing.T) {
 	}()
 	ayame.MembershipVectorSize = 320
 	peers := setupNamedNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- DUAL DHT SEARCH STARTS ---------")
+	log.Debugf("------- DUAL DHT SEARCH STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 	numberOfLookups := numberOfPeers
 
@@ -878,7 +877,6 @@ func TestDualDHT(t *testing.T) {
 }
 
 func TestLookupName(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	bak := ayame.MembershipVectorSize
 	defer func() {
@@ -886,11 +884,11 @@ func TestLookupName(t *testing.T) {
 	}()
 	ayame.MembershipVectorSize = 320
 	peers := setupNamedNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- LOOKUP NAME STARTS ---------")
+	log.Debugf("------- LOOKUP NAME STARTS ---------")
 	for i := 0; i < numberOfPeers; i++ { // RESET
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 
 	}
 	numberOfLookups := numberOfPeers
@@ -913,17 +911,16 @@ func TestLookupName(t *testing.T) {
 }
 
 func TestUnifiedId(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	ayame.MembershipVectorSize = 320
 	peers := setupUnifiedIdNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- UNIFIED ID LOOKUP STARTS ---------")
+	log.Debugf("------- UNIFIED ID LOOKUP STARTS ---------")
 
 	// Reset counters
 	for i := range numberOfPeers {
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 
 	numberOfLookups := numberOfPeers
@@ -949,7 +946,6 @@ func TestUnifiedId(t *testing.T) {
 }
 
 func TestIdKey(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
 	numberOfPeers := 32
 	bak := ayame.MembershipVectorSize
 	defer func() {
@@ -957,13 +953,13 @@ func TestIdKey(t *testing.T) {
 	}()
 	ayame.MembershipVectorSize = 320
 	peers := setupIdKeyNodes(4, numberOfPeers, false, true, 20*time.Second)
-	ayame.Log.Debugf("------- ID KEY LOOKUP STARTS ---------")
+	log.Debugf("------- ID KEY LOOKUP STARTS ---------")
 
 	// Reset counters
 	for i := range numberOfPeers {
 		peers[i].Parent.(*p2p.P2PNode).InCount = 0
 		peers[i].Parent.(*p2p.P2PNode).InBytes = 0
-		ayame.Log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
+		log.Debugf("key=%s,mv=%s\n%s", peers[i].Key(), peers[i].MV(), peers[i].RoutingTable)
 	}
 
 	numberOfLookups := numberOfPeers
@@ -989,7 +985,6 @@ func TestIdKey(t *testing.T) {
 }
 
 func TestMixed(t *testing.T) {
-	ayame.InitLogger(logging.DEBUG)
 	numberOfPeers := 32
 	bak := ayame.MembershipVectorSize
 	defer func() {
@@ -1000,7 +995,7 @@ func TestMixed(t *testing.T) {
 	// Create mix of nodes - half with IdKey, half with string keys
 	peers := setupMixedKeyNodes(4, numberOfPeers, false, true, 20*time.Second) // Create all nodes at once
 
-	ayame.Log.Debugf("------- MIXED KEY LOOKUP STARTS ---------")
+	log.Debugf("------- MIXED KEY LOOKUP STARTS ---------")
 
 	// Reset counters
 	for i := range numberOfPeers {
@@ -1056,7 +1051,7 @@ func TestUnicast(t *testing.T) {
 	numberOfPeers := 32
 	useQuic := true
 	peers := setupNodes(4, numberOfPeers, true, useQuic, 20*time.Second)
-	ayame.Log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
+	log.Debugf("------- UNICAST STARTS (USE QUIC=%v) ---------", useQuic)
 	lock := sync.Mutex{}
 	results := make(map[string][]ayame.Key)
 	for i := range numberOfPeers {
@@ -1110,7 +1105,7 @@ func TestUnicast(t *testing.T) {
 func TestClose(t *testing.T) {
 	numberOfPeers := 16
 	peers := setupNodes(4, numberOfPeers, true, true, 20*time.Second)
-	ayame.Log.Debugf("------- Closing nodes ---------")
+	log.Debugf("------- Closing nodes ---------")
 	for i := 0; i < numberOfPeers; i++ {
 		peers[i].Close()
 	}

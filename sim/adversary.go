@@ -8,7 +8,6 @@ import (
 
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip" // "go mod tidy" is needed on go 1.16
-	//
 )
 
 type AdversaryRoutingTable struct {
@@ -100,7 +99,7 @@ func (table *AdversaryRoutingTable) GetClosestIndex() *bs.TableIndex {
 // called as a normal behavior
 func (table *AdversaryRoutingTable) Add(c bs.KeyMV, truncate bool) {
 	if FailureType == F_NONE {
-		ayame.Log.Debugf("%s adding %s", table, c)
+		log.Debugf("%s adding %s", table, c)
 		table.normal.Add(c, truncate)
 	}
 }

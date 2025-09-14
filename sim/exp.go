@@ -31,12 +31,12 @@ func expUnicastRecursive(trials int) {
 		mid := src.String() + "." + NextId()
 		msg := bs.NewBSUnicastEventNoOriginator(src, mid, ayame.MembershipVectorSize, dst.Key(), []byte("hello")) // starts with the max level.
 		msgs = append(msgs, msg)
-		ayame.Log.Debugf("%d: nodes=%d, id=%s,src=%s, dst=%s\n", int64(i*1000), len(NormalList), msg.MessageId, src, dst)
+		log.Debugf("%d: nodes=%d, id=%s,src=%s, dst=%s\n", int64(i*1000), len(NormalList), msg.MessageId, src, dst)
 		ayame.GlobalEventExecutor.RegisterEvent(msg, int64(i*1000))
 		//nodes[src].SendEvent(msg)
 		// time out after 200ms
 		ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-			ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
+			log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
 			msg.Root.Channel <- true
 		}), int64(i*1000)+100)
 	}
@@ -132,8 +132,8 @@ func expMVIterative(trials int) {
 		//founds, hops, msgs, hops_to_match, failure := FastNodeLookup(nodes[dst].routingTable.dhtId, nodes[src], *alpha)
 		founds, hops, msgs, hops_to_match, failure := FastLookupMV(dst.MV(), src)
 		//founds2, hops2, msgs2, hops_to_match2, failure2 := FastLookup(src.Key(), dst)
-		ayame.Log.Debugf("%s->%s MV %s %d %d %d %v\n", src, dst, founds, hops, msgs, hops_to_match, failure)
-		//ayame.Log.Infof("%s->%s Key: %s %d %d %d %v\n", dst, src, founds2, hops2, msgs2, hops_to_match2, failure2)
+		log.Debugf("%s->%s MV %s %d %d %d %v\n", src, dst, founds, hops, msgs, hops_to_match, failure)
+		//log.Infof("%s->%s Key: %s %d %d %d %v\n", dst, src, founds2, hops2, msgs2, hops_to_match2, failure2)
 		path_lengths = append(path_lengths, float64(hops))
 		nums_msgs = append(nums_msgs, msgs)
 		if !failure {
@@ -141,16 +141,16 @@ func expMVIterative(trials int) {
 		}
 		if failure {
 			failures++
-			ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+			log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 		}
-		ayame.Log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
+		log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 	}
 	pmean, _ := stats.Mean(path_lengths)
-	ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
+	log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 }
 
 func expIterative(trials int) {
@@ -171,16 +171,16 @@ func expIterative(trials int) {
 		}
 		if failure {
 			failures++
-			ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+			log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 		}
-		ayame.Log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
+		log.Debugf("%s->%s: avg. results: %d, hops: %d, msgs: %d, hops_to_match: %d, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 	}
 	pmean, _ := stats.Mean(path_lengths)
-	ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
+	log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 }
 
 func expEachIterative() {
@@ -209,19 +209,19 @@ func expEachIterative() {
 				match_lengths = append(match_lengths, float64(hops_to_match))
 			} else {
 				failures++
-				ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+				log.Debugf("%s->%s: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
-			ayame.Log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
+			log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
 		}
 		sum_max_hops += max_hops
 		sum_max_msgs += max_msgs
 	}
-	ayame.Log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sum_max_hops)/float64(EACH_UNICAST_TRIALS))
-	ayame.Log.Infof("avg-max-msgs: %s %f\n", paramsString, float64(sum_max_msgs)/float64(EACH_UNICAST_TRIALS))
+	log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sum_max_hops)/float64(EACH_UNICAST_TRIALS))
+	log.Infof("avg-max-msgs: %s %f\n", paramsString, float64(sum_max_msgs)/float64(EACH_UNICAST_TRIALS))
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(EACH_UNICAST_TRIALS*EACH_UNICAST_TIMES))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(EACH_UNICAST_TRIALS*EACH_UNICAST_TIMES))
 }
 
 func expUnicastEachRecursive() {
@@ -237,17 +237,17 @@ func expUnicastEachRecursive() {
 			mid := src.String() + "." + NextId()
 			msg := bs.NewBSUnicastEventNoOriginator(src, mid, ayame.MembershipVectorSize, dst.Key(), []byte("hello")) // starts with the max level.
 			msgs = append(msgs, msg)
-			ayame.Log.Debugf("%d: nodes=%d, id=%s,src=%s, dst=%s\n", int64(count*1000), len(NormalList), msg.MessageId, src, dst)
+			log.Debugf("%d: nodes=%d, id=%s,src=%s, dst=%s\n", int64(count*1000), len(NormalList), msg.MessageId, src, dst)
 			ayame.GlobalEventExecutor.RegisterEvent(msg, int64(count*1000))
 			ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-				ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
+				log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
 				msg.Root.Channel <- true
 			}), int64(count*1000)+100)
 		}
 	}
 	recursiveUnicastExperiment(msgs, count)
-	ayame.Log.Infof("avg-max-hops: %s %f\n", paramsString, calcMaxPathAve(msgs))
-	ayame.Log.Infof("avg-max-msgs: %s %f\n", paramsString, calcMaxMsgsAve(msgs))
+	log.Infof("avg-max-hops: %s %f\n", paramsString, calcMaxPathAve(msgs))
+	log.Infof("avg-max-msgs: %s %f\n", paramsString, calcMaxMsgsAve(msgs))
 }
 
 func recursiveUnicastExperiment(msgs []*bs.BSUnicastEvent, trials int) {
@@ -257,13 +257,13 @@ func recursiveUnicastExperiment(msgs []*bs.BSUnicastEvent, trials int) {
 			<-msg.Root.Channel // wait for the timeout.
 			//if *verbose {
 			//avg, _ := meanOfPathLength(msg.root.paths)
-			ayame.Log.Debugf("%d: started %s, finished: %d\n", msg.TargetKey, msg.MessageId, msg.Time())
+			log.Debugf("%d: started %s, finished: %d\n", msg.TargetKey, msg.MessageId, msg.Time())
 			//}
 			if bs.ContainsKey(msg.TargetKey, msg.Root.Destinations) {
-				ayame.Log.Debugf("%s is included in %s\n", msg.TargetKey, msg.Root.Destinations)
+				log.Debugf("%s is included in %s\n", msg.TargetKey, msg.Root.Destinations)
 				success++
 			} else {
-				ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
+				log.Debugf("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
 			}
 			close(msg.Root.Channel)
 		}(msg)
@@ -274,28 +274,28 @@ func recursiveUnicastExperiment(msgs []*bs.BSUnicastEvent, trials int) {
 
 	ave, _ := stats.Mean(funk.Map(msgs, func(msg *bs.BSUnicastEvent) float64 {
 		for _, path := range msg.DestinationPaths {
-			ayame.Log.Debugf("%s->%s: path %s\n", msg.Root.Sender(), msg.TargetKey, ayame.SliceString(path))
+			log.Debugf("%s->%s: path %s\n", msg.Root.Sender(), msg.TargetKey, ayame.SliceString(path))
 		}
 		min, _ := minHops(msg.DestinationPaths, msg.TargetKey)
-		ayame.Log.Debugf("%s->%s: min. path length: %f\n", msg.Root.Sender(), msg.TargetKey, min)
+		log.Debugf("%s->%s: min. path length: %f\n", msg.Root.Sender(), msg.TargetKey, min)
 		return min
 	}).([]float64))
 	// len(msgs) should be ignored because unicasts are initiated autonomously
 	counts := ayame.GlobalEventExecutor.EventCount - len(msgs)
 
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, ave)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, float64(counts)/float64(trials))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, ave)
+	log.Infof("avg-msgs: %s %f\n", paramsString, float64(counts)/float64(trials))
 	if FailureType == F_CALC && *failureRatio != 0.0 {
 		// XXX
 		probSum := 0.0
 		count := 1000
 		for _, msg := range msgs {
 			prob := ComputeProbabilityMonteCarlo(msg, *failureRatio, count)
-			ayame.Log.Debugf("%s->%d %f\n", msg.Sender(), msg.TargetKey, prob)
+			log.Debugf("%s->%d %f\n", msg.Sender(), msg.TargetKey, prob)
 			probSum += prob
 		}
-		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-probSum/float64(len(msgs)))
+		log.Infof("success-ratio: %s %f\n", paramsString, 1-probSum/float64(len(msgs)))
 	} else {
-		ayame.Log.Infof("success-ratio: %s %f\n", paramsString, float64(success)/float64(trials))
+		log.Infof("success-ratio: %s %f\n", paramsString, float64(success)/float64(trials))
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -234,7 +233,7 @@ func numberOfUnincludedNodes(curKNodes []*KADNode, queried []*KADNode) int {
 			}
 		}
 	}
-	//ayame.Log.Debugf("%d/%d queried\n", found, len(curKNodes))
+	//log.Debugf("%d/%d queried\n", found, len(curKNodes))
 	return len(curKNodes) - found
 }
 
@@ -293,7 +292,7 @@ func FastNodeLookupNoFailure(id kbucket.ID, source *KADNode, alpha int, k int) (
 	for numberOfUnincludedNodes(curKNodes, queried) != 0 {
 		if matchNode(id, curKNodes) != nil {
 			if hops_to_match < 0 {
-				ayame.Log.Debugf("matched hops=%d\n", hops)
+				log.Debugf("matched hops=%d\n", hops)
 				hops_to_match = hops // actually +1 hop is needed to reach the node
 			}
 		}
@@ -310,14 +309,14 @@ func FastNodeLookupNoFailure(id kbucket.ID, source *KADNode, alpha int, k int) (
 		}
 		curKNodes = queryTable.getNearestNodes(id, k)
 		nodes, _ = queryTable.pickClosestUncontained(queried, alpha)
-		ayame.Log.Debugf("hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
+		log.Debugf("hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
 		prevCurKNodes = append([]*KADNode{}, curKNodes...)
 		hops++ // NIGHBORSs
 	}
 	if hops_to_match < 0 {
 		failure = true
 	}
-	ayame.Log.Debugf("END: hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
+	log.Debugf("END: hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
 	return queryTable.getNearestNodes(id, k), hops, msgs, hops_to_match, failure
 }
@@ -340,7 +339,7 @@ func FastNodeLookupWithStopFailure(id kbucket.ID, source *KADNode, alpha int, k 
 	for numberOfUnincludedNodes(curKNodes, queried) != 0 {
 		if matchNode(id, curKNodes) != nil {
 			if hops_to_match < 0 {
-				ayame.Log.Debugf("matched hops=%d\n", hops)
+				log.Debugf("matched hops=%d\n", hops)
 				hops_to_match = hops
 			}
 		}
@@ -362,14 +361,14 @@ func FastNodeLookupWithStopFailure(id kbucket.ID, source *KADNode, alpha int, k 
 		}
 		curKNodes = queryTable.getNearestNodes(id, k)
 		nodes, _ = queryTable.pickClosestUncontained(queried, alpha)
-		ayame.Log.Debugf("hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
+		log.Debugf("hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
 		prevCurKNodes = append([]*KADNode{}, curKNodes...)
 		hops++ // NIGHBORSs
 	}
 	if hops_to_match < 0 {
 		failure = true
 	}
-	ayame.Log.Debugf("END: hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
+	log.Debugf("END: hops=%d, diff=%d, queried=%d, next=%d\n", hops_to_match, numberOfUnincludedNodes(curKNodes, prevCurKNodes), len(queried), len(nodes))
 	//return source.routingTable.getNearestNodes(id, K), hops, msgs, hops_to_match, failure
 	return queryTable.getNearestNodes(id, k), hops, msgs, hops_to_match, failure
 }

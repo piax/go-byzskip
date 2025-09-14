@@ -27,6 +27,16 @@ func authFile(filename string) (*PCert, error) {
 	return &c, nil
 }
 
+func FileAuthAuthorizer(filename string) func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	return func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		c, err := authFile(filename)
+		if err != nil {
+			return nil, "", nil, nil, err
+		}
+		return c.Key, c.Name, c.Mv, c.Cert, nil
+	}
+}
+
 func FileAuthAuthorize(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 	c, err := authFile(os.Getenv(CERT_FILE))
 	if err != nil {

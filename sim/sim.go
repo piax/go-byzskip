@@ -11,13 +11,15 @@ import (
 	"strconv"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/montanaflynn/stats"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
 	bs "github.com/piax/go-byzskip/byzskip"
 	flag "github.com/spf13/pflag"
 	"github.com/thoas/go-funk"
 )
+
+var log = logging.Logger("sim")
 
 var alpha *int
 var kValue *int
@@ -85,7 +87,7 @@ func correctEntryRatio(nodes []*bs.BSNode) float64 {
 		keys := DummyNodes[i].AllKeys()
 		looked := nodes[i].routingTable.AllKeys()
 		contained := containedNumber(looked, keys)
-		ayame.Log.Debugf("%d: %f %s should be %s", i, float64(contained)/float64(len(keys)), IntSliceString(looked), IntSliceString(keys))
+		log.Debugf("%d: %f %s should be %s", i, float64(contained)/float64(len(keys)), IntSliceString(looked), IntSliceString(keys))
 		sumContained += contained
 		sum += len(keys)
 	}
@@ -112,9 +114,9 @@ func ComputeProbabilityMonteCarlo(msg *bs.BSUnicastEvent, failureRatio float64, 
 		}
 	}
 	if dst == nil {
-		ayame.Log.Errorf("dst node not found")
+		log.Errorf("dst node not found")
 	} //else {
-	//ayame.Log.Infof("**** dst=%d\n", dst.key)
+	//log.Infof("**** dst=%d\n", dst.key)
 	//}
 
 	graph := make(Graph)
@@ -274,7 +276,7 @@ func ConstructOverlay(numberOfNodes int) []*bs.BSNode {
 			fcount += f
 		}
 	}
-	ayame.Log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, ncount, float64(fcount)/float64(ncount))
+	log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, ncount, float64(fcount)/float64(ncount))
 
 	return nodes
 }
@@ -331,13 +333,13 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 				count++
 				percent := 100 * count / len(nodes)
 				if percent/10 != prev {
-					ayame.Log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+					log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
 				}
 				prev = percent / 10
 				if *printJoinMsgs {
 					joinTick := (len(nodes) / 10)
 					if (locali+1)%joinTick == 0 {
-						ayame.Log.Infof("join-msgs: %d %s %d\n", locali+1, paramsString, ayame.GlobalEventExecutor.EventCount-before)
+						log.Infof("join-msgs: %d %s %d\n", locali+1, paramsString, ayame.GlobalEventExecutor.EventCount-before)
 					}
 					if (locali+1)%joinTick == joinTick-1 {
 						before = ayame.GlobalEventExecutor.EventCount
@@ -349,8 +351,8 @@ func JoinAllByIterative(nodes []*bs.BSNode) error {
 	ayame.GlobalEventExecutor.Sim(int64(len(nodes)*2000), true)
 	ayame.GlobalEventExecutor.AwaitFinish()
 	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
-	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(bs.ResponseCount)/float64(count))
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
+	log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(bs.ResponseCount)/float64(count))
+	log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
 	return nil
 }
 
@@ -399,7 +401,7 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 					count++
 					percent := 100 * count / len(nodes)
 					if percent/10 != prev {
-						ayame.Log.Infof("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), allFaultyCount)
+						log.Infof("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), allFaultyCount)
 					}
 					prev = percent / 10
 				}), int64(100)) // runs after 100ms time out
@@ -410,9 +412,9 @@ func FastJoinAllByRecursive(nodes []*bs.BSNode) error {
 	ayame.GlobalEventExecutor.AwaitFinish()
 	//fmt.Printf("ev count %d\n", ayame.GlobalEventExecutor.EventCount)
 	if *joinType == "recur" {
-		ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
+		log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(ayame.GlobalEventExecutor.EventCount)/float64(count))
 	}
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
+	log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs+ayame.GlobalEventExecutor.EventCount)/float64(count))
 
 	return nil
 }
@@ -477,7 +479,7 @@ func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 
 	for i, n := range nodes {
 		if n.IsFailure {
-			ayame.Log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
+			log.Debugf("ADV LENGTH: %d\n", len(JoinedAdversaryList))
 			JoinedAdversaryList = append(JoinedAdversaryList, n)
 			for _, p := range JoinedAdversaryList {
 				if !p.Equals(n) {
@@ -494,14 +496,14 @@ func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 		}
 		if isFirstTime {
 			if index != i {
-				ayame.Log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
+				log.Debugf("%d: introducer= %s, search=%s\n", n.Key(), nodes[index].String(), n.String())
 				rets, _, msgs, _, lmsgs, faulty, candidateLen, hopSum, returnSum, co, maxHops := FastRefresh(n, []*bs.BSNode{nodes[index]}) //FastNodeLookup(n, nodes[index])
 				if faulty {
 					faultyCount++
 				}
-				ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
+				log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
 				if (i+1)%1000 == 0 {
-					ayame.Log.Infof("exact-join-msgs: %d %s %d\n", i+1, paramsString, msgs)
+					log.Infof("exact-join-msgs: %d %s %d\n", i+1, paramsString, msgs)
 				}
 				sumMsgs += msgs
 				sumLMsgs += lmsgs
@@ -519,12 +521,12 @@ func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 			} else {
 				n.RoutingTable = bs.NewSkipRoutingTable(n)
 			}
-			ayame.Log.Debugf("%s: start refresh with %s\n", n, lvl0)
+			log.Debugf("%s: start refresh with %s\n", n, lvl0)
 			rets, _, msgs, _, lmsgs, faulty, candidateLen, hopSum, returnSum, co, maxHops := FastRefresh(n, lvl0) //FastNodeLookup(n, nodes[index])
 			if faulty {
 				faultyCount++
 			}
-			ayame.Log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
+			log.Debugf("%d: rets %s\n", n.Key(), ayame.SliceString(rets))
 			sumMsgs += msgs
 			sumLMsgs += lmsgs
 			sumCandidates += candidateLen
@@ -537,16 +539,16 @@ func FastJoinAllByIterative(nodes []*bs.BSNode, isFirstTime bool) error {
 		count++
 		percent := 100 * count / len(nodes)
 		if percent/10 != prev {
-			ayame.Log.Infof("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), faultyCount)
+			log.Infof("%s %d percent of %d nodes (%d hijacked)\n", time.Now(), percent, len(nodes), faultyCount)
 		}
 		prev = percent / 10
 	}
-	ayame.Log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
-	ayame.Log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
-	ayame.Log.Infof("avg-hops: %s %f\n", paramsString, float64(sumHops)/float64(sumCounts))
-	ayame.Log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sumMaxes)/float64(count))
-	ayame.Log.Infof("avg-returns: %s %f\n", paramsString, float64(sumReturns)/float64(sumCounts))
+	log.Infof("avg-join-lookup-msgs: %s %f\n", paramsString, float64(sumLMsgs)/float64(count))
+	log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(count))
+	log.Infof("avg-sum-candidates: %s %f\n", paramsString, float64(sumCandidates)/float64(count))
+	log.Infof("avg-hops: %s %f\n", paramsString, float64(sumHops)/float64(sumCounts))
+	log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sumMaxes)/float64(count))
+	log.Infof("avg-returns: %s %f\n", paramsString, float64(sumReturns)/float64(sumCounts))
 
 	return nil
 }
@@ -564,7 +566,7 @@ func hops(lst []bs.PathEntry, dstKey ayame.Key) (float64, bool) {
 		}
 		prev = pe.Node.(*bs.BSNode)
 	}
-	///ayame.Log.Debugf("%s, %f\n", lst, ret)
+	///log.Debugf("%s, %f\n", lst, ret)
 	return ret, found
 }
 
@@ -651,9 +653,13 @@ func DoSim() {
 	bs.ALPHA = *alpha
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", ayame.DEBUG)
+		logging.SetLogLevel("byzskip", ayame.DEBUG)
+		logging.SetLogLevel("sim", ayame.DEBUG)
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", ayame.INFO)
+		logging.SetLogLevel("byzskip", ayame.INFO)
+		logging.SetLogLevel("sim", ayame.INFO)
 	}
 
 	rand.Seed(*seed)
@@ -770,13 +776,13 @@ func DoSim() {
 			//fmt.Printf("cheat key=%s\n%s\n", localPeers[i].Key(), localPeers[i].RoutingTable)
 			if !nodes[i].IsFailure {
 				diff := bs.RoutingTableDiffs(testPeers[i].RoutingTable, nodes[i].RoutingTable)
-				//ayame.Log.Infof("diff: %s %d\n", nodes[i], diff)
+				//log.Infof("diff: %s %d\n", nodes[i], diff)
 				diffs += diff
 				c := nodes[i].RoutingTable.Size()
 				count += c
 			}
 		}
-		ayame.Log.Infof("pollution-prevention-ratio: %s %d %d %f\n", paramsString, diffs, count, 1-float64(diffs)/float64(count))
+		log.Infof("pollution-prevention-ratio: %s %d %d %f\n", paramsString, diffs, count, 1-float64(diffs)/float64(count))
 		return
 	}
 
@@ -814,22 +820,22 @@ func DoSim() {
 			for _, node := range NormalList {
 				topmosts = append(topmosts, node.RoutingTable.(*bs.SkipRoutingTable).TopmostLevel())
 			}
-			ayame.Log.Infof("avg-table-height: %s %f\n", paramsString, meanOfInt(topmosts))
+			log.Infof("avg-table-height: %s %f\n", paramsString, meanOfInt(topmosts))
 			sum := 0
 			for i, x := range byzskip.Counter {
 				sum += i * x
 				fmt.Println(i, x)
 			}
-			ayame.Log.Infof("avg-num-nodes-in-topmost: %s %f\n", paramsString, float64(sum)/float64(*numberOfNodes)) */
+			log.Infof("avg-num-nodes-in-topmost: %s %f\n", paramsString, float64(sum)/float64(*numberOfNodes)) */
 	//}
 
 	table_sizes := []int{}
 	for _, node := range NormalList {
-		//ayame.Log.Infof("%v\n", node.Id())
+		//log.Infof("%v\n", node.Id())
 		table_sizes = append(table_sizes, node.RoutingTable.Size())
 	}
 
-	ayame.Log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
+	log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
 
 }
 

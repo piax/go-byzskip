@@ -43,7 +43,7 @@ func FullName(name string, idStr string) string {
 }
 
 func ParseName(keystr string) (*ayame.UnifiedKey, error) {
-	ayame.Log.Infof("ParseName: %s", keystr)
+	log.Infof("ParseName: %s", keystr)
 	parts := strings.Split(keystr, "/")
 	if parts[0] != "" || parts[1] != "hrns" {
 		return nil, fmt.Errorf("only /hrns/... is allowed: %s", parts[0])
@@ -171,7 +171,7 @@ func HRNSRepublisher(repubPeriod time.Duration) func(lc fx.Lifecycle, dht *BSDHT
 						case <-ticker.C:
 							err := RepublishHRNSRecords(ctx, repo.Datastore(), dht)
 							if err != nil {
-								ayame.Log.Errorf("failed to republish records: %v", err)
+								log.Errorf("failed to republish records: %v", err)
 							}
 						}
 					}
@@ -226,28 +226,28 @@ func RepublishHRNSRecords(ctx context.Context, ds datastore.Datastore, dht *BSDH
 
 	for r := range results.Next() {
 		if r.Error != nil {
-			ayame.Log.Errorf("error processing result: %v", r.Error)
+			log.Errorf("error processing result: %v", r.Error)
 			continue
 		}
 
 		var record pb.Record
 		if err := proto.Unmarshal(r.Value, &record); err != nil {
-			ayame.Log.Errorf("failed to unmarshal record: %v", err)
+			log.Errorf("failed to unmarshal record: %v", err)
 			continue
 		}
 
 		err := checkHRNSRecord(record.Value)
 		if err == nil {
-			ayame.Log.Infof("republishing record %s", r.Key)
+			log.Infof("republishing record %s", r.Key)
 			err := dht.PutNamedValue(ctx, r.Key, r.Value)
 			if err != nil {
-				ayame.Log.Errorf("failed to republish record %s: %v", r.Key, err)
+				log.Errorf("failed to republish record %s: %v", r.Key, err)
 			}
 		} else {
-			ayame.Log.Infof("record %s is not valid", r.Key)
+			log.Infof("record %s is not valid", r.Key)
 			err := DeleteHRNSRecord(ctx, ds, r.Key)
 			if err != nil {
-				ayame.Log.Errorf("failed to delete record %s: %v", r.Key, err)
+				log.Errorf("failed to delete record %s: %v", r.Key, err)
 			}
 		}
 	}

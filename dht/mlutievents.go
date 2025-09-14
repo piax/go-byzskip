@@ -56,7 +56,7 @@ func (ue *BSMultiPutEvent) Encode() *pb.Message {
 }
 
 func (ue *BSMultiPutEvent) Run(ctx context.Context, node ayame.Node) error {
-	ayame.Log.Debugf("running put response handler.")
+	log.Debugf("running put response handler.")
 	if ue.IsResponse() {
 		if err := node.App().(AppDHT).HandleMultiPutResEvent(ctx, ue); err != nil {
 			return err
@@ -79,7 +79,7 @@ func (ue *BSMultiPutEvent) MessageId() string {
 }
 
 func (ev *BSMultiPutEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running multi-put request handler on %s@%v", node.Name(), node.Id())
+	log.Debugf("running multi-put request handler on %s@%v", node.Name(), node.Id())
 	return node.App().(AppDHT).HandleMultiPutRequest(ctx, ev)
 }
 
@@ -115,7 +115,7 @@ func (ue *BSMultiGetEvent) Encode() *pb.Message {
 
 func (ue *BSMultiGetEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
-		ayame.Log.Debugf("running get response handler.")
+		log.Debugf("running get response handler.")
 		if err := node.App().(AppDHT).HandleMultiGetResEvent(ctx, ue); err != nil {
 			return err
 		}
@@ -137,6 +137,6 @@ func (ue *BSMultiGetEvent) MessageId() string {
 }
 
 func (ev *BSMultiGetEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running get request handler.")
+	log.Debugf("running get request handler.")
 	return node.App().(AppDHT).HandleMultiGetRequest(ctx, ev)
 }

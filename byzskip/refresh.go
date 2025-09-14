@@ -17,7 +17,7 @@ var refreshInterval = 20 * time.Minute // refresh the routing table
 
 /*
 func (n *BSNode) fixLowPeersRoutine(proc goprocess.Process) {
-	ayame.Log.Debugf("%s: fixLowPeersRoutine starting", n)
+	log.Debugf("%s: fixLowPeersRoutine starting", n)
 	ticker := time.NewTicker(periodicBootstrapInterval)
 	defer ticker.Stop()
 
@@ -26,10 +26,10 @@ func (n *BSNode) fixLowPeersRoutine(proc goprocess.Process) {
 		//		case <-n.fixLowPeersChan:
 		case <-ticker.C:
 		case <-proc.Closing():
-			ayame.Log.Debugf("%s: fixLowPeersRoutine closing", n)
+			log.Debugf("%s: fixLowPeersRoutine closing", n)
 			return
 		}
-		ayame.Log.Debugf("%s: fixing low peers", n)
+		log.Debugf("%s: fixing low peers", n)
 		n.fixLowPeers(context.Background())
 	}
 }*/
@@ -44,7 +44,7 @@ func (n *BSNode) pingAll(ctx context.Context) {
 			defer wg.Done()
 			livelinessCtx, cancel := context.WithTimeout(ctx, peerPingTimeout)
 			if err := n.Parent.(*p2p.P2PNode).Host.Connect(livelinessCtx, peer.AddrInfo{ID: node.Id()}); err != nil {
-				ayame.Log.Debug("evicting peer after failed ping", "peer", node.Id(), "error", err)
+				log.Info("evicting peer after failed ping", "peer", node.Id(), "error", err)
 
 				n.rtMutex.Lock()
 				//n.RoutingTable.Delete(ev.TargetKey)
@@ -60,7 +60,7 @@ func (n *BSNode) pingAll(ctx context.Context) {
 func (n *BSNode) fixLowPeers(ctx context.Context) {
 	force := false
 	//	if time.Since(n.lastPing) >= pingInterval {
-	ayame.Log.Debugf("%s: ping to all", n)
+	log.Debugf("%s: ping to all", n)
 	n.pingAll(ctx)
 	//		n.lastPing = time.Now()
 	//	}
@@ -70,12 +70,12 @@ func (n *BSNode) fixLowPeers(ctx context.Context) {
 	}
 
 	if !force && len(n.stats.failed) == 0 && n.RoutingTable.HasSufficientNeighbors() {
-		ayame.Log.Debugf("%s: has sufficient neighbors", n)
+		log.Debugf("%s: has sufficient neighbors", n)
 		return
 	}
 
 	clst, _ := n.RoutingTable.KClosestWithKey(n.Key())
-	ayame.Log.Debugf("%s: refresh start nodes: %s", n, ayame.SliceString(clst))
+	log.Debugf("%s: refresh start nodes: %s", n, ayame.SliceString(clst))
 	n.stats = &JoinStats{runningQueries: 0,
 		closest:    ksToNs(clst),
 		candidates: []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
@@ -95,10 +95,10 @@ func LowPeersFixer(interval time.Duration) func(lc fx.Lifecycle, node *BSNode) e
 					for {
 						select {
 						case <-ticker.C:
-							ayame.Log.Debugf("%s: fixing low peers", node)
+							log.Debugf("%s: fixing low peers", node)
 							node.fixLowPeers(context.Background())
 						case <-ctx.Done():
-							ayame.Log.Debugf("%s: fixLowPeersRoutine closing", node)
+							log.Debugf("%s: fixLowPeersRoutine closing", node)
 							return
 						}
 					}

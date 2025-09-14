@@ -11,13 +11,13 @@ import (
 	"net/http"
 	"os"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/julienschmidt/httprouter"
 	"github.com/libp2p/go-libp2p"
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -68,7 +68,7 @@ func nodeStat(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	fmt.Fprintf(w, "recv-msgs: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).InCount)
 	fmt.Fprintf(w, "recv-bytes: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).InBytes)
 	fmt.Fprintf(w, "out-bytes: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).OutBytes)
-	fmt.Fprintf(w, "conn-stats: %v\n", bsdht.Node.Parent.(*p2p.P2PNode).ConnManager().(*connmgr.BasicConnMgr).GetInfo())
+	fmt.Fprintf(w, "conn-stats: %v\n", bsdht.Node.Parent.(*p2p.P2PNode).Host.ConnManager().(*connmgr.BasicConnMgr).GetInfo())
 	if p2p.RECORD_BYTES_PER_KEY {
 		for k, v := range bsdht.Node.Parent.(*p2p.P2PNode).KeyInBytes {
 			fmt.Fprintf(w, "key-bytes: %s %d\n", k, v)
@@ -166,11 +166,14 @@ func main() {
 	}
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("dhtsrv", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("dhtsrv", "info")
 	}
-
 	fmt.Printf("authority url: %s\nauthority pub: %s\n", *authURL, *pubKeyString)
 
 	if len(*pubKeyString) == 0 {

@@ -6,11 +6,9 @@ import (
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
-	"github.com/libp2p/go-libp2p-kad-dht/providers"
+	"github.com/libp2p/go-libp2p-kad-dht/records"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/op/go-logging"
-	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	bs "github.com/piax/go-byzskip/byzskip"
 )
@@ -59,7 +57,6 @@ const (
 )
 
 func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
-	ayame.InitLogger(logging.ERROR) // set log level to error so that surpress messages.
 	//key := ayame.NewIdKey(h.ID())
 	assignedKey, name, mv, cert, err := c.Authorizer(h.ID())
 	if err != nil {
@@ -71,7 +68,7 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 	// toplevel context
 	ctx, cancel := context.WithCancel(context.Background())
 
-	pm, err := providers.NewProviderManager(h.ID(), h.Peerstore(), c.Datastore)
+	pm, err := records.NewProviderManager(ctx, h.ID(), h.Peerstore(), c.Datastore)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -81,7 +78,7 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 		&BSDHT{
 			ctx:      ctx,
 			cancel:   cancel,
-			IdFinder: c.IdFinder,
+			idFinder: c.IdFinder,
 			Node: &bs.BSNode{
 				BootstrapAddrs:      c.BootstrapAddrs,
 				Parent:              parent,
@@ -97,11 +94,11 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 	ret.Node.SetKey(assignedKey)
 	ret.Node.SetMV(mv)
 	ret.Node.SetName(name)
-	ayame.Log.Debugf("running key=%s, mv=%s, name=%s", assignedKey, mv, name)
+	log.Debugf("running key=%s, mv=%s, name=%s", assignedKey, mv, name)
 	ret.Node.SetApp(ret)
 	ret.Node.RoutingTable = c.RoutingTableMaker(ret.Node)
 	parent.SetChild(ret.Node)
-	ayame.Log.Infof("started BSDHT")
+	log.Infof("started BSDHT")
 	return ret, nil
 }
 

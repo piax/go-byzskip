@@ -33,10 +33,12 @@ func MVIdFinder(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error
 }
 
 func (dht *BSDHT) LookupIPAddr(ctx context.Context, name string) ([]net.IPAddr, error) {
+	fmt.Printf("*** LookupIPAddr %s\n", name)
 	return net.DefaultResolver.LookupIPAddr(ctx, name)
 }
 
 func (dht *BSDHT) LookupLocal(ctx context.Context, name string) (bool, error) {
+	fmt.Printf("*** LookupLocal %s\n", name)
 	var key string
 	var err error
 	if key, err = Normalize(name); err != nil {
@@ -59,7 +61,7 @@ func (dht *BSDHT) LookupName(ctx context.Context, name string) ([]*bs.BSNode, er
 	if err == nil {
 		ukey := pkey
 		if len(ukey.ID()) == 0 {
-			ayame.Log.Debugf("looking up key: %s @ %s\n", ukey.Value(), dht.Node.Id())
+			log.Debugf("looking up key: %s @ %s\n", ukey.Value(), dht.Node.Id())
 			ps, _ = dht.Node.LookupRange(ctx,
 				ayame.NewRangeKey(
 					ayame.NewUnifiedKeyFromByteValue(ukey.Value(), ayame.ZeroID()),
@@ -71,19 +73,20 @@ func (dht *BSDHT) LookupName(ctx context.Context, name string) ([]*bs.BSNode, er
 			ps, _ = dht.Node.Lookup(ctx, ukey)
 		}
 	} else {
-		ayame.Log.Errorf(fmt.Sprintf("namespace error: %s", err))
+		log.Errorf(fmt.Sprintf("namespace error: %s", err))
 	}
 	return ps, nil
 }
 
 func (dht *BSDHT) LookupTXT(ctx context.Context, name string) (values []string, err error) {
+	fmt.Printf("***LookupTXT %s\n", name)
 	_, values, err = dht.LookupNames(ctx, name, false)
 	return values, err
 }
 
 // Not compatible with BasicResolver
 func (dht *BSDHT) LookupNames(ctx context.Context, name string, isPrefix bool) ([]string, []string, error) {
-	ayame.Log.Debugf("LookupNames %s %v", name, isPrefix)
+	log.Debugf("LookupNames %s %v", name, isPrefix)
 	// DNSLink specific handling
 	name = strings.TrimPrefix(name, "_dnslink.")
 	name = strings.TrimSuffix(name, ".")
@@ -127,7 +130,7 @@ func (dht *BSDHT) getRecordWithPrefixFromDatastore(ctx context.Context, key stri
 }
 
 func (dht *BSDHT) getNamedLocal(ctx context.Context, key string) ([]*pb.Record, error) {
-	ayame.Log.Debugf("finding value in datastore for key %s", key)
+	log.Debugf("finding value in datastore for key %s", key)
 	return dht.getRecordWithPrefixFromDatastore(ctx, key)
 }
 
@@ -150,7 +153,7 @@ func (dht *BSDHT) getPCert() (*authority.PCert, error) {
 }
 
 func (dht *BSDHT) sendMultiPutValue(ctx context.Context, p ayame.Node, rec *pb.Record) error {
-	ayame.Log.Debugf("send multi put value")
+	log.Debugf("send multi put value")
 	if dht.Node.Id() == p.Id() { // put to self. This should be already done.
 		return nil
 	}
@@ -159,10 +162,10 @@ func (dht *BSDHT) sendMultiPutValue(ctx context.Context, p ayame.Node, rec *pb.R
 	if ev, ok := resp.(*BSMultiPutEvent); ok {
 		if !bytes.Equal(rec.Value, ev.Record.Value) {
 			const errStr = "value not put correctly"
-			ayame.Log.Info(errStr, "put-message", rec, "get-message", ev.Record)
+			log.Info(errStr, "put-message", rec, "get-message", ev.Record)
 			return errors.New(errStr)
 		}
-		ayame.Log.Debugf("exec multi put %s=%s successfully on: %s", rec.Key, rec.Value, p.Id())
+		log.Debugf("exec multi put %s=%s successfully on: %s", rec.Key, rec.Value, p.Id())
 		return nil
 	}
 	if ev, ok := resp.(*bs.FailureResponse); ok {
@@ -186,7 +189,7 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 
 	// Authorization succeeds only if the peer has already been authorized for the IdKey.
 	//netKey, m, cert, err := Authorizer(dht.Node.Id(), k)
-	//ayame.Log.Debugf("k=%v key=%v, %v=%v? %s => %s cert=%v\n", k, netKey, m, dht.Node.Id(), netKey, dht.Node.Key(), cert)
+	//log.Debugf("k=%v key=%v, %v=%v? %s => %s cert=%v\n", k, netKey, m, dht.Node.Id(), netKey, dht.Node.Key(), cert)
 
 	// at this point, netKey is the permitted key.
 	// name:peer.ID
@@ -197,7 +200,7 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 		return err
 	}
 
-	ayame.Log.Debugf("Put key=%s, value len=%d", recordKey, len(value))
+	//log.Debugf("Put key=%s, value len1=%d, len2=%d", recordKey, len(value), len(rec.GetValue()))
 	/*
 		rec := MakePutRecord(recordKey, value)
 		rec.TimeReceived = u.FormatRFC3339(time.Now())
@@ -214,23 +217,23 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 
 	err = dht.RecordValidator.Validate(string(rec.GetKey()), rec.GetValue())
 	if err != nil {
-		ayame.Log.Debugf("before local put, validate failure key=%s, %s", key, err)
+		log.Debugf("before local put, validate failure key=%s, %s", key, err)
 		return err
 	}
 
 	// put to local
 	old, err := dht.getLocalRaw(ctx, recordKey)
 	if err != nil {
-		ayame.Log.Debugf("get local failure key=%s, %s", key, err)
+		log.Debugf("get local failure key=%s, %s", key, err)
 		return err
 	}
 	// Check if we have an old value that's not the same as the new one.
 	if old != nil && !bytes.Equal(old.GetValue(), value) {
-		ayame.Log.Debugf("comparing local value, old len=%d, new len=%d", len(old.GetValue()), len(value))
+		log.Debugf("comparing local value, old len=%d, new len=%d", len(old.GetValue()), len(value))
 		// Check to see if the new one is better.
 		i, err := dht.RecordValidator.Select(recordKey, [][]byte{value, old.GetValue()})
 		if err != nil {
-			ayame.Log.Debugf("select failure key=%s, %s", key, err)
+			log.Debugf("select failure key=%s, %s", key, err)
 			return err
 		}
 		if i != 0 {
@@ -240,15 +243,15 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 
 	err = dht.putLocalRaw(ctx, recordKey, rec)
 	if err != nil {
-		ayame.Log.Debugf("put local failure key=%s, %s", key, err)
+		log.Debugf("put local failure key=%s, %s", key, err)
 		return err
 	}
 
-	ps, err := dht.IdFinder(ctx, dht, recordKey)
+	ps, err := dht.idFinder(ctx, dht, recordKey)
 	if err != nil {
 		return err
 	}
-	ayame.Log.Debugf("lookup done: %v", ps)
+	log.Debugf("lookup done: %v", ps)
 
 	wg := sync.WaitGroup{}
 	for _, p := range ps {
@@ -259,7 +262,7 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 			defer wg.Done()
 			err := dht.sendMultiPutValue(ctx, p, rec)
 			if err != nil {
-				ayame.Log.Debugf("failed putting value to peer: %s", err)
+				log.Debugf("failed putting value to peer: %s", err)
 			}
 		}(p)
 	}
@@ -269,7 +272,7 @@ func (dht *BSDHT) PutNamedValue(ctx context.Context, name string, value []byte, 
 		numSuccess := dht.execOnManyMulti(ctx, func(ctx context.Context, p ayame.Node) error {
 			return dht.sendMultiPutValue(ctx, p, rec)
 		}, peers)
-		ayame.Log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess) */
+		log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess) */
 	return nil
 }
 
@@ -284,9 +287,9 @@ func (dh *BSDHT) sendGetValues(ctx context.Context, p ayame.Node, key string) ([
 	resp := dh.Node.SendRequest(getCtx, p, mes)
 
 	if ev, ok := resp.(*BSMultiGetEvent); ok {
-		ayame.Log.Debugf("%s: got ev=%v", dh.Node.Id(), ev)
+		log.Debugf("%s: got ev=%v", dh.Node.Id(), ev)
 		if len(ev.Record) > 0 {
-			ayame.Log.Debugf("%s: got first key=%s, value len=%d", dh.Node.Id(), string(ev.Record[0].Key), len(ev.Record[0].Value))
+			log.Debugf("%s: got first key=%s, value len=%d", dh.Node.Id(), string(ev.Record[0].Key), len(ev.Record[0].Value))
 		}
 		return ev.Record, nil
 	}
@@ -349,18 +352,18 @@ func (dht *BSDHT) execOnManyMulti(ctx context.Context, fn func(context.Context, 
 		case <-putctx.Done():
 			// Context was cancelled or timed out
 			if putctx.Err() == context.DeadlineExceeded {
-				ayame.Log.Debugf("execOnManyMulti timed out after %v", TIMEOUT_PER_OP)
+				log.Debugf("execOnManyMulti timed out after %v", TIMEOUT_PER_OP)
 			} else {
-				ayame.Log.Debugf("execOnManyMulti cancelled: %v", putctx.Err())
+				log.Debugf("execOnManyMulti cancelled: %v", putctx.Err())
 			}
 			return numSuccess
 		}
-		ayame.Log.Debugf("execOnManyMulti loop, numDone=%d, numSuccess=%d", numDone, numSuccess)
+		log.Debugf("execOnManyMulti loop, numDone=%d, numSuccess=%d", numDone, numSuccess)
 	}
 
 	// Wait for all goroutines to complete
 	wg.Wait()
-	ayame.Log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess)
+	log.Debugf("execOnManyMulti done, numSuccess=%d", numSuccess)
 	return numSuccess
 }
 
@@ -386,7 +389,7 @@ func (dht *BSDHT) GetNamedValues(ctx context.Context, key string, isPrefix bool,
 		return ret, ctx.Err()
 	}
 
-	ayame.Log.Debugf("GetNamedValue %s %v", key, ret)
+	log.Debugf("GetNamedValue %s %v", key, ret)
 	return ret, nil
 }
 
@@ -420,7 +423,7 @@ func (dht *BSDHT) searchMultipleValues(ctx context.Context, key string, valCh <-
 		})
 }
 
-func (dht *BSDHT) processMultipleValues(ctx context.Context, key string, vals <-chan RecvdVal,
+func (dht *BSDHT) processMultipleValues(ctx context.Context, _ string, vals <-chan RecvdVal,
 	newVal func(ctx context.Context, keystr string, v RecvdVal, recs map[string]RecvdVal, collected map[string][]RecvdVal, better bool) bool) (best map[string]RecvdVal, aborted bool) {
 	bestmap := make(map[string]RecvdVal)
 	collected := make(map[string][]RecvdVal)
@@ -452,7 +455,7 @@ loop:
 				}
 				sel, err := dht.RecordValidator.Select(keystr, [][]byte{cur.Val, v.Val})
 				if err != nil {
-					ayame.Log.Debugf("failed to select best value key %s err=%s", keystr, err)
+					log.Debugf("failed to select best value key %s err=%s", keystr, err)
 					continue
 				}
 				if sel != 1 {
@@ -515,7 +518,7 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 	if err == nil {
 		ukey := pkey
 		if len(ukey.ID()) == 0 {
-			ayame.Log.Debugf("looking up key: %s @ %s\n", ukey.Value(), dht.Node.Id())
+			log.Debugf("looking up key: %s @ %s\n", ukey.Value(), dht.Node.Id())
 			var rng *ayame.RangeKey
 			if isPrefix {
 				rng = ayame.NewUnifiedRangeKeyForPrefix(string(ukey.Value()))
@@ -531,7 +534,7 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 			ps, _ = dht.Node.Lookup(ctx, ukey)
 		}
 	} else {
-		ayame.Log.Errorf(fmt.Sprintf("namespace error: %s", err))
+		log.Errorf(fmt.Sprintf("namespace error: %s", err))
 	}
 
 	peers := nsToIs(ps)
@@ -541,7 +544,7 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 		return valCh, lookupResCh
 	}
 
-	fmt.Printf("get range done: for %s, %v\n", key, peers)
+	log.Debugf("get range done: for %s, %v\n", key, peers)
 
 	// Create channels and mutex for synchronization
 	done := make(chan struct{})
@@ -585,7 +588,7 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 					default:
 						key, value, err := dht.extractNamedValue(rec)
 						if err != nil {
-							ayame.Log.Warningf("invalid record: %s", err)
+							log.Warningf("invalid record: %s", err)
 							continue
 						}
 						if rec != nil && rec.GetValue() != nil {
@@ -607,9 +610,9 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 							select {
 							case valCh <- rv:
 								timer.Stop()
-								ayame.Log.Debugf("Successfully sent value to channel")
+								log.Debugf("Successfully sent value to channel")
 							case <-timer.C:
-								ayame.Log.Debugf("Timeout while sending value to channel")
+								log.Debugf("Timeout while sending value to channel")
 							case <-ctx.Done():
 								timer.Stop()
 								mu.Unlock()
@@ -628,7 +631,7 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 		}
 
 		success := dht.execOnManyMulti(queryCtx, queryFn, peers)
-		ayame.Log.Debugf("execOnManyMulti completed with %d successes", success)
+		log.Debugf("execOnManyMulti completed with %d successes", success)
 
 		// Check if channels are closed before sending lookup result
 		mu.Lock()
@@ -638,12 +641,12 @@ func (dht *BSDHT) getNamedValues(ctx context.Context, key string, isPrefix bool,
 			select {
 			case lookupResCh <- &lookupWithFollowupResult{peers: peers}:
 				timer.Stop()
-				ayame.Log.Debugf("Successfully sent lookup result")
+				log.Debugf("Successfully sent lookup result")
 			case <-timer.C:
-				ayame.Log.Debugf("Timeout while sending lookup result")
+				log.Debugf("Timeout while sending lookup result")
 			case <-ctx.Done():
 				timer.Stop()
-				ayame.Log.Debugf("Context cancelled while sending lookup result")
+				log.Debugf("Context cancelled while sending lookup result")
 			}
 		}
 		mu.Unlock()
@@ -667,24 +670,24 @@ func (dht *BSDHT) ValidateRecord(record *pb.Record, sender ayame.Node) bool {
 	// Validate that the record key matches the sender's ID and name
 	key, err := ParseName(string(record.GetKey()))
 	if err != nil {
-		ayame.Log.Warningf("Invalid record key format: %v", err)
+		log.Warningf("Invalid record key format: %v", err)
 		return false
 	}
 	if key.ID() != sender.Id() {
-		ayame.Log.Warningf("Unauthorized request: Id in the event=%s, but sender=%s", key, sender)
+		log.Warningf("Unauthorized request: Id in the event=%s, but sender=%s", key, sender)
 		return false
 	}
 	keyName := strings.TrimRight(string(key.Value()), "\x00")
 	senderName := sender.Name()
 	if keyName != senderName {
-		ayame.Log.Warningf("Unauthorized request: name in the event key='%s', but sender's name='%s'", keyName, senderName)
+		log.Warningf("Unauthorized request: name in the event key='%s', but sender's name='%s'", keyName, senderName)
 		return false
 	}
 	return true
 }
 
 func (dht *BSDHT) HandleMultiGetRequest(ctx context.Context, ev *BSMultiGetEvent) ayame.SchedEvent {
-	ayame.Log.Infof("get from=%v, key=%s @%s\n", ev.Sender(), ev.Record[0].GetKey(), dht.Node.Id())
+	log.Infof("get from=%v, key=%s @%s\n", ev.Sender(), ev.Record[0].GetKey(), dht.Node.Id())
 	//	fmt.Printf("getting key: %s @ %s\n", ev.Record[0].GetKey(), dh.Node.Id())
 
 	rec, err := dht.getRecordWithPrefixFromDatastore(ctx, string(ev.Record[0].GetKey()))
@@ -692,13 +695,13 @@ func (dht *BSDHT) HandleMultiGetRequest(ctx context.Context, ev *BSMultiGetEvent
 	if err != nil { // XXX ignore
 		rec = nil
 	}
-	ayame.Log.Debugf("got rec=%v", rec)
+	log.Debugf("got rec=%v", rec)
 	ret := NewBSMultiGetEvent(dht.Node, ev.MessageId(), false, rec)
 	return ret
 }
 
 func (dht *BSDHT) HandleMultiGetResEvent(ctx context.Context, ev *BSMultiGetEvent) error {
-	//ayame.Log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
+	//log.Debugf("stats=%s, table=%s\n", n.stats, n.RoutingTable)
 	dht.Node.ProcsMutex.RLock()
 	proc, exists := dht.Node.Procs[ev.MessageId()]
 	dht.Node.ProcsMutex.RUnlock()
@@ -715,31 +718,31 @@ func (dht *BSDHT) HandleMultiPutRequest(ctx context.Context, ev *BSMultiPutEvent
 	}
 	err := dht.putLocalRaw(ctx, string(ev.Record.GetKey()), ev.Record)
 	if err != nil {
-		ayame.Log.Warningf("failed to put local raw: %s", err)
+		log.Warningf("failed to put local raw: %s", err)
 		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
 	}
-	ayame.Log.Debugf("handle multi-put finished on %s@%v from=%v, key=%s, len=%d\n", dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
+	log.Debugf("handle multi-put finished on %s@%v from=%v, key=%s, len=%d\n", dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ev.Record.GetKey()), len(ev.Record.Value))
 
 	rec, err := dht.getLocalRaw(ctx, string(ev.Record.GetKey()))
 	if err != nil {
 		rec = nil
 	}
 	recs, err := dht.getRecordWithPrefixFromDatastore(ctx, string(ev.Record.GetKey()))
-	ayame.Log.Debugf("got prefixed recs after put=%v", recs)
+	log.Debugf("got prefixed recs after put=%v", recs)
 	if err != nil {
-		ayame.Log.Warningf("failed to get record with prefix from datastore: %s", err)
+		log.Warningf("failed to get record with prefix from datastore: %s", err)
 		rec = nil
 	}
 	if rec == nil {
 		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
 	}
 	if rec.GetValue() != nil && ev.Record.GetValue() != nil && bytes.Equal(rec.GetValue(), ev.Record.GetValue()) {
-		ayame.Log.Debugf("Record is correctly stored")
+		log.Debugf("Record is correctly stored")
 		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, rec)
 	}
 
 	ret := NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, rec)
-	ayame.Log.Debugf("returning multi-put record on %s@%v to=%v, key=%s, len=%d\n",
+	log.Debugf("returning multi-put record on %s@%v to=%v, key=%s, len=%d\n",
 		dht.Node.Name(), dht.Node.Id(), ev.Sender(), string(ret.Record.GetKey()), len(ret.Record.GetValue()))
 	return ret
 }
@@ -749,7 +752,7 @@ func (dht *BSDHT) HandleMultiPutResEvent(ctx context.Context, ev *BSMultiPutEven
 	proc, exists := dht.Node.Procs[ev.MessageId()]
 	dht.Node.ProcsMutex.RUnlock()
 	if exists && proc.Ch != nil {
-		ayame.Log.Debugf("put finished from=%v\n", ev.Sender())
+		log.Debugf("put finished from=%v\n", ev.Sender())
 		proc.Ch <- ev
 		return nil
 	}

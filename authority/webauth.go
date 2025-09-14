@@ -25,6 +25,16 @@ func WebGetCert(id peer.ID, key ayame.Key, name string) (*PCert, error) {
 	return c, nil
 }
 
+func AuthValidator(authPubkey string) func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+	return func(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+		p, err := UnmarshalStringToPubKey(authPubkey)
+		if err != nil {
+			return false
+		}
+		return VerifyJoinCert(id, key, name, mv, cert, p)
+	}
+}
+
 func AuthValidate(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
 	UpdateAuthPubKey()
 	return VerifyJoinCert(id, key, name, mv, cert, AuthPubKey)

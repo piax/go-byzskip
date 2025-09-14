@@ -134,9 +134,17 @@ func (t *UnifiedKey) String() string {
 			last = i
 		}
 	}
-	n := make([]byte, last+1)
-	copy(n, b)
-	str := url.QueryEscape(string(n))
+
+	var str string
+	// If all bytes are zero or empty, treat as empty string
+	if len(b) == 0 || b[0] == 0 {
+		str = ""
+	} else {
+		n := make([]byte, last+1)
+		copy(n, b)
+		str = url.QueryEscape(string(n))
+	}
+
 	str = str + UNIFIED_KEY_SEP
 
 	if t.id == peer.ID([]byte{0}) {

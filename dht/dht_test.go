@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -28,7 +28,12 @@ func addr(port int, quic bool) string {
 	}
 }
 
-func setupDualDHTs(ctx context.Context, numberOfPeers int, useQuic bool, sameTest bool) []*BSDHT {
+func init() {
+	logging.SetLogLevel("ayame", ayame.DEBUG)
+	logging.SetLogLevel("byzskip", ayame.DEBUG)
+}
+
+func setupDualDHTs(ctx context.Context, numberOfPeers int, useQuic bool, sameTest bool) ([]*BSDHT, *authority.Authorizer) {
 	byzskip.InitK(4)
 	auth := authority.NewAuthorizer()
 	count := 0
@@ -92,7 +97,7 @@ func setupDualDHTs(ctx context.Context, numberOfPeers int, useQuic bool, sameTes
 			}(i)
 		}
 	}
-	return peers
+	return peers, auth
 }
 
 func setupDHTs(ctx context.Context, numberOfPeers int, useQuic bool) []*BSDHT {
@@ -192,7 +197,6 @@ func TestHRNSRecord(t *testing.T) {
 }
 
 func TestValueGetSet(t *testing.T) {
-	ayame.InitLogger(logging.INFO)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -257,7 +261,6 @@ func TestValueGetSet(t *testing.T) {
 }
 
 func TestFailureRecovery(t *testing.T) {
-	ayame.InitLogger(logging.ERROR)
 	ctx := context.Background()
 	nDHTs := 20
 	bak := ayame.MembershipVectorSize
@@ -265,7 +268,7 @@ func TestFailureRecovery(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 256
-	dhts := setupDualDHTs(ctx, nDHTs, true, false)
+	dhts, auth := setupDualDHTs(ctx, nDHTs, true, false)
 
 	// Allow time for the DHT network to stabilize
 	time.Sleep(time.Duration(5) * time.Second)
@@ -274,6 +277,7 @@ func TestFailureRecovery(t *testing.T) {
 	ctxT, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	key := "/v/recovery-test"
+	UpdateName(t, auth, dhts[0], key)
 	err := dhts[0].PutValue(ctxT, key, []byte("test-recovery"))
 	if err != nil {
 		t.Fatal(err)
@@ -338,7 +342,6 @@ func TestFailureRecovery(t *testing.T) {
 }
 
 func TestNamedValueRecovery(t *testing.T) {
-	ayame.InitLogger(logging.ERROR)
 	ctx := context.Background()
 	nDHTs := 32
 	bak := ayame.MembershipVectorSize
@@ -346,7 +349,7 @@ func TestNamedValueRecovery(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 256
-	dhts := setupDualDHTs(ctx, nDHTs, true, false)
+	dhts, _ := setupDualDHTs(ctx, nDHTs, true, false)
 
 	time.Sleep(time.Duration(5) * time.Second)
 
@@ -426,7 +429,6 @@ func TestNamedValueRecovery(t *testing.T) {
 }
 
 func TestSimultaneousPutGet(t *testing.T) {
-	ayame.InitLogger(logging.ERROR)
 	ctx := context.Background()
 	nDHTs := 32
 	bak := ayame.MembershipVectorSize
@@ -434,7 +436,7 @@ func TestSimultaneousPutGet(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 256
-	dhts := setupDualDHTs(ctx, nDHTs, true, false)
+	dhts, auth := setupDualDHTs(ctx, nDHTs, true, false)
 
 	time.Sleep(time.Duration(5) * time.Second)
 
@@ -450,6 +452,7 @@ func TestSimultaneousPutGet(t *testing.T) {
 			defer cancel()
 			key := fmt.Sprintf("/v/test%d", i)
 			value := fmt.Sprintf("test-value-%d", i)
+			UpdateName(t, auth, dhts[i], key)
 			err := dhts[i].PutValue(ctxT, key, []byte(value))
 			if err != nil {
 				errs <- err
@@ -495,8 +498,35 @@ func TestSimultaneousPutGet(t *testing.T) {
 	}
 }
 
+func genAuthorizer(auth *authority.Authorizer, _ peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector) func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	return func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		cert := auth.Authorize(id, key, name, mv, time.Now().Unix(), time.Now().Unix()+100)
+		return key, name, mv, cert, nil
+	}
+}
+
+func UpdateName(t *testing.T, auth *authority.Authorizer, dht *BSDHT, name string) []byte {
+	// Set the name for the DHT
+	dht.Node.SetName(name)
+
+	// Create authorization using the DHT's authorizer
+	authorizer := genAuthorizer(auth, dht.Node.Id(), dht.Node.Key(), name, dht.Node.MV())
+
+	_, _, _, cert, err := authorizer(dht.Id())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	/*bin, _, _, err := authority.ExtractCert(cert)
+	if err != nil {
+		t.Fatal(err)
+	}*/
+	dht.Node.Parent.(*p2p.P2PNode).Cert = cert
+	return cert
+}
+
 func TestPutNamedValue(t *testing.T) {
-	ayame.InitLogger(logging.ERROR)
+	//ayame.InitLogger(ayame.ERROR)
 	ctx := context.Background()
 	nDHTs := 32
 	bak := ayame.MembershipVectorSize
@@ -504,7 +534,7 @@ func TestPutNamedValue(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 256
-	dhts := setupDualDHTs(ctx, nDHTs, true, false)
+	dhts, auth := setupDualDHTs(ctx, nDHTs, true, false)
 	defer func() {
 		for i := 0; i < nDHTs; i++ {
 			//dhts[i].Close()
@@ -517,6 +547,7 @@ func TestPutNamedValue(t *testing.T) {
 	// Test putting a named value with longer timeout
 	ctxT, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
+
 	err := dhts[0].PutNamedValue(ctxT, "node-0", []byte("world"))
 	if err != nil {
 		t.Fatal(err)
@@ -545,6 +576,7 @@ func TestPutNamedValue(t *testing.T) {
 	// Test putting multiple named values with longer timeout
 	ctxT, cancel = context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
+	UpdateName(t, auth, dhts[7], "node-7")
 	err = dhts[7].PutNamedValue(ctxT, "node-7", []byte("hello"))
 	if err != nil {
 		t.Fatal(err)
@@ -555,6 +587,7 @@ func TestPutNamedValue(t *testing.T) {
 
 	ctxT, cancel = context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
+	UpdateName(t, auth, dhts[8], "node-7")
 	dhts[8].PutNamedValue(ctxT, "node-7", []byte("world"))
 	/*if err != nil {
 		t.Fatal(err)
@@ -572,8 +605,8 @@ func TestPutNamedValue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(vals) != 1 {
-		t.Fatalf("Expected 1 values, got %d", len(vals))
+	if len(vals) != 2 {
+		t.Fatalf("Expected 2 values, got %d %v", len(vals), vals)
 	}
 
 	found := make(map[string]bool)
@@ -588,6 +621,8 @@ func TestPutNamedValue(t *testing.T) {
 	// Test putting/getting with empty name
 	ctxT, cancel = context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
+	UpdateName(t, auth, dhts[0], "")
+
 	err = dhts[0].PutNamedValue(ctxT, "", []byte("test"))
 	if err != nil {
 		t.Fatalf("Error putting value with empty name %v", err)
@@ -617,7 +652,7 @@ func TestMixedDHTs(t *testing.T) {
 		ayame.MembershipVectorSize = bak
 	}()
 	ayame.MembershipVectorSize = 320
-	dhts := setupDualDHTs(ctx, nDHTs, true, false)
+	dhts, auth := setupDualDHTs(ctx, nDHTs, true, false)
 	defer func() {
 		for i := 0; i < nDHTs; i++ {
 			//dhts[i].Close()
@@ -632,6 +667,7 @@ func TestMixedDHTs(t *testing.T) {
 	// Test putting a named value
 	ctxT, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
+	UpdateName(t, auth, dhts[0], "node-1")
 	err := dhts[0].PutNamedValue(ctxT, "node-1", []byte("world"))
 	if err != nil {
 		t.Fatal(err)
@@ -657,10 +693,12 @@ func TestMixedDHTs(t *testing.T) {
 	// Test putting multiple named values
 	ctxT, cancel = context.WithTimeout(ctx, time.Second)
 	defer cancel()
+	UpdateName(t, auth, dhts[0], "node-2")
 	err = dhts[0].PutNamedValue(ctxT, "node-2", []byte("hello"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	UpdateName(t, auth, dhts[1], "node-2")
 	err = dhts[1].PutNamedValue(ctxT, "node-2", []byte("world"))
 	if err != nil {
 		t.Fatal(err)
@@ -693,9 +731,10 @@ func TestMixedDHTs(t *testing.T) {
 	// Test putting/getting with empty name
 	ctxT, cancel = context.WithTimeout(ctx, time.Second)
 	defer cancel()
+	UpdateName(t, auth, dhts[0], "")
 	err = dhts[0].PutNamedValue(ctxT, "", []byte("test"))
 	if err != nil {
-		t.Fatal(fmt.Sprintf("Error putting value with empty name %v", err))
+		t.Fatalf("Error putting value with empty name %v", err)
 	}
 
 	// Test PutValue/GetValue

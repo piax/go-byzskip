@@ -7,24 +7,25 @@ import (
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/libp2p/go-msgio/pbio"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/libp2p/go-msgio"
+	"github.com/libp2p/go-msgio/pbio"
+	ma "github.com/multiformats/go-multiaddr"
 	ayame "github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p/pb"
+	"google.golang.org/protobuf/proto"
 	// "github.com/gogo/protobuf/proto"
 )
 
 // Node type - a p2p host implementing one or more p2p protocols
 type P2PNode struct {
-	host.Host // libp2p host
+	Host      host.Host // libp2p host
 	key       ayame.Key
 	name      string
 	mv        *ayame.MembershipVector
@@ -58,6 +59,8 @@ const (
 	MAX_MESSAGE_FROM_FUTURE = 30 // 30 seconds
 )
 
+var log = logging.Logger("ayame:p2p")
+
 func New(h host.Host, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,
 	validator func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool,
@@ -74,16 +77,16 @@ func New(h host.Host, key ayame.Key, name string, mv *ayame.MembershipVector, ce
 	node := &P2PNode{Host: h, key: key, name: name, mv: mv, converter: converter, Validator: validator,
 		VerifyIntegrity: verifyIntegrity, DetailedStatistics: detailedStatistics, KeyInBytes: keyInBytes, OutBytes: 0, InBytes: 0, InCount: 0, OutCount: 0,
 		protocol: protocol.ID(sendMessageProto)}
-	node.SetStreamHandler(protocol.ID(sendMessageProto), node.onReceiveMessage)
+	node.Host.SetStreamHandler(protocol.ID(sendMessageProto), node.onReceiveMessage)
 	node.Cert = cert
 	//sig, va, vb, err := authority.ExtractCert(cert)
 	//if err != nil {
-	//	ayame.Log.Warningf("failed to extract cert: verification may fail")
+	//	log.Warningf("failed to extract cert: verification may fail")
 	//}
 	//node.CertSign = sig
 	//node.CertValidAfter = va
 	//node.CertValidBefore = vb
-	ayame.Log.Debug("node", node)
+	log.Debug("node", node)
 	return node
 
 }
@@ -100,14 +103,14 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 
 	listen, err := multiaddr.NewMultiaddr(locator)
 	if err != nil {
-		ayame.Log.Errorf("%s\n", err)
+		log.Errorf("%s\n", err)
 		return nil, err
 	}
 	// public key is omitted because libp2p extracts pubkey from priv.GetPublic()
 	if priv == nil {
 		priv, _, err = crypto.GenerateKeyPair(crypto.Secp256k1, 256)
 		if err != nil {
-			ayame.Log.Errorf("%s\n", err)
+			log.Errorf("%s\n", err)
 			return nil, err
 		}
 	}
@@ -131,7 +134,7 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 			libp2p.ConnectionManager(connmgr),
 		)
 		if err != nil {
-			ayame.Log.Errorf("libp2p.New %s\n", err)
+			log.Errorf("libp2p.New %s\n", err)
 			return nil, err
 		}
 		host = h
@@ -144,7 +147,7 @@ func NewNode(ctx context.Context, locator string, key ayame.Key, mv *ayame.Membe
 			libp2p.ConnectionManager(connmgr),
 		)
 		if err != nil {
-			ayame.Log.Errorf("libp2p.New %s\n", err)
+			log.Errorf("libp2p.New %s\n", err)
 			return nil, err
 		}
 		host = h
@@ -190,12 +193,16 @@ func (n *P2PNode) SetMV(mv *ayame.MembershipVector) {
 	n.mv = mv
 }
 
+func (n *P2PNode) Addrs() []ma.Multiaddr {
+	return n.Host.Addrs()
+}
+
 func (n *P2PNode) String() string {
-	return fmt.Sprintf("%s,%s", n.key, n.Addrs())
+	return fmt.Sprintf("%s,%s", n.key, n.Host.Addrs())
 }
 
 func (n *P2PNode) Id() peer.ID { // Endpoint
-	return n.ID()
+	return n.Host.ID()
 }
 
 func IfNeededSign(verifyIntegrity bool, cert []byte) []byte {
@@ -207,8 +214,8 @@ func IfNeededSign(verifyIntegrity bool, cert []byte) []byte {
 
 func (n *P2PNode) Encode() *p2p.Peer {
 	return &p2p.Peer{
-		Id:         n.ID().String(),
-		Addrs:      EncodeAddrs(n.Addrs()),
+		Id:         n.Host.ID().String(),
+		Addrs:      EncodeAddrs(n.Host.Addrs()),
 		Mv:         n.mv.Encode(),
 		Key:        n.key.Encode(),
 		Name:       n.name,
@@ -218,7 +225,7 @@ func (n *P2PNode) Encode() *p2p.Peer {
 }
 
 func (n *P2PNode) Close() error {
-	ayame.Log.Debugf("%s's host is closed\n", n.Key())
+	log.Debugf("%s's host is closed\n", n.Key())
 	return n.Host.Close()
 }
 
@@ -242,6 +249,14 @@ func (n *P2PNode) SetChild(c ayame.Node) {
 	n.child = c
 }
 
+func (n *P2PNode) ListAllPeerProtocols(label string) {
+	peers := n.Host.Peerstore().Peers()
+	for _, peerID := range peers {
+		protocols, _ := n.Host.Peerstore().GetProtocols(peerID)
+		log.Debugf("%s: Peer %s supports protocols: %v", label, peerID, protocols)
+	}
+}
+
 // a stream handler
 func (n *P2PNode) onReceiveMessage(s network.Stream) {
 	// get request data
@@ -255,16 +270,16 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 			return
 		}
 		s.Reset()
-		ayame.Log.Errorf("%s: %s", n, err)
+		log.Errorf("%s: %s", n, err)
 		return
 	}
 	defer r.ReleaseMsg(buf) // Ensure buffer is released after use
 
-	ayame.Log.Debugf("receved mes len=%d", len(buf))
+	log.Debugf("receved mes len=%d", len(buf))
 	// unmarshal it
 	err = proto.Unmarshal(buf, mes)
 	if err != nil {
-		ayame.Log.Error(err)
+		log.Error(err)
 		return
 	}
 	n.mutex.Lock()
@@ -274,7 +289,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		n.KeyInBytes[mes.Data.Id] += int64(len(buf))
 	}
 	n.mutex.Unlock()
-	//ayame.Log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
+	//log.Infof("%s: store %s->%s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr())
 	var valid bool = true
 	if n.VerifyIntegrity { // if failed, valid becomes false.
 		valid = n.validateMessage(mes, s)
@@ -287,6 +302,7 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		return // Failed to convert message. Ignore.
 		//panic("sender is nil")
 	}
+	//n.ListAllPeerProtocols("onReceiveMessage")
 	n.Host.Peerstore().AddAddr(ev.Sender().Id(), s.Conn().RemoteMultiaddr(), peerstore.ConnectedAddrTTL)
 	if mes.IsRequest {
 		resp := ev.ProcessRequest(context.TODO(), n.child)
@@ -294,15 +310,15 @@ func (n *P2PNode) onReceiveMessage(s network.Stream) {
 		if resp != nil {
 			mes := resp.Encode()
 			mes.Sender = n.Encode()
-			ayame.Log.Debugf("%s@%s: PROCESSED REQUEST\n", n.Name(), s.Conn().LocalPeer())
+			log.Debugf("%s@%s: PROCESSED REQUEST\n", n.Name(), s.Conn().LocalPeer())
 			// no sign
 			n.sendMsgToStream(s, mes)
 		} else {
-			ayame.Log.Warningf("Request %s is not processed", mes.Data.Id)
+			log.Warningf("Request %s is not processed", mes.Data.Id)
 		}
 	} else {
 		if err := ev.Run(context.TODO(), n.child); err != nil {
-			ayame.Log.Error(err)
+			log.Error(err)
 			return
 		}
 	}
@@ -322,15 +338,15 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 				mes.Data.SenderAppData = ""          // ensure empty
 				mes.Data.Path = nil                  // backup
 				mes.Data.Timestamp = 0               // ignored
-				//ayame.Log.Debugf("%s: AUTHOR %s, sign msg=%v", n, n.Id(), mes.Data)
+				//log.Debugf("%s: AUTHOR %s, sign msg=%v", n, n.Id(), mes.Data)
 				mes.Data.OriginatorSign, _ = n.signProtoMessage(mes.Data)
-				ayame.Log.Debugf("ORIGINATOR %s signed: %v", n, mes.Data.OriginatorSign)
+				log.Debugf("ORIGINATOR %s signed: %v", n, mes.Data.OriginatorSign)
 				mes.Data.SenderAppData = senderData // restore
 				mes.Data.Path = path                // restore
 				mes.Data.Timestamp = ts
 			}
 		} //else { // not author
-		//ayame.Log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
+		//log.Debugf("NOT AUTHOR. FORWARD msg=%v", mes.Data)
 		//}
 		if n.VerifyIntegrity {
 			mes.SenderSign, _ = n.signProtoMessage(mes)
@@ -341,26 +357,28 @@ func (n *P2PNode) sign(ev ayame.SchedEvent, sign bool) proto.Message {
 
 // Node API
 func (n *P2PNode) Send(ctx context.Context, ev ayame.SchedEvent, sign bool) error {
-	ayame.Log.Debugf("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
+	log.Debugf("sending mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 
 	id := ev.Receiver().Id()
 
-	s, err := n.NewStream(ctx, id, n.protocol)
+	s, err := n.Host.NewStream(ctx, id, n.protocol)
 	if err != nil {
-		ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
+		log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return err
 	}
 	defer s.Close() // Ensure stream is closed after use
 
-	ayame.Log.Debugf("%s NewStream to %s\n", n.Key(), id)
+	log.Debugf("%s NewStream to %s\n", n.Key(), id)
 	if err := n.sendMsgToStream(s, n.sign(ev, sign)); err != nil {
-		ayame.Log.Errorf("%s send to %s: %s\n", n.Key(), id, err)
+		log.Errorf("%s send to %s: %s\n", n.Key(), id, err)
 		return err
 	}
+	//n.ListAllPeerProtocols("Send")
+
 	if ev.IsRequest() {
 		n.onReceiveMessage(s)
 	}
-	ayame.Log.Debugf("sent mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
+	log.Debugf("sent mes=%v/%s", ev.Receiver().Id(), ev.Receiver().Key())
 	return nil
 }
 
@@ -375,7 +393,7 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	currentTime := time.Now().Unix()
 	messageDuration := currentTime - data.Timestamp
 	if messageDuration > MAX_MESSAGE_AGE || messageDuration < -MAX_MESSAGE_FROM_FUTURE {
-		ayame.Log.Errorf("Message timestamp is invalid: %d seconds old", messageDuration)
+		log.Errorf("Message timestamp is invalid: %d seconds old", messageDuration)
 		return false
 	}
 
@@ -383,7 +401,7 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	message.SenderSign = nil
 	senderBin, err := proto.Marshal(message)
 	if err != nil {
-		ayame.Log.Error(err, "failed to marshal pb message")
+		log.Error(err, "failed to marshal pb message")
 		return false
 	}
 	message.SenderSign = senderSign
@@ -401,10 +419,10 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	data.Path = nil
 
 	// marshall data without the signature to protobufs3 binary format
-	//ayame.Log.Debugf("%s: verifing author message=%v", n, data)
+	//log.Debugf("%s: verifing author message=%v", n, data)
 	bin, err := proto.Marshal(data)
 	if err != nil {
-		ayame.Log.Error(err, "failed to marshal pb message")
+		log.Error(err, "failed to marshal pb message")
 		return false
 	}
 
@@ -418,13 +436,13 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	// restore peer id binary format from base58 encoded node id data
 	senderId, err := peer.Decode(message.Sender.Id)
 	if err != nil {
-		ayame.Log.Error(err, "Failed to decode sender node id from base58")
+		log.Error(err, "Failed to decode sender node id from base58")
 		return false
 	}
 
 	authorId, err := peer.Decode(data.Originator.Id)
 	if err != nil {
-		ayame.Log.Error(err, "Failed to decode author node id from base58")
+		log.Error(err, "Failed to decode author node id from base58")
 		return false
 	}
 
@@ -432,12 +450,12 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	if data.OriginatorPubKey != nil {
 		apk, err := crypto.UnmarshalPublicKey(data.OriginatorPubKey)
 		if err != nil {
-			ayame.Log.Error(err, "Failed to extract key from message key data")
+			log.Error(err, "Failed to extract key from message key data")
 			return false
 		}
 		authorPubKey = apk
 	} else {
-		ayame.Log.Errorf("no author public key in message %s", message.Data.Id)
+		log.Errorf("no author public key in message %s", message.Data.Id)
 		return false
 	}
 
@@ -446,24 +464,24 @@ func (n *P2PNode) validateMessage(message *p2p.Message, s network.Stream) bool {
 	if message.SenderSign != nil {
 		senderPubKey := s.Conn().RemotePublicKey()
 		if !n.verifyData(senderBin, []byte(message.SenderSign), senderId, senderPubKey) {
-			ayame.Log.Errorf("Failed to verify sender's signature")
+			log.Errorf("Failed to verify sender's signature")
 			return false
 		}
 	} else {
-		ayame.Log.Debugf("no sender sign in message %s", message.Data.Id)
+		log.Debugf("no sender sign in message %s", message.Data.Id)
 		return false
 	}
 
 	if message.Data.OriginatorSign != nil {
 		if !n.verifyData(bin, []byte(message.Data.OriginatorSign), authorId, authorPubKey) {
-			ayame.Log.Errorf("%s: failed to verify the signature of msgid=%s, author %s", n, message.Data.Id, authorId)
+			log.Errorf("%s: failed to verify the signature of msgid=%s, author %s", n, message.Data.Id, authorId)
 			return false
 		}
 	} else {
-		ayame.Log.Errorf("%s: no author sign in message %s", n, message.Data.Id)
+		log.Errorf("%s: no author sign in message %s", n, message.Data.Id)
 		return false
 	}
-	ayame.Log.Debugf("%s: succeeded author msgid=%s author=%s, sender=%s", n, message.Data.Id, authorId, senderId)
+	log.Debugf("%s: succeeded author msgid=%s author=%s, sender=%s", n, message.Data.Id, authorId, senderId)
 	return true
 }
 
@@ -478,7 +496,7 @@ func (n *P2PNode) signProtoMessage(message proto.Message) ([]byte, error) {
 
 // sign binary data using the local node's private key
 func (n *P2PNode) signData(data []byte) ([]byte, error) {
-	key := n.Peerstore().PrivKey(n.ID())
+	key := n.Host.Peerstore().PrivKey(n.Host.ID())
 	res, err := key.Sign(data)
 	//res, err := authority.Sign(data, n.CertValidAfter, n.CertValidBefore, key)
 	return res, err
@@ -495,20 +513,20 @@ func (n *P2PNode) verifyData(data []byte, signature []byte, peerId peer.ID, pubK
 	idFromKey, err := peer.IDFromPublicKey(pubKey)
 
 	if err != nil {
-		ayame.Log.Errorf("Failed to extract peer id from public key")
+		log.Errorf("Failed to extract peer id from public key")
 		return false
 	}
 
 	// verify that message author node id matches the provided node public key
 	if idFromKey != peerId {
-		ayame.Log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
+		log.Errorf("Node id=%v and provided public key=%v mismatch", peerId, idFromKey)
 		return false
 	}
 
 	res, err := pubKey.Verify(data, signature)
 
 	if err != nil {
-		ayame.Log.Errorf("Verify error: %s\n", err)
+		log.Errorf("Verify error: %s\n", err)
 		return false
 	}
 
@@ -532,7 +550,7 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType,
 	}*/
 
 	if originatorPubKey == nil {
-		pKey, err := crypto.MarshalPublicKey(n.Peerstore().PubKey(n.ID()))
+		pKey, err := crypto.MarshalPublicKey(n.Host.Peerstore().PubKey(n.Host.ID()))
 		if err != nil {
 			panic("Failed to get public key for sender from local peer store.")
 		}
@@ -575,16 +593,16 @@ func (n *P2PNode) NewMessage(messageId string, mtype p2p.MessageType,
 func (n *P2PNode) sendMsgToStream(s network.Stream, msg proto.Message) error {
 	writer := pbio.NewDelimitedWriter(s)
 	err := writer.WriteMsg(msg)
-	ayame.Log.Debugf("%s: written msg", n)
+	log.Debugf("%s: written msg", n)
 	if err != nil {
-		ayame.Log.Errorf("%s: write msg %s", n, err)
+		log.Errorf("%s: write msg %s", n, err)
 		s.Reset()
 		return err
 	}
 	// XXX this is just for measurement.
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		ayame.Log.Errorf("%s: write msg %s", n, err)
+		log.Errorf("%s: write msg %s", n, err)
 		return err
 	}
 	length := int64(len(data))
@@ -599,7 +617,7 @@ func (n *P2PNode) sendMsgToStream(s network.Stream, msg proto.Message) error {
 func (n *P2PNode) sendProtoMessage(ctx context.Context, id peer.ID, p protocol.ID, data proto.Message) error {
 	s, err := n.NewStream(context.Background(), id, p)
 	if err != nil {
-		//ayame.Log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
+		//log.Errorf("%s NewStream to %s: %s\n", n.Key(), id, err)
 		return err
 	}
 	defer func() {

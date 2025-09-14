@@ -47,7 +47,7 @@ func NewNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector, 
 
 	//p2pNode, err := p2p.NewNodeWithAuth(context.TODO(), locator, key, mv, ConvertMessage, authorizer)
 	if err != nil {
-		ayame.Log.Errorf("%s\n", err)
+		log.Errorf("%s\n", err)
 		return nil, err
 	}
 	ret := NewWithParent(p2pNode, NewSkipRoutingTable, false)
@@ -59,7 +59,7 @@ func NewNodeWithAuth(locator string, key ayame.Key, mv *ayame.MembershipVector, 
 func NewNode(locator string, key ayame.Key, mv *ayame.MembershipVector, priv crypto.PrivKey) (*BSNode, error) {
 	p2pNode, err := p2p.NewNode(context.TODO(), locator, key, mv, priv, ConvertMessage, nil, false)
 	if err != nil {
-		ayame.Log.Errorf("%s\n", err)
+		log.Errorf("%s\n", err)
 		return nil, err
 	}
 	ret := NewWithParent(p2pNode, NewSkipRoutingTable, false)
@@ -85,12 +85,12 @@ func ConvertPeer(self *p2p.P2PNode, p *pb.Peer, needValidation bool) (*BSNode, e
 	parent := p2p.NewRemoteNode(self, p)
 	if self.VerifyIntegrity {
 		if self.Validator != nil && needValidation {
-			//ayame.Log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
+			//log.Debugf("id=%s, key=%s, mv=%s, cert=%v", parent.Id(), parent.Key(), parent.MV(), p.Cert)
 			if self.Validator(parent.Id(), parent.Key(), parent.Name(), parent.MV(), p.Cert) {
-				ayame.Log.Debugf("remote peer %s@%s validated", parent.Name(), parent.Id()) // XXX should be cached for performance.
+				log.Debugf("remote peer %s@%s validated", parent.Name(), parent.Id()) // XXX should be cached for performance.
 				return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 			}
-			ayame.Log.Debugf("validation failed")
+			log.Debugf("validation failed")
 		} else { // no validator case
 			return NewWithParent(parent, NewSkipRoutingTable, nil, false), nil
 		}
@@ -145,7 +145,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	level, _ := strconv.Atoi(mes.Data.SenderAppData) // sender app data indicates the level
 	var ev ayame.SchedEvent
 	originator, _ := ConvertPeer(self, mes.Data.Originator, self.VerifyIntegrity)
-	ayame.Log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Originator.Id)
+	log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Originator.Id)
 
 	switch mes.Data.Type {
 	case pb.MessageType_UNICAST:
@@ -171,7 +171,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender, false) // request-response can skip sender verification (done by libp2p)
 		if err != nil {
-			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
@@ -185,7 +185,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
-			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
@@ -205,7 +205,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 			AbstractSchedEvent: *ayame.NewSchedEvent(nil, nil, nil)}
 		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
-			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
 		}
 		ev.SetRequest(mes.IsRequest)
@@ -217,7 +217,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 		}
 		p, err := ConvertPeer(self, mes.Sender, false)
 		if err != nil {
-			ayame.Log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
+			log.Infof(fmt.Sprintf("Failed to convert node: %s\n", err))
 			return nil
 		}
 		ev.SetSender(p)

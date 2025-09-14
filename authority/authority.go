@@ -6,6 +6,7 @@ import (
 	"time"
 
 	//proto "github.com/gogo/protobuf/proto"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/ayame"
@@ -24,6 +25,7 @@ type Authorizer struct {
 
 // Global variable to store public key of authority.
 var AuthPubKey crypto.PubKey = nil
+var log = logging.Logger("authority")
 
 func UpdateAuthPubKey() {
 	// since this function is called at bootstrap phase, initialize the public key.
@@ -44,7 +46,7 @@ func UpdateAuthPubKey() {
 func NewAuthorizer() *Authorizer {
 	priv, pub, err := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
 	if err != nil {
-		ayame.Log.Errorf("%s\n", err)
+		log.Errorf("%s\n", err)
 		return nil
 	}
 	return &Authorizer{pubKey: pub, privKey: priv}
@@ -102,25 +104,25 @@ func Verify(data []byte, cert []byte, pubKey crypto.PubKey) bool {
 	c := &pb.Cert{}
 	err := proto.Unmarshal(cert, c)
 	if err != nil {
-		ayame.Log.Errorf("Verify error: %s\n", err)
+		log.Errorf("Verify error: %s\n", err)
 		return false
 	}
 	res, err := pubKey.Verify(data, c.Sig)
 	if err != nil {
-		ayame.Log.Errorf("Verify error: %s\n", err)
+		log.Errorf("Verify error: %s\n", err)
 		return false
 	}
 	if !res {
-		ayame.Log.Errorf("Verify error\n")
+		log.Errorf("Verify error\n")
 		return false
 	}
 	now := time.Now().Unix()
 	if c.ValidAfter > now {
-		ayame.Log.Errorf("Not valid yet: validAfter=%s\n", time.Unix(c.ValidAfter, 0).Format(time.RFC3339))
+		log.Errorf("Not valid yet: validAfter=%s\n", time.Unix(c.ValidAfter, 0).Format(time.RFC3339))
 		return false
 	}
 	if c.ValidBefore < now {
-		ayame.Log.Errorf("Certificate expired: validBefore=%s\n", time.Unix(c.ValidBefore, 0).Format(time.RFC3339))
+		log.Errorf("Certificate expired: validBefore=%s\n", time.Unix(c.ValidBefore, 0).Format(time.RFC3339))
 		return false
 	}
 	return true
@@ -134,7 +136,7 @@ func VerifyPCert(pcert *PCert, pubKey crypto.PubKey) bool {
 func VerifyJoinCert(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte, pubKey crypto.PubKey) bool {
 	c := &pb.Cert{}
 	if err := proto.Unmarshal(cert, c); err != nil {
-		ayame.Log.Errorf("Verify error: %s\n", err)
+		log.Errorf("Verify error: %s\n", err)
 		return false
 	}
 	data := MarshalJoinInfo(id, key, name, mv, c.ValidAfter, c.ValidBefore)
@@ -152,7 +154,7 @@ func VerifyJoinCert(id peer.ID, key ayame.Key, name string, mv *ayame.Membership
 func newJoinInfoCert(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, va int64, vb int64, privKey crypto.PrivKey) []byte {
 	data := MarshalJoinInfo(id, key, name, mv, va, vb)
 	//mHashBuf, _ := multihash.EncodeName(data, "sha2-256")
-	ayame.Log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
+	log.Debugf("joincert id=%s, key=%s, mv=%s, data=%v", id, key, mv, data)
 	//res, _ := privKey.Sign(data) // XXX discarded errors
 	res, _ := Sign(data, va, vb, privKey) // XXX discarded errors
 
