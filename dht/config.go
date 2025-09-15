@@ -62,6 +62,12 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if c.AuthValidator != nil {
+		if !c.AuthValidator(h.ID(), assignedKey, name, mv, cert) {
+			return nil, fmt.Errorf("invalid authorization")
+		}
+	}
 	parent := p2p.New(h, assignedKey, name, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
