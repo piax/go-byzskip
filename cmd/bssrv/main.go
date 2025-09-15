@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -53,6 +53,7 @@ var joinMsgs int64*/
 
 var joinMsgs int64
 var joinBytes int64
+var log = logging.Logger("bssrv")
 
 const (
 	UNICAST_RESPONSE_TIMEOUT = 4000 // milliseconds
@@ -71,7 +72,7 @@ func nodeStat(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "recv-msgs: %d\n", node.Parent.(*p2p.P2PNode).InCount)
 	fmt.Fprintf(w, "recv-bytes: %d\n", node.Parent.(*p2p.P2PNode).InBytes)
 	fmt.Fprintf(w, "out-bytes: %d\n", node.Parent.(*p2p.P2PNode).OutBytes)
-	fmt.Fprintf(w, "conn-stats: %v\n", node.Parent.(*p2p.P2PNode).ConnManager().(*connmgr.BasicConnMgr).GetInfo())
+	fmt.Fprintf(w, "conn-stats: %v\n", node.Parent.(*p2p.P2PNode).Host.ConnManager().(*connmgr.BasicConnMgr).GetInfo())
 	if p2p.RECORD_BYTES_PER_KEY {
 		for k, v := range node.Parent.(*p2p.P2PNode).KeyInBytes {
 			fmt.Fprintf(w, "key-bytes: %s %d\n", k, v)
@@ -94,7 +95,7 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 
 		uniCtx, cancel := context.WithTimeout(context.Background(), time.Duration(UNICAST_RESPONSE_TIMEOUT)*time.Millisecond)
 		defer cancel()
-		//ayame.Log.Infof("unicasting: %s to %s", vals["body"][0], vals["key"][0])
+		//log.Infof("unicasting: %s to %s", vals["body"][0], vals["key"][0])
 		i, err := strconv.Atoi(vals["key"][0])
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -114,7 +115,7 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 				//for i := 0; i < byzskip.K; i++ {
 				select {
 				case <-uniCtx.Done():
-					ayame.Log.Infof("unicast timed out")
+					log.Infof("unicast timed out")
 					break L
 				case resp := <-resMap[mid]:
 					if _, ok := results[resp.Sender().String()]; !ok {
@@ -131,20 +132,20 @@ func nodeUnicast(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func authorizeWeb(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-	c, err := authWeb(*authURL, id, key)
+func authorizeWeb(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	c, err := authWeb(*authURL, id, ayame.IntKey(*key), "")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, "", nil, nil, err
 	}
-	return c.Key, c.Mv, c.Cert, nil
+	return c.Key, c.Name, c.Mv, c.Cert, nil
 }
 
-func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-	return authority.VerifyJoinCert(id, key, mv, cert, pubKey)
+func validateWeb(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+	return authority.VerifyJoinCert(id, key, name, mv, cert, pubKey)
 }
 
-func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.String()))
+func authWeb(url string, id peer.ID, key ayame.Key, name string) (*authority.PCert, error) {
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s&name=%s", authority.MarshalKeyToString(key), id.String(), name))
 	if err != nil {
 		return nil, err
 	}
@@ -162,27 +163,27 @@ func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
 }
 
 func receiveMessage(node *bs.BSNode, ev *bs.BSUnicastEvent) {
-	ayame.Log.Infof("received message: %s", ev.Payload)
+	log.Infof("received message: %s", ev.Payload)
 	sender := ev.Originator().(*bs.BSNode)
 	res := bs.NewBSUnicastResEvent(node, ev.MessageId, ev.Payload)
 	res.Path = ev.Path       // copy the path info
 	if sender.Equals(node) { //&& ev.TargetKey.Equals(node.Key()) {
-		ayame.Log.Infof("Send to self: %s", node)
+		log.Infof("Send to self: %s", node)
 		go func() {
 			receiveResponse(node, res)
 		}()
 	} else {
-		ayame.Log.Infof("sending response to: %s from: %s", sender, node)
+		log.Infof("sending response to: %s from: %s", sender, node)
 		node.SendEventAsync(context.Background(), sender, res, true)
 		//if err != nil {
-		//	ayame.Log.Infof("Sending response failed: %s", err)
+		//	log.Infof("Sending response failed: %s", err)
 		//}
 	}
 }
 
 func receiveResponse(node *bs.BSNode, ev *bs.BSUnicastResEvent) {
 	// ugly
-	ayame.Log.Infof("received response response from: %s", ev.Sender())
+	log.Infof("received response response from: %s", ev.Sender())
 	resMap[ev.MessageId] <- ev
 }
 
@@ -210,15 +211,14 @@ func main() {
 		//p2p.USE_QUIC = false
 		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/", *port)
 	} else {
-		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic/", *port)
+		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1/", *port)
 	}
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("bssrv", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("bssrv", "info")
 	}
-
 	if len(*pubKeyString) == 0 {
 		fmt.Fprintln(os.Stderr, "No public key is specified. Use -apub option to specify the public key provided by the authority.")
 		os.Exit(1)
@@ -275,7 +275,6 @@ func main() {
 	fmt.Printf("web port: %d\n", *srvPort)
 
 	bsOpts := []bs.Option{
-		bs.Key(ayame.IntKey(*key)),
 		bs.Bootstrap(*iAddr),
 		bs.RedundancyFactor(*k),
 		bs.Authorizer(authorizeWeb),
@@ -312,7 +311,7 @@ func main() {
 
 			if strings.HasPrefix(text, "uni") {
 				args := strings.Split(text, " ")
-				ayame.Log.Infof("unicasting: " + strings.Join(args[1:], " "))
+				log.Infof("unicasting: " + strings.Join(args[1:], " "))
 				node.Unicast(context.Background(), ayame.IntKey(1), []byte(strings.Join(args[1:], " ")))
 			}
 

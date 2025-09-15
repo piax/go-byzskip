@@ -2,6 +2,7 @@ package byzskip
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -12,16 +13,18 @@ import (
 type Option func(*Config) error
 
 type Config struct {
-	Key                ayame.Key
-	BootstrapAddrs     []peer.AddrInfo
-	RedundancyFactor   *int // the parameter 'k'
-	Authorizer         func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)
-	AuthValidator      func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool
-	RoutingTableMaker  func(KeyMV) RoutingTable
-	IsFailure          *bool
-	VerifyIntegrity    *bool
-	DetailedStatistics *bool
-	DisableFixLowPeers *bool
+	Key                 ayame.Key
+	Name                string
+	BootstrapAddrs      []peer.AddrInfo
+	RedundancyFactor    *int // the parameter 'k'
+	Authorizer          func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)
+	AuthValidator       func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool
+	RoutingTableMaker   func(KeyMV) RoutingTable
+	IsFailure           *bool
+	VerifyIntegrity     *bool
+	DetailedStatistics  *bool
+	DisableFixLowPeers  *bool
+	FixLowPeersInterval time.Duration
 }
 
 // Apply applies the given options to this Option
@@ -55,31 +58,34 @@ const (
 func (c *Config) NewNode(h host.Host) (*BSNode, error) {
 	var assignedKey ayame.Key
 	var mv *ayame.MembershipVector
+	var name string
 	var cert []byte
 	var err error
 
 	if c.Authorizer != nil {
-		assignedKey, mv, cert, err = c.Authorizer(h.ID(), c.Key)
+		assignedKey, name, mv, cert, err = c.Authorizer(h.ID())
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// skipping authorizations.
 		assignedKey = c.Key
+		name = c.Name
 		mv = ayame.NewMembershipVector(2)
 		cert = nil
 		err = nil
 	}
 
-	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
+	parent := p2p.New(h, assignedKey, name, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
-	ret := &BSNode{key: assignedKey, mv: mv,
-		BootstrapAddrs:     c.BootstrapAddrs,
-		Parent:             parent,
-		QuerySeen:          make(map[string]int),
-		Procs:              make(map[string]*RequestProcess),
-		DisableFixLowPeers: *c.DisableFixLowPeers,
+	ret := &BSNode{key: assignedKey, name: name, mv: mv,
+		BootstrapAddrs:      c.BootstrapAddrs,
+		Parent:              parent,
+		QuerySeen:           make(map[string]int),
+		Procs:               make(map[string]*RequestProcess),
+		DisableFixLowPeers:  *c.DisableFixLowPeers,
+		FixLowPeersInterval: c.FixLowPeersInterval,
 	}
 	ret.RoutingTable = c.RoutingTableMaker(ret)
 	ret.EventForwarder = NodeEventForwarder

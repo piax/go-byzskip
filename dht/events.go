@@ -56,7 +56,7 @@ func (ue *BSPutEvent) Encode() *pb.Message {
 }
 
 func (ue *BSPutEvent) Run(ctx context.Context, node ayame.Node) error {
-	ayame.Log.Debugf("running put response handler.")
+	log.Debugf("running put response handler.")
 	if ue.IsResponse() {
 		if err := node.App().(AppDHT).HandlePutResEvent(ctx, ue); err != nil {
 			return err
@@ -79,7 +79,7 @@ func (ue *BSPutEvent) MessageId() string {
 }
 
 func (ev *BSPutEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running put request handler.")
+	log.Debugf("running put request handler.")
 	return node.App().(AppDHT).HandlePutRequest(ctx, ev)
 }
 
@@ -112,7 +112,7 @@ func (ue *BSGetEvent) Encode() *pb.Message {
 
 func (ue *BSGetEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
-		ayame.Log.Debugf("running get response handler.")
+		log.Debugf("running get response handler.")
 		if err := node.App().(AppDHT).HandleGetResEvent(ctx, ue); err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func (ue *BSGetEvent) MessageId() string {
 }
 
 func (ev *BSGetEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running get request handler.")
+	log.Debugf("running get request handler.")
 	return node.App().(AppDHT).HandleGetRequest(ctx, ev)
 }
 
@@ -220,7 +220,7 @@ func (ue *BSGetProvidersEvent) Encode() *pb.Message {
 
 func (ue *BSGetProvidersEvent) Run(ctx context.Context, node ayame.Node) error {
 	if ue.IsResponse() {
-		ayame.Log.Debugf("running get providers response handler.")
+		log.Debugf("running get providers response handler.")
 		if err := node.App().(AppDHT).HandleGetProvidersResEvent(ctx, ue); err != nil {
 			return err
 		}
@@ -242,6 +242,6 @@ func (ue *BSGetProvidersEvent) MessageId() string {
 }
 
 func (ev *BSGetProvidersEvent) ProcessRequest(ctx context.Context, node ayame.Node) ayame.SchedEvent {
-	ayame.Log.Debugf("running get providers request handler.")
+	log.Debugf("running get providers request handler.")
 	return node.App().(AppDHT).HandleGetProvidersRequest(ctx, ev)
 }

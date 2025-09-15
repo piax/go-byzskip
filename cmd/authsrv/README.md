@@ -1,5 +1,6 @@
 # authsrv
 An experimental authority server.
+Note that this is an experimental authority server which assumes to run with bssrv/dhtsrv.
 
 It provides an Web API that issues perticipation certificates for ByzSkip nodes.
 

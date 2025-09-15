@@ -4,29 +4,23 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/op/go-logging"
+	logging "github.com/ipfs/go-log/v2"
 )
 
-var Log = logging.MustGetLogger("ayame")
+// Log level constants
+const (
+	DEBUG = "debug"
+	INFO  = "info"
+	WARN  = "warn"
+	ERROR = "error"
+	FATAL = "fatal"
+)
 
-func InitLogger(level logging.Level) {
-	var logFmt = logging.MustStringFormatter(
-		`%{color}%{level:.4s}%{color:reset} %{message}`,
-	)
-	backend := logging.NewLogBackend(os.Stderr, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, logFmt)
-
-	// set log level
-	backendLeveled := logging.AddModuleLevel(backendFormatter)
-	backendLeveled.SetLevel(level, "")
-
-	logging.SetBackend(backendLeveled)
-}
+var log = logging.Logger("ayame")
 
 func ReverseSlice(data interface{}) {
 	value := reflect.ValueOf(data)

@@ -279,7 +279,7 @@ func pickFirst(lst []KeyMV) (KeyMV, []KeyMV) {
 /*
 // returns a newly generated list
 func pickupClosestExcept(key ayame.Key, length int, lst []KeyMV, except []KeyMV) []KeyMV {
-	ayame.Log.Debugf("lst=%s, except=%s", ayame.SliceString(lst), ayame.SliceString(except))
+	log.Debugf("lst=%s, except=%s", ayame.SliceString(lst), ayame.SliceString(except))
 	ret := []KeyMV{}
 	if length == 0 {
 		return ret
@@ -312,15 +312,15 @@ func pickupClosestExcept(key ayame.Key, length int, lst []KeyMV, except []KeyMV)
 			right = true
 		}
 	}
-	ayame.Log.Debugf("picked=%s, key=%s, length=%d", ayame.SliceString(picked), key, length)
+	log.Debugf("picked=%s, key=%s, length=%d", ayame.SliceString(picked), key, length)
 	return picked
 }
 */
 
 func pickupMVClosestExcept(key ayame.Key, mv *ayame.MembershipVector, length int, lst []KeyMV, except []KeyMV) []KeyMV {
-	//ayame.Log.Debugf("%s: picking from lst=%s, except=%s", key, ayame.SliceString(lst), ayame.SliceString(except))
+	//log.Debugf("%s: picking from lst=%s, except=%s", key, ayame.SliceString(lst), ayame.SliceString(except))
 	for _, n := range lst {
-		ayame.Log.Debugf("%s, %s", n.MV(), n.Key())
+		log.Debugf("%s, %s", n.MV(), n.Key())
 	}
 	ret := []KeyMV{}
 	if length == 0 {
@@ -354,7 +354,7 @@ func pickupMVClosestExcept(key ayame.Key, mv *ayame.MembershipVector, length int
 			right = true
 		}
 	}
-	//ayame.Log.Debugf("picked=%s, mv=%s, length=%d", ayame.SliceString(picked), mv, length)
+	//log.Debugf("picked=%s, mv=%s, length=%d", ayame.SliceString(picked), mv, length)
 	return picked
 }
 
@@ -368,17 +368,17 @@ func pickupMVClosest(key ayame.Key, mv *ayame.MembershipVector, length int, lst 
 	if len(lst) <= length {
 		return ret
 	}
-	//ayame.Log.Debugf("%s: picking from lst=%s", key, ayame.SliceString(lst))
+	//log.Debugf("%s: picking from lst=%s", key, ayame.SliceString(lst))
 	picked := []KeyMV{}
 	SortCMV(mv, ret)
-	//ayame.Log.Debugf("%s: sorted right=%s", key, ayame.SliceString(ret))
+	//log.Debugf("%s: sorted right=%s", key, ayame.SliceString(ret))
 	for _, n := range ret {
-		ayame.Log.Debugf("%s, %s", n.MV(), n.Key())
+		log.Debugf("%s, %s", n.MV(), n.Key())
 	}
 	rev := make([]KeyMV, len(ret))
 	copy(rev, ret)
 	reverseSlice(rev) // left
-	//ayame.Log.Debugf("%s: sorted left=%s", key, ayame.SliceString(rev))
+	//log.Debugf("%s: sorted left=%s", key, ayame.SliceString(rev))
 	right := false
 	// pick altanately from left and right
 	for i := 0; i < length; i++ {
@@ -386,17 +386,17 @@ func pickupMVClosest(key ayame.Key, mv *ayame.MembershipVector, length int, lst 
 			first, rest := pickFirst(ret)
 			ret = rest
 			picked = append(picked, first)
-			//ayame.Log.Debugf("%s: picked right %s", key, picked)
+			//log.Debugf("%s: picked right %s", key, picked)
 			right = false
 		} else {
 			first, rest := pickFirst(rev)
 			rev = rest
 			picked = append(picked, first)
-			//ayame.Log.Debugf("%s: picked left %s", key, picked)
+			//log.Debugf("%s: picked left %s", key, picked)
 			right = true
 		}
 	}
-	ayame.Log.Debugf("picked=%s, mv=%s, length=%d", ayame.SliceString(picked), mv, length)
+	log.Debugf("picked=%s, mv=%s, length=%d", ayame.SliceString(picked), mv, length)
 	return picked
 }
 
@@ -418,13 +418,13 @@ func longestMVMatches(lst []KeyMV, mv *ayame.MembershipVector) []KeyMV {
 func kMVClosest(key ayame.Key, lst []KeyMV, mv *ayame.MembershipVector) []KeyMV {
 
 	if len(lst) < K {
-		ayame.Log.Debugf("%s: less than K", key)
+		log.Debugf("%s: less than K", key)
 		return lst
 	}
 	ret := []KeyMV{}
 	for len(ret) < K {
 		cur := longestMVMatches(lst, mv)
-		ayame.Log.Debugf("%s: longest matches=%s", key, ayame.SliceString(cur))
+		log.Debugf("%s: longest matches=%s", key, ayame.SliceString(cur))
 		if len(ret)+len(cur) > K {
 			ret = append(ret, pickupMVClosest(key, mv, K-len(ret), cur)...)
 		} else {
@@ -450,7 +450,7 @@ func EndExtentIn[T KeyMV](rng *ayame.RangeKey, nodes []T) ayame.Key {
 	var ret ayame.Key
 	for _, n := range nodes {
 		if ayame.IsOrdered(rng.Start(), rng.StartInclusive(), rng.End(), n.Key(), rng.EndInclusive()) {
-			ayame.Log.Debugf("is ordered %s, %s", rng, n.Key())
+			log.Debugf("is ordered %s, %s", rng, n.Key())
 			count++
 			if count >= RIGHT_HALF_K {
 				ret = n.Key()
@@ -464,21 +464,21 @@ func pickRangeFrom[T KeyMV](src ayame.Key, rng *ayame.RangeKey, nodes []T) []Key
 	ret := []KeyMV{}
 	endExtent := rng.EndExtent()
 	count := 0
-	ayame.Log.Infof("start:%s end:%s, nodes: %s, endExtent: %s\n", rng.Start(), rng.End(), ayame.SliceString(nodes), endExtent)
+	log.Infof("start:%s end:%s, nodes: %s, endExtent: %s\n", rng.Start(), rng.End(), ayame.SliceString(nodes), endExtent)
 L:
 	for _, n := range nodes {
 		if ayame.IsOrdered(src, true, n.Key(), rng.End(), rng.EndInclusive()) &&
 			!ayame.IsOrdered(rng.Start(), rng.StartInclusive(), rng.End(), n.Key(), rng.EndInclusive()) {
-			ayame.Log.Infof("ORDERED: src:%s n: %s, max:%s, count=%d\n", rng.Start(), n, rng.End(), count)
+			log.Infof("ORDERED: src:%s n: %s, max:%s, count=%d\n", rng.Start(), n, rng.End(), count)
 			ret = append(ret, n)
 		} else if endExtent != nil && n.Key().Less(endExtent) {
 			ret = append(ret, n)
 		} else if ayame.IsOrdered(src, true, rng.End(), n.Key(), rng.EndInclusive()) {
 			count++
 			if endExtent != nil && !n.Key().LessOrEquals(endExtent) {
-				ayame.Log.Infof("EXEED (NO USE): rng: %s, n: %s, count=%d\n", rng, n.Key(), count)
+				log.Infof("EXEED (NO USE): rng: %s, n: %s, count=%d\n", rng, n.Key(), count)
 			} else {
-				ayame.Log.Infof("EXEED AND NEW: rng:%s, n: %s, count=%d\n", rng, n.Key(), count)
+				log.Infof("EXEED AND NEW: rng:%s, n: %s, count=%d\n", rng, n.Key(), count)
 				ret = append(ret, n)
 			}
 			if count >= RIGHT_HALF_K {
@@ -500,7 +500,7 @@ func (rts *NeighborList) pickupKNodesMV(target *ayame.MembershipVector, src ayam
 	nodes := rts.concatenate(true)
 
 	if rts.hasDuplicatesInLeftsAndRights() { // the ring is completed
-		//ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s has duplicates:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
+		//log.Debugf("%s, key=%s, level=%d, src=%s, target=%s has duplicates:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
 		lst := []KeyMV{}
 		for _, x := range nodes {
 			lst = ayame.AppendIfAbsent(lst, x)
@@ -518,7 +518,7 @@ func (rts *NeighborList) pickupKNodesMV(target *ayame.MembershipVector, src ayam
 
 	if len(matchRing) < K {
 		// not reached here?
-		ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s equals or less than k:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(matchRing))
+		log.Debugf("%s, key=%s, level=%d, src=%s, target=%s equals or less than k:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(matchRing))
 		lst = kMVClosest(rts.owner.Key(), nodes, target)
 		return lst, true
 	}
@@ -529,12 +529,12 @@ func (rts *NeighborList) pickupKNodesMV(target *ayame.MembershipVector, src ayam
 		curNode := nodes[i].Key()
 		nextNode := nodes[i+1].Key()
 		if ayame.IsOrdered(curNode, true, src, nextNode, false) {
-			ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]))
+			log.Debugf("%s, key=%s, level=%d, src=%s, target=%s:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]))
 			return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], false
 		}
 	}
 	// not a k-closest
-	ayame.Log.Debugf("%s, key=%s, level=%d, src=%s target=%s: NOT k-closest\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
+	log.Debugf("%s, key=%s, level=%d, src=%s target=%s: NOT k-closest\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(nodes))
 	return matchRing, false
 }
 
@@ -546,11 +546,11 @@ func (table *SkipRoutingTable) KClosestWithMV(mv *ayame.MembershipVector, src ay
 		lst, fin = singleLevel.pickupKNodesMV(mv, src)
 		if fin {
 			// reached to the topmost level
-			//ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s reached to topmost. return:\n%s", table.km.MV(), table.km.Key(), singleLevel.level, src, mv, MVString(lst))
+			//log.Debugf("%s, key=%s, level=%d, src=%s, target=%s reached to topmost. return:\n%s", table.km.MV(), table.km.Key(), singleLevel.level, src, mv, MVString(lst))
 			return lst, fin
 		}
 		if table.km.MV().CommonPrefixLength(mv) == singleLevel.level { // next level is the highest level
-			//ayame.Log.Debugf("%s, key=%s, level=%d, src=%s, target=%s reached to highest. forward to:\n%s", table.km.MV(), table.km.Key(), singleLevel.level, src, mv, MVString(lst))
+			//log.Debugf("%s, key=%s, level=%d, src=%s, target=%s reached to highest. forward to:\n%s", table.km.MV(), table.km.Key(), singleLevel.level, src, mv, MVString(lst))
 			return lst, fin
 		}
 	}
@@ -567,18 +567,18 @@ func (table *SkipRoutingTable) KClosestWithMVOld(mv *ayame.MembershipVector, src
 
 		if len(kn) < K { // reached to topmost level.
 			if len(highest) == 0 { // not as many as k ... pick the rest from the current level.
-				ayame.Log.Debugf("%s: not reached to k. use level %d: %s", table.km.Key(), lvl, MVString(highest))
+				log.Debugf("%s: not reached to k. use level %d: %s", table.km.Key(), lvl, MVString(highest))
 				if lvl == 0 {
 					highest = table.NeighborLists[lvl].concatenate(true)
 				} else {
 					highest, _ = singleLevel.pickupKNodesMV(mv, src)
 				}
-				//				ayame.Log.Debugf("%s, key=%s, level=%d return:\n%s", table.km.MV(), table.km.Key(), lvl, MVString(highest))
+				//				log.Debugf("%s, key=%s, level=%d return:\n%s", table.km.MV(), table.km.Key(), lvl, MVString(highest))
 			} //else {
 			// kn + closest fulfillment from the last highest
 			picked := pickupMVClosestExcept(table.km.Key(), mv, K-len(kn), highest, kn)
 			highest = append(kn, picked...)
-			ayame.Log.Debugf("%s, key=%s, level=%d return:\n%s", table.km.MV(), table.km.Key(), lvl, MVString(highest))
+			log.Debugf("%s, key=%s, level=%d return:\n%s", table.km.MV(), table.km.Key(), lvl, MVString(highest))
 			// expected highest always updated.
 			//}
 			return highest, lvl
@@ -810,9 +810,9 @@ func (rts *NeighborList) concatenateWithIndex(req *NeighborRequest, includeSelf 
 		}
 	}
 	/*	if idx != nil {
-			ayame.Log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.Key, idx.Max, ayame.SliceString(ret))
+			log.Debugf("req@%d=(%s %s %s),resp=%s\n", idx.Level, idx.Min, req.Key, idx.Max, ayame.SliceString(ret))
 		} else {
-			ayame.Log.Debugf("@%d,resp=%s\n", rts.level, ayame.SliceString(ret))
+			log.Debugf("@%d,resp=%s\n", rts.level, ayame.SliceString(ret))
 		}*/
 	return ret
 }
@@ -820,7 +820,7 @@ func (rts *NeighborList) concatenateWithIndex(req *NeighborRequest, includeSelf 
 func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(req.MV)
-	//ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
+	//log.Debugf("key=%s: %s", table.km.Key(), table)
 	for l, singleLevel := range table.NeighborLists {
 		if l > commonLen { // no match
 			break
@@ -837,7 +837,7 @@ func (table *SkipRoutingTable) Neighbors(req *NeighborRequest) []KeyMV {
 func (table *SkipRoutingTable) GetCommonNeighbors(mv *ayame.MembershipVector) []KeyMV {
 	ret := []KeyMV{}
 	commonLen := table.km.MV().CommonPrefixLength(mv)
-	//ayame.Log.Debugf("key=%s: %s", table.km.Key(), table)
+	//log.Debugf("key=%s: %s", table.km.Key(), table)
 	for l, singleLevel := range table.NeighborLists {
 		if l > commonLen { // no match
 			break
@@ -859,7 +859,7 @@ func (table *SkipRoutingTable) ensureHeight(level int) {
 }
 
 func (table *SkipRoutingTable) Add(c KeyMV, truncate bool) {
-	ayame.Log.Debugf("%s is adding %s", table.km, c)
+	log.Debugf("%s is adding %s", table.km, c)
 	if table.km.Equals(c) {
 		return // cannot add self
 	}
@@ -1375,14 +1375,14 @@ func (rts *NeighborList) Add(d int, u KeyMV, truncate bool) {
 	}
 	if truncate {
 		i := rts.satisfactionIndex(d)
-		//		ayame.Log.Debugf("satisfaction index dir=%d %s=%d\n", d, ayame.SliceString(rts.Neighbors[d]), i)
+		//		log.Debugf("satisfaction index dir=%d %s=%d\n", d, ayame.SliceString(rts.Neighbors[d]), i)
 		//before := len(rts.Neighbors[d])
 		if i >= 0 {
 			rts.Neighbors[d] = rts.Neighbors[d][0 : i+1]
 		}
 		//after := len(rts.Neighbors[d])
 		//if after < before {
-		//	ayame.Log.Infof("%d truncated", before-after)
+		//	log.Infof("%d truncated", before-after)
 		//}
 	}
 }
@@ -1472,17 +1472,17 @@ func (rts *NeighborList) hasDuplicatesInLeftsAndRights() bool {
 func (rts *NeighborList) PickupKNodes(target ayame.Key) ([]KeyMV, bool) {
 	nodes := rts.concatenate(true)
 	if rts.hasDuplicatesInLeftsAndRights() {
-		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
+		//log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		return closestKNodesDisjoint(target, nodes), true
 	} else {
-		//ayame.Log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
+		//log.Debugf("%d: picking up KNodes: level=%d, target=%d, nodes=%s\n", rts.owner.Key(), rts.level, target, ayame.SliceString(nodes))
 		if len(nodes) < K || K == 1 { // if number of nodes is less than K, return all
 			return nodes, true
 		}
 		for i := LEFT_HALF_K - 1; i < len(nodes)-RIGHT_HALF_K; i++ {
 			curNode := nodes[i].Key()
 			nextNode := nodes[i+1].Key()
-			//ayame.Log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
+			//log.Debugf("cur=%d, next=%d, ordered? %s, %d:%d\n", curNode, nextNode, ayame.SliceString(nodes[i-LEFT_HALF_K+1:i+RIGHT_HALF_K+1]), i-LEFT_HALF_K+1, i+RIGHT_HALF_K+1)
 			if ayame.IsOrdered(curNode, true, target, nextNode, false) {
 				return nodes[i-LEFT_HALF_K+1 : i+RIGHT_HALF_K+1], true
 			}
@@ -1511,7 +1511,7 @@ func (rts *NeighborList) satisfactionIndex(d int) int {
 		digit := n.MV().Val[rts.level]
 		counts[digit]++
 		// all is greater than (or equals) k - 1
-		//ayame.Log.Debugf("{%s} node=%s level=%d: nextDigit=%d match=%v counts[%d]=%d", rts.owner.Key(), n, rts.level, nextDigit, digit == nextDigit, nextDigit, counts[nextDigit])
+		//log.Debugf("{%s} node=%s level=%d: nextDigit=%d match=%v counts[%d]=%d", rts.owner.Key(), n, rts.level, nextDigit, digit == nextDigit, nextDigit, counts[nextDigit])
 		if (SYMMETRIC_ROUTING_TABLE && !lessThanExists(counts, K-1)) ||
 			(!SYMMETRIC_ROUTING_TABLE && counts[nextDigit] >= K-1) {
 			return i

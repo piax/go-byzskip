@@ -153,7 +153,7 @@ func (ks *FSKeystore) List() ([]string, error) {
 		if err == nil {
 			list = append(list, decodedName)
 		} else {
-			Log.Errorf("Ignoring keyfile with invalid encoded filename: %s", name)
+			log.Errorf("Ignoring keyfile with invalid encoded filename: %s", name)
 		}
 	}
 
@@ -166,7 +166,7 @@ func encode(name string) (string, error) {
 	}
 
 	encodedName := codec.EncodeToString([]byte(name))
-	Log.Debugf("Encoded key name: %s to: %s", name, encodedName)
+	log.Debugf("Encoded key name: %s to: %s", name, encodedName)
 
 	return keyFilenamePrefix + strings.ToLower(encodedName), nil
 }
@@ -182,7 +182,7 @@ func decode(name string) (string, error) {
 		return "", err
 	}
 
-	Log.Debugf("Decoded key name: %s to: %s", name, decodedName)
+	log.Debugf("Decoded key name: %s to: %s", name, decodedName)
 
 	return string(decodedName), nil
 }

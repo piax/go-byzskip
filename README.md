@@ -1,4 +1,4 @@
-# go-byzskip: ByzSkip Implementation in Go
+# go-byzskip: A ByzSkip Implementation in Go
 
 This implementation uses [go-libp2p](https://github.com/libp2p/go-libp2p) for the P2P transport.
 
@@ -33,28 +33,11 @@ Some experimental codes.
 * [dhtsrv](cmd/dhtsrv) - an experimental DHT node with API/web server
 * [mobile](mobile) - an experimental gomobile app for mobile platforms (iOS/Android)
 
-## Run as a router in IPFS/Kubo
+## IPFS/Kubo
 
-There are a few steps required to run ByzSkip/DHT on IPFS. Here's what you need to do:
-
-1. Obtain kubo source code
-```bash
-git clone https://github.com/ipfs/kubo
-```
-2. Apply the patch
-```bash
-cd kubo
-patch -p1 < bsdht.diff
-```
-3. Update dependencies
-```bash
-go mod tidy
-```
-4. Build kubo binary
-```bash
-cd cmd/kubo
-go build
-```
+There's an experimental-version of Kubo that employs ByzSkip-DHT.
+You can see the implementation at [https://github.com/teranisi/kubo/tree/bsdht](https://github.com/teranisi/kubo/tree/bsdht).
+To use this, our authority implementation (on-going work) is required. If you're interested in using this project, please contact us.
 
 ## License
 
@@ -65,3 +48,19 @@ If you need alternative license without source code disclosure obligation, feel 
 ## Acknowledgements
 
 This work was partially supported by JSPS KAKENHI Grant Number JP23K28081.
+
+## Referring to the ByzSkip
+If you have used ByzSkip in your research, please use the [INFOCOM paper](https://ieeexplore.ieee.org/document/11044766) as the reference.
+
+```
+@INPROCEEDINGS{11044766,
+  author={Teranishi, Yuuichi and Akiyama, Toyokazu and Abe, Kota},
+  booktitle={IEEE INFOCOM 2025 - IEEE Conference on Computer Communications}, 
+  title={ByzSkip - A Byzantine-Resilient Skip Graph}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={1-10},
+  keywords={Fault tolerance;Analytical models;Overlay networks;Multicast algorithms;Upper bound;Pollution;Fault tolerant systems;Routing;Search problems;Resilience;P2P networks;key-order preserving structured overlay network;Byzantine fault tolerance},
+  doi={10.1109/INFOCOM55648.2025.11044766}}
+```

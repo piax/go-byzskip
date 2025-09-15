@@ -9,7 +9,6 @@
 syntax = "proto3";
 package ayame.pb;
 option go_package = "./";
-import "github.com/libp2p/go-libp2p-record/pb/record.proto";
 
 enum KeyType {
 	INT = 0;
@@ -18,6 +17,14 @@ enum KeyType {
     ID = 3;
     RANGE = 4;
     UNIFIED = 5;
+}
+
+message PCert {
+    string name = 1;
+    string id = 2;
+    Key key = 3;
+    bytes mv = 4;
+    bytes cert = 5;
 }
 
 message Cert {
@@ -67,6 +74,8 @@ enum MessageType {
     DEL_NODE = 8;
     UNICAST = 9;
     MULTICAST = 10;
+    PUT_MULTI_VALUE = 11;
+    GET_MULTI_VALUE = 12;
 }
 
 // Sender information
@@ -79,19 +88,21 @@ message Peer {
     ConnectionType connection = 3;
     // the key to join to the overlay
     Key key = 4;
+    // the name of the node
+    string name = 5;
     // the membership vector to join the overlay
-    bytes mv = 5;
+    bytes mv = 6;
     // certificate information (=a signature for id,key,mv)
-    bytes cert = 6;
+    bytes cert = 7;
 }
 
 // import libp2p-record
-//message Record {
+message Record {
         // The key that references this record
-//        bytes key = 1;
+        bytes key = 1;
 
         // The actual value this record is storing
-//        bytes value = 2;
+        bytes value = 2;
 
         // Note: These fields were removed from the Record message
         // hash of the originators public key
@@ -100,8 +111,8 @@ message Peer {
         //optional bytes signature = 4;
 
         // Time the record was received, set by receiver
-//        string timeReceived = 5;
-//}
+        string timeReceived = 5;
+}
 
 message TableIndex {
     int32 level = 1;
@@ -164,4 +175,11 @@ message Message {
     Peer sender = 3;
     bool isRequest = 4;  // true if message is a request (requires response)
     bool isResponse = 5;  // true if message is the response
+}
+
+message NamedValue {
+    bytes value = 1;
+    bytes pcert = 2;
+    bytes pubKey = 3;
+    bytes sign = 4;
 }

@@ -15,8 +15,9 @@ import (
 
 type PCert struct {
 	Key         ayame.Key               `json:"-"`
-	id          peer.ID                 `json:"-"`
+	ID          peer.ID                 `json:"-"`
 	Mv          *ayame.MembershipVector `json:"-"`
+	Name        string                  `json:"name"`
 	ValidAfter  time.Time               `json:"validAfter"`
 	ValidBefore time.Time               `json:"validBefore"`
 	Cert        []byte                  `json:"cert"`
@@ -63,18 +64,20 @@ func UnmarshalStringToPubKey(pubstr string) (ci.PubKey, error) {
 	return ci.UnmarshalPublicKey(b)
 }
 
-func NewPCert(key ayame.Key, id peer.ID, mv *ayame.MembershipVector, cert []byte, va time.Time, vb time.Time) *PCert {
-	return &PCert{Key: key, id: id, Mv: mv, Cert: cert, ValidBefore: vb, ValidAfter: va}
+func NewPCert(key ayame.Key, name string, id peer.ID, mv *ayame.MembershipVector, cert []byte, va time.Time, vb time.Time) *PCert {
+	return &PCert{Key: key, Name: name, ID: id, Mv: mv, Cert: cert, ValidBefore: vb, ValidAfter: va}
 }
 
 func (r *PCert) MarshalJSON() ([]byte, error) {
 	type alias PCert
 	kb := r.Key.Encode()
-	idb := r.id.String()
+	idb := r.ID.String()
 	mvb := r.Mv.Encode()
-	return json.Marshal(&struct {
+
+	aux := struct {
 		*alias
 		AliasKey         *pb.Key   `json:"key"`
+		AliasName        string    `json:"name,omitempty"`
 		AliasId          string    `json:"id"`
 		AliasMv          []byte    `json:"mv"`
 		AliasValidAfter  time.Time `json:"validAfter"`
@@ -86,7 +89,13 @@ func (r *PCert) MarshalJSON() ([]byte, error) {
 		AliasMv:          mvb,
 		AliasValidAfter:  r.ValidAfter,
 		AliasValidBefore: r.ValidBefore,
-	})
+	}
+
+	if r.Name != "" {
+		aux.AliasName = r.Name
+	}
+
+	return json.Marshal(aux)
 }
 
 func (r *PCert) UnmarshalJSON(b []byte) error {
@@ -95,6 +104,7 @@ func (r *PCert) UnmarshalJSON(b []byte) error {
 	aux := &struct {
 		*alias
 		AliasKey         *pb.Key   `json:"key"`
+		AliasName        string    `json:"name,omitempty"`
 		AliasId          string    `json:"id"`
 		AliasMv          []byte    `json:"mv"`
 		AliasValidBefore time.Time `json:"validBefore"`
@@ -105,10 +115,49 @@ func (r *PCert) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &aux); err != nil {
 		return err
 	}
-	r.id, _ = peer.Decode(aux.AliasId)
+	r.ID, _ = peer.Decode(aux.AliasId)
 	r.Key = ayame.NewKey(aux.AliasKey)
+	r.Name = aux.AliasName // Will be empty string if field missing
 	r.Mv = ayame.NewMembershipVectorFromBinary(aux.AliasMv)
 	r.ValidAfter = aux.ValidAfter
 	r.ValidBefore = aux.ValidBefore
 	return nil
+}
+
+func PCertToBytes(cert *PCert) ([]byte, error) {
+	p := &pb.PCert{
+		Id:   cert.ID.String(),
+		Mv:   cert.Mv.Encode(),
+		Cert: cert.Cert,
+		Key:  cert.Key.Encode(),
+		Name: cert.Name,
+	}
+	return proto.Marshal(p)
+}
+
+func BytesToPCert(dat []byte) (*PCert, error) {
+	p := &pb.PCert{}
+	err := proto.Unmarshal(dat, p)
+	if err != nil {
+		return nil, err
+	}
+	id, err := peer.Decode(p.Id)
+	if err != nil {
+		return nil, err
+	}
+	mv := ayame.NewMembershipVectorFromBinary(p.Mv)
+	_, va, vb, err := ExtractCert(p.Cert)
+	if err != nil {
+		return nil, err
+	}
+	cert := &PCert{
+		Key:         ayame.NewKey(p.Key),
+		ID:          id,
+		Mv:          mv,
+		Name:        p.Name,
+		Cert:        p.Cert,
+		ValidAfter:  time.Unix(va, 0),
+		ValidBefore: time.Unix(vb, 0),
+	}
+	return cert, nil
 }

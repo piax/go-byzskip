@@ -13,8 +13,8 @@ import (
 func newTestEv(i int, t int64) ayame.Event {
 	ev := ayame.NewSchedEvent(nil, nil, nil)
 	ev.SetTime(t)
-	ev.SetSender(ayame.NewLocalNode(ayame.IntKey(i), nil))
-	ev.SetReceiver(ayame.NewLocalNode(ayame.IntKey(0), nil))
+	ev.SetSender(ayame.NewLocalNode(ayame.IntKey(i), "", nil))
+	ev.SetReceiver(ayame.NewLocalNode(ayame.IntKey(0), "", nil))
 	return ev
 }
 
@@ -143,4 +143,16 @@ func TestUnifiedKey(t *testing.T) {
 	ast.Equal(t, true, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あいうえお", ayame.MaxID())))
 	ast.Equal(t, false, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あきすての", ayame.MaxID())))
 	ast.Equal(t, true, key5.ContainsKey(ayame.NewUnifiedKeyFromString("あいちけん", ayame.MaxID())))
+
+	// Test UnifiedIdKey
+	idKey1 := ayame.NewUnifiedKeyFromIdKey(ayame.NewIdKey(ayame.RandomID()))
+	idKey1String := idKey1.String()
+
+	// Test encoding/decoding
+	encoded := idKey1.Encode()
+	decoded := ayame.NewUnifiedKeyFromBytes(encoded.Body)
+	ast.Equal(t, idKey1, decoded, "expected decoded key to match original")
+
+	// Test string representation
+	ast.Contains(t, idKey1.String(), idKey1String, "expected string to contain ID")
 }

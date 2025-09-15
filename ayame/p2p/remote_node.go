@@ -16,6 +16,7 @@ import (
 type RemoteNode struct {
 	self  *P2PNode
 	key   ayame.Key
+	name  string
 	mv    *ayame.MembershipVector
 	addrs []ma.Multiaddr
 	cert  []byte
@@ -30,6 +31,14 @@ func (n *RemoteNode) Key() ayame.Key {
 
 func (n *RemoteNode) SetKey(key ayame.Key) {
 	n.key = key
+}
+
+func (n *RemoteNode) Name() string {
+	return n.name
+}
+
+func (n *RemoteNode) SetName(name string) {
+	n.name = name
 }
 
 func (n *RemoteNode) MV() *ayame.MembershipVector { // Endpoint
@@ -62,7 +71,7 @@ func (n *RemoteNode) Encode() *pb.Peer {
 		Key:        n.key.Encode(),
 		Addrs:      EncodeAddrs(n.addrs),
 		Cert:       IfNeededSign(n.self.VerifyIntegrity, n.cert),
-		Connection: ConnectionType(n.self.Network().Connectedness(n.id)),
+		Connection: ConnectionType(n.self.Host.Network().Connectedness(n.id)),
 	}
 }
 
@@ -96,7 +105,7 @@ func Addresses(addrs [][]byte) []ma.Multiaddr {
 	for _, addr := range addrs {
 		maddr, err := ma.NewMultiaddrBytes(addr)
 		if err != nil {
-			ayame.Log.Debugf("error decoding multiaddr for peer %s\n", err)
+			log.Debugf("error decoding multiaddr for peer %s\n", err)
 			continue
 		}
 
@@ -139,11 +148,12 @@ func Connectedness(c pb.ConnectionType) network.Connectedness {
 func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 	// store to peerstore on self.
 	id, _ := peer.Decode(p.Id)
-	self.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.AddressTTL)
+	self.Host.Peerstore().AddAddrs(id, Addresses(p.Addrs), peerstore.AddressTTL)
 	return &RemoteNode{
 		self:  self,
 		id:    id,
 		key:   ayame.NewKey(p.Key),
+		name:  p.Name,
 		addrs: Addresses(p.Addrs),
 		cert:  p.Cert,
 		mv:    ayame.NewMembershipVectorFromBinary(p.Mv),
@@ -152,7 +162,7 @@ func NewRemoteNode(self *P2PNode, p *pb.Peer) *RemoteNode {
 
 func NewIntroducerRemoteNode(self *P2PNode, id peer.ID, addrs []ma.Multiaddr) *RemoteNode {
 	// store to peerstore on self.
-	self.Peerstore().AddAddrs(id, addrs, peerstore.AddressTTL)
+	self.Host.Peerstore().AddAddrs(id, addrs, peerstore.AddressTTL)
 	return &RemoteNode{
 		self: self,
 		id:   id,

@@ -5,10 +5,14 @@ package dht
 import (
 	"fmt"
 	"os"
+	"os/user"
+	"strings"
 	"time"
 
+	record "github.com/libp2p/go-libp2p-record"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/ipfs/boxo/ipns"
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/piax/go-byzskip/authority"
@@ -16,16 +20,24 @@ import (
 	bs "github.com/piax/go-byzskip/byzskip"
 )
 
-var DefaultAuthorizer = func(cfg *Config) error {
-	if url := os.Getenv(authority.WEBAUTH_URL); len(url) != 0 { // if environment variable is set, use webauth.
-		ayame.Log.Infof("using %s as authority", url)
-		return cfg.Apply(Authorizer(authority.WebAuthAuthorize))
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		currentUser, err := user.Current()
+		if err != nil {
+			return path
+		}
+		return strings.Replace(path, "~", currentUser.HomeDir, 1)
 	}
+	return path
+}
+
+var DefaultAuthorizer = func(cfg *Config) error {
 	if filename := os.Getenv(authority.CERT_FILE); len(filename) != 0 { // if environment variable is set, use cert file.
 		// file exists
+		filename = expandPath(filename)
 		if _, err := os.Stat(filename); err == nil {
-			ayame.Log.Infof("using %s as the cert file", filename)
-			return cfg.Apply(Authorizer(authority.FileAuthAuthorize))
+			log.Infof("using %s as the cert file", filename)
+			return cfg.Apply(Authorizer(authority.FileAuthAuthorizer(filename)))
 		} else {
 			if *cfg.VerifyIntegrity {
 				panic(fmt.Errorf("failed to determine authorization method: %w", err))
@@ -36,20 +48,20 @@ var DefaultAuthorizer = func(cfg *Config) error {
 			panic(fmt.Sprintf("failed to determine authorization method: please check %s", authority.CERT_FILE))
 		}
 	}
-	// default
-	ayame.Log.Infof("using empty authority")
-	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+	// default is to use the identity key and empty name.
+	log.Infof("using empty authority")
+	return cfg.Apply(Authorizer(func(pid peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
-		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2
+		return ayame.IdKey(pid), "", ayame.NewMembershipVector(2), nil, nil // alpha=2
 	}))
 }
 
 var DefaultAuthValidator = func(cfg *Config) error {
 	if pk := os.Getenv(authority.AUTH_PUBKEY); len(pk) != 0 { // if environment variable is set, use the publickey
-		ayame.Log.Infof("using authority public key: %s", pk)
-		return cfg.Apply(AuthValidator(authority.AuthValidate))
+		log.Infof("using authority public key: %s", pk)
+		return cfg.Apply(AuthValidator(authority.AuthValidator(pk)))
 	}
-	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
+	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool {
 		return true
 	}))
 }
@@ -57,6 +69,11 @@ var DefaultAuthValidator = func(cfg *Config) error {
 var DefaultRedundancyFactor = func(cfg *Config) error {
 	return cfg.Apply(RedundancyFactor(4))
 }
+
+type BlankValidator struct{}
+
+func (BlankValidator) Validate(_ string, _ []byte) error        { return nil }
+func (BlankValidator) Select(_ string, _ [][]byte) (int, error) { return 0, nil }
 
 // Complete list of default options and when to fallback on them.
 //
@@ -87,8 +104,21 @@ var defaults = []struct {
 		opt:      DefaultAuthValidator,
 	},
 	{
+		fallback: func(cfg *Config) bool { return cfg.IdFinder == nil },
+		opt:      IdFinder(MVIdFinder),
+	},
+	{
 		fallback: func(cfg *Config) bool { return cfg.Datastore == nil },
 		opt:      Datastore(dssync.MutexWrap(ds.NewMapDatastore())),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.RecordValidator == nil },
+		opt: NamespacedValidator([]NameValidator{
+			{Name: "pk", Validator: record.PublicKeyValidator{}},
+			{Name: "ipns", Validator: ipns.Validator{KeyBook: nil}},
+			{Name: "hrns", Validator: NamedValueValidator{}},
+			{Name: "v", Validator: BlankValidator{}},
+		}),
 	},
 	{
 		fallback: func(cfg *Config) bool { return cfg.MaxRecordAge == nil },
@@ -97,6 +127,14 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.DetailedStatistics == nil },
 		opt:      DetailedStatistics(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.DisableFixLowPeers == nil },
+		opt:      DisableFixLowPeers(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.FixLowPeersInterval == 0 },
+		opt:      FixLowPeersInterval(1 * time.Minute),
 	},
 }
 

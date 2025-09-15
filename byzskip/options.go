@@ -1,6 +1,8 @@
 package byzskip
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/piax/go-byzskip/ayame"
@@ -14,14 +16,14 @@ func RedundancyFactor(k int) Option {
 	}
 }
 
-func Authorizer(authorizer func(peer.ID, ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error)) Option {
+func Authorizer(authorizer func(peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error)) Option {
 	return func(c *Config) error {
 		c.Authorizer = authorizer
 		return nil
 	}
 }
 
-func AuthValidator(validator func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool) Option {
+func AuthValidator(validator func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool) Option {
 	return func(c *Config) error {
 		c.AuthValidator = validator
 		return nil
@@ -63,10 +65,24 @@ func DisableFixLowPeers(enable bool) Option {
 	}
 }
 
+func FixLowPeersInterval(interval time.Duration) Option {
+	return func(c *Config) error {
+		c.FixLowPeersInterval = interval
+		return nil
+	}
+}
+
 // desired key
 func Key(key ayame.Key) Option {
 	return func(c *Config) error {
 		c.Key = key
+		return nil
+	}
+}
+
+func Name(name string) Option {
+	return func(c *Config) error {
+		c.Name = name
 		return nil
 	}
 }

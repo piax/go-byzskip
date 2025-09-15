@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/piax/go-byzskip/ayame"
 	ast "github.com/stretchr/testify/assert"
 )
@@ -23,6 +24,20 @@ func TestMembershipVector(t *testing.T) {
 	fmt.Println(mv)
 	fmt.Println(mv3)
 	fmt.Printf("common= %d\n", common)
+}
+
+func TestMembershipVectorFromId(t *testing.T) {
+	bak := ayame.MembershipVectorSize
+	defer func() {
+		ayame.MembershipVectorSize = bak
+	}()
+	ayame.MembershipVectorSize = 320
+	pid := peer.ID("12D3KooWQzAuj4jb2WRKXCSZTDpHqBeuSwJVkdwfN41jEMWqJQ6U")
+	mv := ayame.NewMembershipVectorFromId(pid.String())
+	pid2 := peer.ID("12D3KooWN7e8rihSQobVa491xm6sCRqJdBpw1V7pf3RbxWi4NQVs")
+	mv2 := ayame.NewMembershipVectorFromId(pid2.String())
+	fmt.Println(mv)
+	fmt.Println(mv2)
 }
 
 func TestEncode(t *testing.T) {

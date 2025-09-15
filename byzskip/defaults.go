@@ -3,20 +3,22 @@ package byzskip
 // This file contains all the default configuration options.
 
 import (
+	"time"
+
 	"github.com/piax/go-byzskip/ayame"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var DefaultAuthorizer = func(cfg *Config) error {
-	return cfg.Apply(Authorizer(func(pid peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
+	return cfg.Apply(Authorizer(func(pid peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
 		// given key is ignored.
-		return ayame.IdKey(pid), ayame.NewMembershipVector(2), nil, nil // alpha=2
+		return ayame.IdKey(pid), "", ayame.NewMembershipVector(2), nil, nil // alpha=2
 	}))
 }
 
 var DefaultAuthValidator = func(cfg *Config) error {
-	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, *ayame.MembershipVector, []byte) bool {
+	return cfg.Apply(AuthValidator(func(peer.ID, ayame.Key, string, *ayame.MembershipVector, []byte) bool {
 		return true
 	}))
 }
@@ -61,6 +63,10 @@ var defaults = []struct {
 	{
 		fallback: func(cfg *Config) bool { return cfg.DisableFixLowPeers == nil },
 		opt:      DisableFixLowPeers(false),
+	},
+	{
+		fallback: func(cfg *Config) bool { return cfg.FixLowPeersInterval == 0 },
+		opt:      FixLowPeersInterval(1 * time.Minute),
 	},
 }
 

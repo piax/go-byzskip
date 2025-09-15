@@ -2,7 +2,6 @@ package sim
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -57,7 +56,7 @@ func DoUnicast() string {
 	msg := bs.NewBSUnicastEventNoOriginator(src, mid, ayame.MembershipVectorSize, dst.Key(), []byte("hello"))
 	ayame.GlobalEventExecutor.RegisterEvent(msg, int64(1000))
 	ayame.GlobalEventExecutor.RegisterEvent(ayame.NewSchedEventWithJob(func() {
-		ayame.Log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
+		log.Debugf("id=%s,src=%s, dst=%s timed out\n", msg.MessageId, src, dst)
 		msg.Root.Channel <- true
 	}), int64(1000+100))
 
@@ -65,12 +64,12 @@ func DoUnicast() string {
 		<-msg.Root.Channel // wait for the timeout.
 		//if *verbose {
 		//avg, _ := meanOfPathLength(msg.root.paths)
-		ayame.Log.Debugf("%d: started %s, finished: %d\n", msg.TargetKey, msg.MessageId, msg.Time())
+		log.Debugf("%d: started %s, finished: %d\n", msg.TargetKey, msg.MessageId, msg.Time())
 		//}
 		if bs.ContainsKey(msg.TargetKey, msg.Root.Destinations) {
-			ayame.Log.Debugf("%s is included in %s\n", msg.TargetKey, msg.Root.Destinations)
+			log.Debugf("%s is included in %s\n", msg.TargetKey, msg.Root.Destinations)
 		} else {
-			ayame.Log.Debugf("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
+			log.Debugf("%s->%s: FAILURE!!! %s\n", msg.Sender(), msg.TargetKey, ayame.SliceString(msg.Root.Destinations))
 		}
 		close(msg.Root.Channel)
 	}(msg)

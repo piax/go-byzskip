@@ -6,12 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 )
@@ -21,6 +22,7 @@ var port *int
 var keystore *string
 
 var auth *authority.Authorizer
+var log = logging.Logger("authsrv")
 
 const (
 	SEQ_NO              = "_seq"
@@ -29,7 +31,7 @@ const (
 	AUTH_VALID_DURATION = "8760h"
 )
 
-// honest integer key
+// issue a certificate for the given key, id, and name.
 func issueCert(w http.ResponseWriter, req *http.Request) {
 	vals := req.URL.Query()
 
@@ -52,13 +54,18 @@ func issueCert(w http.ResponseWriter, req *http.Request) {
 	va := time.Now().Unix()
 	vb := va + int64(d.Seconds())
 	mv := ayame.NewMembershipVector(2)
-	bin := auth.Authorize(id, key, mv, va, vb)
-	p := authority.NewPCert(key, id, mv, bin, time.Unix(va, 0), time.Unix(vb, 0))
+	name, err := url.QueryUnescape(vals["name"][0])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	bin := auth.Authorize(id, key, name, mv, va, vb)
+	p := authority.NewPCert(key, name, id, mv, bin, time.Unix(va, 0), time.Unix(vb, 0))
 
 	pcert, _ := json.Marshal(p)
 	//db.Put([]byte(KEY_PREFIX+vals["user"][0]), pcert, nil)
 
-	ayame.Log.Infof("issueing: id=%s, key=%s", vals["id"][0], key)
+	log.Infof("issueing: id=%s, key=%s", vals["id"][0], key)
 
 	fmt.Fprintf(w, "%s", pcert)
 }
@@ -71,9 +78,13 @@ func main() {
 	flag.Parse()
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("authsrv", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("authsrv", "info")
 	}
 
 	ks, err := ayame.NewFSKeystore(*keystore)

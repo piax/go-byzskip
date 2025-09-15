@@ -30,7 +30,7 @@ func (dq *DisjointQuery) Add(node *KADNode) {
 func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int, k int, queried []*KADNode) []*KADNode {
 	if matchNode(id, dq.curKNodes) != nil {
 		if dq.hops_to_match < 0 {
-			ayame.Log.Debugf("found!! matched hops=%d", dq.hops)
+			log.Debugf("found!! matched hops=%d", dq.hops)
 			dq.hops_to_match = dq.hops // actually, +1 is needed to reach the node.
 		}
 	}
@@ -72,10 +72,10 @@ func (dq *DisjointQuery) DoNextQueries(id kbucket.ID, source *KADNode, alpha int
 	dq.curKNodes = dq.queryTable.getNearestNodes(id, k)
 	dq.updateFinished(queried)
 
-	ayame.Log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops, len(curNodes), ayame.SliceString(curNodes))
+	log.Debugf("%d th: hops=%d, for %d, queried=%s\n", dq.index, dq.hops, len(curNodes), ayame.SliceString(curNodes))
 	if matchNode(id, dq.curKNodes) != nil {
 		if dq.hops_to_match < 0 {
-			ayame.Log.Debugf("found!! matched hops=%d", dq.hops)
+			log.Debugf("found!! matched hops=%d", dq.hops)
 			dq.hops_to_match = dq.hops // actually, +1 is needed to reach the node.
 		}
 	}
@@ -117,7 +117,7 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	ihops++
 
 	if initSrc && matchNode(id, initialKNodes) != nil {
-		//ayame.Log.Infof("src contains dst ret=%s\n", initialKNodes)
+		//log.Infof("src contains dst ret=%s\n", initialKNodes)
 		return initialKNodes, 0, 0, 0, false
 	}
 
@@ -151,7 +151,7 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 		}
 		maxHops = math.Max(float64(dq.hops), float64(maxHops))
 		msgs += dq.msgs
-		ayame.Log.Debugf("%d th: result=%s\n", dq.index, ayame.SliceString(dq.curKNodes))
+		log.Debugf("%d th: result=%s\n", dq.index, ayame.SliceString(dq.curKNodes))
 	}
 	qt := NewKADRoutingTableForQuery(id, k)
 	for _, q := range queried {
@@ -164,7 +164,7 @@ func FastNodeLookupDisjoint(id kbucket.ID, source *KADNode, alpha int, k int, d 
 	//if bytes.Equal(source.routingTable.dhtId, id) {
 	//	ret = append(ret, source)
 	//}
-	ayame.Log.Debugf("result=%s\n", ayame.SliceString(ret))
+	log.Debugf("result=%s\n", ayame.SliceString(ret))
 
 	// initial FIND_NODE
 	if !initSrc {

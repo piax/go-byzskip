@@ -14,7 +14,7 @@ func (eq EventQueue) Swap(i, j int) {
 }
 
 func (eq *EventQueue) Push(x interface{}) {
-	Log.Debugf("queued event to time: %d\n", x.(SchedEvent).Time())
+	log.Debugf("queued event to time: %d\n", x.(SchedEvent).Time())
 	*eq = append(*eq, x.(SchedEvent))
 }
 
@@ -25,6 +25,6 @@ func (eq *EventQueue) Pop() interface{} {
 	//old[n-1] = nil // avoid memory leak
 	*eq = old[0 : n-1]
 	//*eq = old[1:n]
-	Log.Debugf("got event at time: %d\n", ev.Time())
+	log.Debugf("got event at time: %d\n", ev.Time())
 	return ev
 }

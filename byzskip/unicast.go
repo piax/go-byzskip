@@ -102,7 +102,7 @@ func (ev *BSUnicastEvent) CheckAndSetAlreadySeen(myNode *BSNode) bool {
 	seenLevel, exists := myNode.QuerySeen[ev.MessageId]
 	myNode.seenMutex.RUnlock()
 	if exists && msgLevel <= seenLevel {
-		ayame.Log.Debugf("already seen: %s at %d\n", ev.MessageId, seenLevel)
+		log.Debugf("already seen: %s at %d\n", ev.MessageId, seenLevel)
 		return true
 	}
 	myNode.QuerySeen[ev.MessageId] = msgLevel
@@ -113,7 +113,7 @@ func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	msgLevel := ev.level
 
 	if !strings.HasPrefix(ev.MessageId, ev.Originator().MessageIdPrefix()+".") { // check if adversary generated mimic message id.
-		ayame.Log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Originator().Id().String(), myNode.String())
+		log.Infof("*** Adversary DoS attack for %s not starts with %s at %s\n", ev.MessageId, ev.Originator().Id().String(), myNode.String())
 		return false
 	}
 	myNode.seenMutex.RLock()
@@ -132,7 +132,7 @@ func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 	}
 
 	if exists && filterWithLevel {
-		ayame.Log.Debugf("already seen: %s at %d on %s\n", ev.MessageId, seenLevel, myNode.Key())
+		log.Debugf("already seen: %s at %d on %s\n", ev.MessageId, seenLevel, myNode.Key())
 		return true
 	}
 	return false
@@ -140,7 +140,7 @@ func (ev *BSUnicastEvent) CheckAlreadySeen(myNode *BSNode) bool {
 
 func (ev *BSUnicastEvent) SetAlreadySeen(myNode *BSNode) {
 	msgLevel := ev.level
-	ayame.Log.Debugf("set seen: %s at %d on %s\n", ev.MessageId, msgLevel, myNode.Key())
+	log.Debugf("set seen: %s at %d on %s\n", ev.MessageId, msgLevel, myNode.Key())
 	myNode.seenMutex.Lock()
 	myNode.QuerySeen[ev.MessageId] = msgLevel
 	myNode.seenMutex.Unlock()
@@ -221,11 +221,11 @@ func (ev *BSUnicastEvent) findNextHopsSingle(myNode *BSNode) ([]*BSUnicastEvent,
 	ks, lv := myNode.GetClosestNodes(ev.TargetKey)
 	kNodes = ks
 	level = lv
-	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
+	log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
+	log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, nil
 }
 
@@ -268,11 +268,11 @@ func (ev *BSUnicastEvent) findNextHopsSkipGraph(myNode *BSNode) ([]*BSUnicastEve
 	if ks.Key().Equals(ev.TargetKey) || ks.Key().Equals(myNode.Key()) {
 		level = -1 // finish.
 	}
-	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
+	log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
+	log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, nil
 }
 
@@ -293,7 +293,7 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 	var destLevel int = ev.level - 1
 	if ev == ev.Root {
 		kNodes, destLevel = myNode.GetClosestNodes(ev.TargetKey)
-		ayame.Log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.TargetKey, destLevel, ayame.SliceString(kNodes))
+		log.Debugf("%s->%d root destLevel=%d ****%s\n", myNode, ev.TargetKey, destLevel, ayame.SliceString(kNodes))
 	} else {
 		if ev.level == 0 {
 			kNodes = []*BSNode{myNode}
@@ -341,11 +341,11 @@ func (ev *BSUnicastEvent) findNextHopsPrune(myNode *BSNode) ([]*BSUnicastEvent, 
 	nextMsgs := []*BSUnicastEvent{}
 
 	level := destLevel
-	ayame.Log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
+	log.Debugf("%s: %d's neighbors= %s (level %d)\n%s\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level, myNode.RoutingTable.String())
 	for _, n := range kNodes {
 		nextMsgs = append(nextMsgs, ev.nextMsg(n, level))
 	}
-	ayame.Log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
+	log.Debugf("%s: next hops for target %d are %s (level %d)\n", myNode, ev.TargetKey, ayame.SliceString(kNodes), level)
 	return nextMsgs, err
 }
 
@@ -396,7 +396,7 @@ func (ue *BSUnicastResEvent) Encode() *pb.Message {
 }
 
 func (ue *BSUnicastResEvent) Run(ctx context.Context, node ayame.Node) error {
-	ayame.Log.Infof("running unicast response handler.")
+	log.Infof("running unicast response handler.")
 	return node.(*BSNode).handleUnicastResponse(ctx, ue, ue.Sender().Key().Equals(node.Key()))
 }
 

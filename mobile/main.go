@@ -66,5 +66,5 @@ func onDraw(glctx gl.Context, sz size.Event) {
 		glctx.ClearColor(1, 0, 0, 1) // red
 	}
 	glctx.Clear(gl.COLOR_BUFFER_BIT)
-	ayame.Log.Debugf("%d, %d", sz.HeightPx, sz.WidthPx)
+	//ayame.Log.Debugf("%d, %d", sz.HeightPx, sz.WidthPx)
 }

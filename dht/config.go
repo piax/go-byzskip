@@ -6,11 +6,9 @@ import (
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
-	"github.com/libp2p/go-libp2p-kad-dht/providers"
+	"github.com/libp2p/go-libp2p-kad-dht/records"
 	record "github.com/libp2p/go-libp2p-record"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/op/go-logging"
-	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
 	bs "github.com/piax/go-byzskip/byzskip"
 )
@@ -19,9 +17,11 @@ type Option func(*Config) error
 
 type Config struct {
 	bs.Config
-	Datastore       ds.Batching
-	RecordValidator record.Validator
-	MaxRecordAge    *time.Duration
+	IdFinder           func(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error)
+	Datastore          ds.Batching
+	RecordValidator    record.Validator
+	MaxRecordAge       *time.Duration
+	DisableFixLowPeers *bool
 }
 
 type GConfig interface {
@@ -57,19 +57,24 @@ const (
 )
 
 func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
-	ayame.InitLogger(logging.DEBUG) // set log level to error so that surpress messages.
-	key := ayame.NewIdKey(h.ID())
-	assignedKey, mv, cert, err := c.Authorizer(h.ID(), key)
+	//key := ayame.NewIdKey(h.ID())
+	assignedKey, name, mv, cert, err := c.Authorizer(h.ID())
 	if err != nil {
 		return nil, err
 	}
-	parent := p2p.New(h, assignedKey, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
+
+	if c.AuthValidator != nil {
+		if !c.AuthValidator(h.ID(), assignedKey, name, mv, cert) {
+			return nil, fmt.Errorf("invalid authorization")
+		}
+	}
+	parent := p2p.New(h, assignedKey, name, mv, cert, ConvertMessage, c.AuthValidator, *c.VerifyIntegrity,
 		*c.DetailedStatistics, PROTOCOL)
 
 	// toplevel context
 	ctx, cancel := context.WithCancel(context.Background())
 
-	pm, err := providers.NewProviderManager(h.ID(), h.Peerstore(), c.Datastore)
+	pm, err := records.NewProviderManager(ctx, h.ID(), h.Peerstore(), c.Datastore)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -77,14 +82,16 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 
 	ret :=
 		&BSDHT{
-			ctx:    ctx,
-			cancel: cancel,
+			ctx:      ctx,
+			cancel:   cancel,
+			idFinder: c.IdFinder,
 			Node: &bs.BSNode{
-				BootstrapAddrs:     c.BootstrapAddrs,
-				Parent:             parent,
-				QuerySeen:          make(map[string]int),
-				Procs:              make(map[string]*bs.RequestProcess),
-				DisableFixLowPeers: false,
+				BootstrapAddrs:      c.BootstrapAddrs,
+				Parent:              parent,
+				QuerySeen:           make(map[string]int),
+				Procs:               make(map[string]*bs.RequestProcess),
+				DisableFixLowPeers:  *c.DisableFixLowPeers,
+				FixLowPeersInterval: c.FixLowPeersInterval,
 			},
 			ProviderManager: pm,
 			RecordValidator: c.RecordValidator,
@@ -92,15 +99,22 @@ func (c *Config) NewDHT(h host.Host) (*BSDHT, error) {
 		}
 	ret.Node.SetKey(assignedKey)
 	ret.Node.SetMV(mv)
-	ayame.Log.Debugf("running key=%s, mv=%s", assignedKey, mv)
+	ret.Node.SetName(name)
+	log.Debugf("running key=%s, mv=%s, name=%s", assignedKey, mv, name)
 	ret.Node.SetApp(ret)
 	ret.Node.RoutingTable = c.RoutingTableMaker(ret.Node)
 	parent.SetChild(ret.Node)
-	ayame.Log.Infof("started BSDHT")
+	log.Infof("started BSDHT")
 	return ret, nil
 }
 
 // options
+func IdFinder(v func(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error)) Option {
+	return func(c *Config) error {
+		c.IdFinder = v
+		return nil
+	}
+}
 
 func Datastore(v ds.Batching) Option {
 	return func(c *Config) error {
@@ -116,14 +130,28 @@ func MaxRecordAge(v time.Duration) Option {
 	}
 }
 
-func NamespacedValidator(ns string, v record.Validator) Option {
+func DisableFixLowPeers(v bool) Option {
+	return func(c *Config) error {
+		c.DisableFixLowPeers = &v
+		return nil
+	}
+}
+
+type NameValidator struct {
+	Name      string
+	Validator record.Validator
+}
+
+func NamespacedValidator(vs []NameValidator) Option {
 	return func(c *Config) error {
 		c.RecordValidator = record.NamespacedValidator{}
 		nsval, ok := c.RecordValidator.(record.NamespacedValidator)
 		if !ok {
 			return fmt.Errorf("can only add namespaced validators to a NamespacedValidator")
 		}
-		nsval[ns] = v
+		for _, v := range vs {
+			nsval[v.Name] = v.Validator
+		}
 		return nil
 	}
 }
@@ -131,6 +159,13 @@ func NamespacedValidator(ns string, v record.Validator) Option {
 func RecordValidator(v record.Validator) Option {
 	return func(c *Config) error {
 		c.RecordValidator = v
+		return nil
+	}
+}
+
+func FixLowPeersInterval(v time.Duration) Option {
+	return func(c *Config) error {
+		c.FixLowPeersInterval = v
 		return nil
 	}
 }

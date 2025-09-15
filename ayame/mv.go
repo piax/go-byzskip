@@ -12,7 +12,7 @@ const (
 	DefaultAlpha = 2
 )
 
-var MembershipVectorSize = 32
+var MembershipVectorSize = 256
 
 type MembershipVector struct {
 	Alpha int

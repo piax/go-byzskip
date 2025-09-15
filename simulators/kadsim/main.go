@@ -6,10 +6,10 @@ import (
 	"math/rand"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/montanaflynn/stats"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/ayame"
 	flag "github.com/spf13/pflag"
 	"github.com/thoas/go-funk"
@@ -158,7 +158,7 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 		sumMsgs += msgs
 		percent := 100 * count / len(nodes)
 		if percent/10 != prev {
-			ayame.Log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
+			log.Infof("%s %d percent of %d nodes\n", time.Now(), percent, len(nodes))
 		}
 		count++
 		prev = percent / 10
@@ -172,8 +172,8 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 	}
 	sumMsgs += refreshNum
 	lastOne += float64(refreshNum) / float64(len(nodes))
-	ayame.Log.Infof("last-join-msgs: %d %s %f\n", len(nodes), paramsString, lastOne)
-	ayame.Log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
+	log.Infof("last-join-msgs: %d %s %f\n", len(nodes), paramsString, lastOne)
+	log.Infof("avg-join-msgs: %s %f\n", paramsString, float64(sumMsgs)/float64(len(nodes)))
 
 	count = 0
 	fcount := 0
@@ -182,7 +182,7 @@ func FastJoinAllDisjoint(nodes []*KADNode, alpha int, k int, d int) error {
 		count += c
 		fcount += f
 	}
-	ayame.Log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, count, float64(fcount)/float64(count))
+	log.Infof("faulty-entry-ratio: %s %d %d %f\n", paramsString, fcount, count, float64(fcount)/float64(count))
 
 	//	FailureType = bak
 	return nil
@@ -212,14 +212,14 @@ func expIterative(trials int) {
 		if failure {
 			failures++
 		}
-		ayame.Log.Debugf("%d->%d: avg. results: %d, hops: %f, msgs: %d, hops_to_match: %f, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
+		log.Debugf("%d->%d: avg. results: %d, hops: %f, msgs: %d, hops_to_match: %f, fails: %d\n", src, dst, len(founds), hops, msgs, hops_to_match, failures)
 	}
 	pmean, _ := stats.Mean(path_lengths)
-	ayame.Log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
+	log.Infof("avg-paths-length: %s %f\n", paramsString, pmean)
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(trials))
 }
 
 func expEachIterative() {
@@ -248,19 +248,19 @@ func expEachIterative() {
 				match_lengths = append(match_lengths, float64(hops_to_match))
 			} else {
 				failures++
-				ayame.Log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
+				log.Debugf("%d->%d: FAILURE!!! %s\n", src, dst, ayame.SliceString(founds))
 			}
-			ayame.Log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
+			log.Debugf("%d: nodes=%d, src=%s, dst=%s\n", int64(count*1000), len(NormalList), src, dst)
 		}
 		sum_max_hops += max_hops
 		sum_max_msgs += max_msgs
 	}
-	ayame.Log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sum_max_hops)/float64(EACH_UNICAST_TRIALS))
-	ayame.Log.Infof("avg-max-msgs: %s %f\n", paramsString, float64(sum_max_msgs)/float64(EACH_UNICAST_TRIALS))
+	log.Infof("avg-max-hops: %s %f\n", paramsString, float64(sum_max_hops)/float64(EACH_UNICAST_TRIALS))
+	log.Infof("avg-max-msgs: %s %f\n", paramsString, float64(sum_max_msgs)/float64(EACH_UNICAST_TRIALS))
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(EACH_UNICAST_TRIALS*EACH_UNICAST_TIMES))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(EACH_UNICAST_TRIALS*EACH_UNICAST_TIMES))
 }
 
 func expTenToOne(trials int) {
@@ -272,25 +272,26 @@ func expTenToOne(trials int) {
 		src := i //((*numberOfNodes - 1) / trials * i)
 		count++
 		dst := len(NormalList) - 1 // max identifier
-		ayame.Log.Debugf("%d th query: src=%d, dst=%d\n", int64(count), src, dst)
+		log.Debugf("%d th query: src=%d, dst=%d\n", int64(count), src, dst)
 		founds, _, msgs, hops_to_match, failure := FastNodeLookupDisjoint(NormalList[dst].routingTable.dhtId, NormalList[src], *alpha, *kValue, *dValue, true)
 		nums_msgs = append(nums_msgs, msgs)
 		if !failure {
 			match_lengths = append(match_lengths, float64(hops_to_match))
 		} else {
 			failures++
-			ayame.Log.Infof("%d->%d: FAILURE!!! %s, hops=%.1f\n", src, dst, ayame.SliceString(founds), hops_to_match)
+			log.Infof("%d->%d: FAILURE!!! %s, hops=%.1f\n", src, dst, ayame.SliceString(founds), hops_to_match)
 		}
-		ayame.Log.Debugf("%d th query: nodes=%d, src=%d, dst=%d, hops_to_match=%f\n", int64(count), len(NormalList), src, dst, hops_to_match)
+		log.Debugf("%d th query: nodes=%d, src=%d, dst=%d, hops_to_match=%f\n", int64(count), len(NormalList), src, dst, hops_to_match)
 
 	}
 	hmean, _ := stats.Mean(match_lengths)
-	ayame.Log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
-	ayame.Log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
-	ayame.Log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(count))
+	log.Infof("avg-match-hops: %s %f\n", paramsString, hmean)
+	log.Infof("avg-msgs: %s %f\n", paramsString, meanOfInt(nums_msgs))
+	log.Infof("success-ratio: %s %f\n", paramsString, 1-float64(failures)/float64(count))
 }
 
 var paramsString string
+var log = logging.Logger("kadsim")
 
 func main() {
 	alpha = flag.IntP("alpha", "a", 20, "the parallelism parameter")
@@ -307,9 +308,13 @@ func main() {
 	flag.Parse()
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("kadsim", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("kadsim", "info")
 	}
 
 	if *seed > 0 {
@@ -351,10 +356,10 @@ func main() {
 
 	table_sizes := []int{}
 	for _, node := range nodes {
-		//ayame.Log.Infof("%v\n", node.Id())
+		//log.Infof("%v\n", node.Id())
 		table_sizes = append(table_sizes, node.routingTable.table.Size())
 	}
 
-	ayame.Log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
+	log.Infof("avg-table-size: %s %f\n", paramsString, meanOfInt(table_sizes))
 
 }

@@ -14,7 +14,7 @@ const (
 	CERT_FILE = "BS_CERT_FILE"
 )
 
-func authFile(filename string, id peer.ID, key ayame.Key) (*PCert, error) {
+func authFile(filename string) (*PCert, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("authority error: %w", err)
@@ -24,26 +24,30 @@ func authFile(filename string, id peer.ID, key ayame.Key) (*PCert, error) {
 	if err != nil {
 		return nil, fmt.Errorf("participation certificate error: %s", err)
 	}
-	if id != c.id {
-		return nil, fmt.Errorf("unauthorized id error: %s != %s", id.String(), c.id.String())
-	}
-	if !key.Equals(c.Key) {
-		return nil, fmt.Errorf("unauthorized key error: %s", err)
-	}
 	return &c, nil
 }
 
-func FileAuthAuthorize(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-	c, err := authFile(os.Getenv(CERT_FILE), id, key)
+func FileAuthAuthorizer(filename string) func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	return func(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+		c, err := authFile(filename)
+		if err != nil {
+			return nil, "", nil, nil, err
+		}
+		return c.Key, c.Name, c.Mv, c.Cert, nil
+	}
+}
+
+func FileAuthAuthorize(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	c, err := authFile(os.Getenv(CERT_FILE))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, "", nil, nil, err
 	}
 
 	// since this function is called at bootstrap phase, initialize the public key.
 	if AuthPubKey == nil {
 		pk := os.Getenv(AUTH_PUBKEY)
 		if pk == "" {
-			panic("CERT_PUBKEY is empty")
+			panic(AUTH_PUBKEY + " is empty")
 		} else {
 			p, err := UnmarshalStringToPubKey(pk)
 			if err != nil {
@@ -52,9 +56,9 @@ func FileAuthAuthorize(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipV
 			AuthPubKey = p
 		}
 	}
-	return c.Key, c.Mv, c.Cert, nil
+	return c.Key, c.Name, c.Mv, c.Cert, nil
 }
 
-func FileAuthValidate(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-	return VerifyJoinCert(id, key, mv, cert, AuthPubKey)
+func FileAuthValidate(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+	return VerifyJoinCert(id, key, name, mv, cert, AuthPubKey)
 }

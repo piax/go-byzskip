@@ -11,13 +11,13 @@ import (
 	"net/http"
 	"os"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/julienschmidt/httprouter"
 	"github.com/libp2p/go-libp2p"
 	ci "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/op/go-logging"
 	"github.com/piax/go-byzskip/authority"
 	"github.com/piax/go-byzskip/ayame"
 	p2p "github.com/piax/go-byzskip/ayame/p2p"
@@ -68,7 +68,7 @@ func nodeStat(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	fmt.Fprintf(w, "recv-msgs: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).InCount)
 	fmt.Fprintf(w, "recv-bytes: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).InBytes)
 	fmt.Fprintf(w, "out-bytes: %d\n", bsdht.Node.Parent.(*p2p.P2PNode).OutBytes)
-	fmt.Fprintf(w, "conn-stats: %v\n", bsdht.Node.Parent.(*p2p.P2PNode).ConnManager().(*connmgr.BasicConnMgr).GetInfo())
+	fmt.Fprintf(w, "conn-stats: %v\n", bsdht.Node.Parent.(*p2p.P2PNode).Host.ConnManager().(*connmgr.BasicConnMgr).GetInfo())
 	if p2p.RECORD_BYTES_PER_KEY {
 		for k, v := range bsdht.Node.Parent.(*p2p.P2PNode).KeyInBytes {
 			fmt.Fprintf(w, "key-bytes: %s %d\n", k, v)
@@ -103,20 +103,20 @@ func dhtGet(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	w.Write(out)
 }
 
-func authorizeWeb(id peer.ID, key ayame.Key) (ayame.Key, *ayame.MembershipVector, []byte, error) {
-	c, err := authWeb(*authURL, id, key)
+func authorizeWeb(id peer.ID) (ayame.Key, string, *ayame.MembershipVector, []byte, error) {
+	c, err := authWeb(*authURL, id, ayame.IntKey(*key), "")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, "", nil, nil, err
 	}
-	return c.Key, c.Mv, c.Cert, nil
+	return c.Key, c.Name, c.Mv, c.Cert, nil
 }
 
-func validateWeb(id peer.ID, key ayame.Key, mv *ayame.MembershipVector, cert []byte) bool {
-	return authority.VerifyJoinCert(id, key, mv, cert, pubKey)
+func validateWeb(id peer.ID, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte) bool {
+	return authority.VerifyJoinCert(id, key, name, mv, cert, pubKey)
 }
 
-func authWeb(url string, id peer.ID, key ayame.Key) (*authority.PCert, error) {
-	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s", authority.MarshalKeyToString(key), id.String()))
+func authWeb(url string, id peer.ID, key ayame.Key, name string) (*authority.PCert, error) {
+	resp, err := http.Get(url + fmt.Sprintf("/issue?key=%s&id=%s&name=%s", authority.MarshalKeyToString(key), id.String(), name))
 	if err != nil {
 		return nil, err
 	}
@@ -162,15 +162,18 @@ func main() {
 		//p2p.USE_QUIC = false
 		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/", *port)
 	} else {
-		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic/", *port)
+		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1/", *port)
 	}
 
 	if *verbose {
-		ayame.InitLogger(logging.DEBUG)
+		logging.SetLogLevel("ayame", "debug")
+		logging.SetLogLevel("byzskip", "debug")
+		logging.SetLogLevel("dhtsrv", "debug")
 	} else {
-		ayame.InitLogger(logging.INFO)
+		logging.SetLogLevel("ayame", "info")
+		logging.SetLogLevel("byzskip", "info")
+		logging.SetLogLevel("dhtsrv", "info")
 	}
-
 	fmt.Printf("authority url: %s\nauthority pub: %s\n", *authURL, *pubKeyString)
 
 	if len(*pubKeyString) == 0 {
@@ -232,7 +235,9 @@ func main() {
 	dhtOpts := []dht.Option{
 		dht.Bootstrap(*iAddr),
 		dht.RedundancyFactor(*k),
-		dht.NamespacedValidator("v", blankValidator{}),
+		dht.NamespacedValidator([]dht.NameValidator{
+			{Name: "v", Validator: blankValidator{}},
+		}),
 	}
 	if !*insecure {
 		dhtOpts = append(dhtOpts, dht.Authorizer(authorizeWeb),
