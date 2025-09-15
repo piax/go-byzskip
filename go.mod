@@ -5,7 +5,7 @@ replace github.com/ipfs/kubo => ../kubo
 go 1.25
 
 require (
-	github.com/ipfs/boxo v0.34.0
+	github.com/ipfs/boxo v0.34.1-0.20250909170220-e69f67e94c11
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-datastore v0.8.3
 	github.com/ipfs/go-log/v2 v2.8.1
