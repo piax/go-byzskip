@@ -162,7 +162,7 @@ func main() {
 		//p2p.USE_QUIC = false
 		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/", *port)
 	} else {
-		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic/", *port)
+		selfAddr = fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1/", *port)
 	}
 
 	if *verbose {
