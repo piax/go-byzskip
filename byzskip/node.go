@@ -56,9 +56,15 @@ const (
 	// If false, PRUNE_OPT2 forwards messages in the higher level even if the message is already seen.
 	// Setting this to false is not recommended.
 	IGNORE_LEVEL_IN_OPT = true
+
+	STAT_NOT_JOINED = 0
+	STAT_JOINING    = 1
+	STAT_JOINED     = 2
+	STAT_CLOSING    = 3
 )
 
 type JoinStats struct {
+	status         int       // the status of the node
 	runningQueries int       // running queries
 	closest        []*BSNode // the current closest nodes
 	candidates     []*BSNode // the candidate nodes
@@ -211,8 +217,14 @@ func (n *BSNode) Encode() *pb.Peer {
 }
 
 func (n *BSNode) Close() error {
+	if n.stats == nil || n.stats.status == STAT_CLOSING || n.stats.status == STAT_NOT_JOINED {
+		return nil
+	}
+	n.stats.status = STAT_CLOSING
+	log.Infof("closing node %s", n.Id())
 	n.NotifyDeletion(context.Background())
 	time.Sleep(time.Duration(DURATION_BEFORE_CLOSE) * time.Millisecond)
+	n.stats.status = STAT_NOT_JOINED
 	return n.Parent.Close()
 }
 
@@ -484,6 +496,10 @@ func NewSimNode(key ayame.Key, mv *ayame.MembershipVector) *BSNode {
 // Join a node join to the network.
 // introducer's multiaddr candidates are specified as addrs argument
 func (n *BSNode) Join(ctx context.Context) error {
+	if n.stats != nil && n.stats.status != STAT_NOT_JOINED {
+		return errors.New("node already joining or joined")
+	}
+	log.Infof("joining node %s", n.Id())
 	if len(n.BootstrapAddrs) == 0 {
 		return errors.New("no bootstrap address specified")
 	}
@@ -588,10 +604,12 @@ func (n *BSNode) RefreshRTWait(ctx context.Context) error {
 func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 
 	n.stats = &JoinStats{
+		status:         STAT_JOINING,
 		runningQueries: 0,
 		closest:        []*BSNode{introducer},
 		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 	err := n.RefreshRTWait(ctx)
+	n.stats.status = STAT_JOINED
 	n.lastPing = time.Now()
 	n.lastRefresh = time.Now()
 
@@ -615,11 +633,14 @@ func (n *BSNode) JoinWithNode(ctx context.Context, introducer *BSNode) error {
 func (n *BSNode) RunBootstrap(ctx context.Context) error {
 
 	n.stats = &JoinStats{
+		status:         STAT_JOINING,
 		runningQueries: 0,
 		closest:        []*BSNode{n},
 		candidates:     []*BSNode{}, queried: []*BSNode{}, failed: []*BSNode{}}
 	n.RefreshRTWait(ctx)
-
+	n.stats.status = STAT_JOINED
+	n.lastPing = time.Now()
+	n.lastRefresh = time.Now()
 	if !n.DisableFixLowPeers {
 		fx.New(
 			fx.Provide(func() *BSNode { return n }),
