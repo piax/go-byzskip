@@ -12,8 +12,8 @@ import (
 )
 
 // var periodicBootstrapInterval = 1 * time.Minute // bootstrap the routing table
-var refreshInterval = 20 * time.Minute // refresh the routing table
-//var pingInterval = 1 * time.Minute    // ping all neighbors
+var refreshInterval = 12 * time.Hour // reconstruct the routing table
+var pingInterval = 10 * time.Minute  // ping all neighbors
 
 /*
 func (n *BSNode) fixLowPeersRoutine(proc goprocess.Process) {
@@ -59,11 +59,11 @@ func (n *BSNode) pingAll(ctx context.Context) {
 
 func (n *BSNode) fixLowPeers(ctx context.Context) {
 	force := false
-	//	if time.Since(n.lastPing) >= pingInterval {
-	log.Debugf("%s: ping to all", n)
-	n.pingAll(ctx)
-	//		n.lastPing = time.Now()
-	//	}
+	if time.Since(n.lastPing) >= pingInterval {
+		log.Debugf("%s: ping to all", n)
+		n.pingAll(ctx)
+		n.lastPing = time.Now()
+	}
 
 	if time.Since(n.lastRefresh) >= refreshInterval {
 		force = true
@@ -73,8 +73,16 @@ func (n *BSNode) fixLowPeers(ctx context.Context) {
 		log.Debugf("%s: has sufficient neighbors", n)
 		return
 	}
-
+	introducer, err := n.IntroducerNode(ayame.PickRandomly(n.BootstrapAddrs))
 	clst, _ := n.RoutingTable.KClosestWithKey(n.Key())
+	if len(clst) < K && introducer.Id() != n.Id() {
+		log.Infof("%s: has insufficient neighbors, use introducer to refresh", n)
+		if err != nil {
+			log.Errorf("%s: failed to get introducer", n)
+			return
+		}
+		clst = []KeyMV{introducer}
+	}
 	log.Debugf("%s: refresh start nodes: %s", n, ayame.SliceString(clst))
 	n.stats = &JoinStats{runningQueries: 0,
 		closest:    ksToNs(clst),
@@ -95,7 +103,6 @@ func LowPeersFixer(interval time.Duration) func(lc fx.Lifecycle, node *BSNode) e
 					for {
 						select {
 						case <-ticker.C:
-							log.Debugf("%s: fixing low peers", node)
 							node.fixLowPeers(context.Background())
 						case <-ctx.Done():
 							log.Debugf("%s: fixLowPeersRoutine closing", node)
