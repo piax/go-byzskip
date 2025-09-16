@@ -72,6 +72,7 @@ func (n *RemoteNode) Encode() *pb.Peer {
 		Addrs:      EncodeAddrs(n.addrs),
 		Cert:       IfNeededSign(n.self.VerifyIntegrity, n.cert),
 		Connection: ConnectionType(n.self.Host.Network().Connectedness(n.id)),
+		Name:       n.name,
 	}
 }
 
