@@ -39,7 +39,7 @@ import (
 	doh "github.com/libp2p/go-doh-resolver"
 )
 
-var log = logging.Logger("dht")
+var log = logging.Logger("byzskip/dht")
 
 // assertion
 var (
@@ -1102,7 +1102,7 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 	var ev ayame.SchedEvent
 	needValidation := self.VerifyIntegrity
 	originator, _ := bs.ConvertPeer(self, mes.Data.Originator, needValidation)
-	log.Debugf("received msgid=%s,author=%s", mes.Data.Id, mes.Data.Originator.Id)
+	//log.Debugf("received msgid=%s,originator=%s", mes.Data.Id, mes.Data.Originator.Id)
 	switch mes.Data.Type {
 	case pb.MessageType_GET_VALUE:
 		ev = NewBSGetEvent(originator, mes.Data.Id, mes.IsRequest, mes.Data.Record)

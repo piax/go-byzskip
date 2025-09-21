@@ -112,6 +112,10 @@ func LowPeersFixer(interval time.Duration) func(lc fx.Lifecycle, node *BSNode) e
 				}()
 				return nil
 			},
+			OnStop: func(ctx context.Context) error {
+				log.Debugf("%s: LowPeersFixer stopping", node)
+				return nil
+			},
 		})
 		return nil
 	}

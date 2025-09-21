@@ -112,6 +112,8 @@ func (dht *BSDHT) getRecordWithPrefixFromDatastore(ctx context.Context, key stri
 		return nil, err
 	}
 	es, _ := results.Rest()
+	log.Debugf("getRecordWithPrefixFromDatastore %s, length=%d", key, len(es))
+
 	ret := []*pb.Record{}
 	for _, e := range es {
 		rec := new(pb.Record)

@@ -190,7 +190,7 @@ func TestHRNSRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkHRNSRecord(rec.Value); err != nil {
+	if _, err := checkHRNSRecord(rec.Value); err != nil {
 		t.Fatal(err)
 	}
 

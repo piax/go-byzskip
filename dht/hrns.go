@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
 	"github.com/ipfs/kubo/repo"
 	"go.uber.org/fx"
 	"google.golang.org/protobuf/proto"
@@ -23,6 +23,7 @@ import (
 // Human-Readable Name System
 // /hrns/<domain-name>:<peer-id>
 const VALIDITY_PERIOD = 24 * time.Hour
+const INITIAL_REPUBLISH_DELAY = 1 * time.Minute
 
 func Normalize(key string) (string, error) {
 	if strings.HasPrefix(key, "/ipns/") || strings.HasPrefix(key, "/ipfs/") || strings.HasPrefix(key, "/pk/") {
@@ -111,7 +112,8 @@ func (NamedValueValidator) Validate(key string, value []byte) error {
 		return fmt.Errorf("empty value not allowed")
 	}
 
-	return checkHRNSRecord(value)
+	_, err := checkHRNSRecord(value)
+	return err
 }
 
 func (NamedValueValidator) Select(key string, values [][]byte) (int, error) {
@@ -161,21 +163,33 @@ func HRNSRepublisher(repubPeriod time.Duration) func(lc fx.Lifecycle, dht *BSDHT
 		lc.Append(fx.Hook{
 			OnStart: func(ctx context.Context) error {
 				go func() {
-					ticker := time.NewTicker(repubPeriod)
-					defer ticker.Stop()
+
+					timer := time.NewTimer(INITIAL_REPUBLISH_DELAY)
+					defer timer.Stop()
+					if repubPeriod < INITIAL_REPUBLISH_DELAY {
+						timer.Reset(repubPeriod)
+					}
 
 					for {
 						select {
-						case <-ctx.Done():
-							return
-						case <-ticker.C:
+						case <-timer.C:
+							timer.Reset(repubPeriod)
 							err := RepublishHRNSRecords(ctx, repo.Datastore(), dht)
 							if err != nil {
 								log.Errorf("failed to republish records: %v", err)
 							}
+						case <-ctx.Done():
+							return
 						}
 					}
 				}()
+				return nil
+			},
+			OnStop: func(ctx context.Context) error {
+				// closethe repo and remove repo.lock file
+				if closer, ok := repo.(interface{ Close() error }); ok {
+					return closer.Close()
+				}
 				return nil
 			},
 		})
@@ -184,21 +198,21 @@ func HRNSRepublisher(repubPeriod time.Duration) func(lc fx.Lifecycle, dht *BSDHT
 }
 
 // The argument value is Record.Value
-func checkHRNSRecord(value []byte) error {
+func checkHRNSRecord(value []byte) (*pb.NamedValue, error) {
 	var namedValue pb.NamedValue
 	if err := proto.Unmarshal(value, &namedValue); err != nil {
-		return fmt.Errorf("failed to unmarshal named value: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal named value: %v", err)
 	}
 
 	var pCert pb.PCert
 	if err := proto.Unmarshal(namedValue.Pcert, &pCert); err != nil {
-		return fmt.Errorf("failed to unmarshal pcert: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal pcert: %v", err)
 	}
 
 	_, va, vb, err := authority.ExtractCert(pCert.Cert)
 
 	if err != nil {
-		return fmt.Errorf("failed to extract cert: %v", err)
+		return nil, fmt.Errorf("failed to extract cert: %v", err)
 	}
 
 	validAfter := time.Unix(va, 0)
@@ -207,47 +221,60 @@ func checkHRNSRecord(value []byte) error {
 	// Check if record is valid
 	now := time.Now()
 	if now.Before(validBefore) && now.After(validAfter) {
-		return nil
+		log.Infof("record is valid")
+		return &namedValue, nil
 	}
-	return fmt.Errorf("record is not valid")
+	log.Debugf("record is not valid %s, %s, %s", now, validBefore, validAfter)
+	return nil, fmt.Errorf("record is not valid")
 }
 
 func RepublishHRNSRecords(ctx context.Context, ds datastore.Datastore, dht *BSDHT) error {
 	// Query all keys with prefix /hrns/
-	q := query.Query{
-		Prefix: "/hrns/",
-	}
-
-	results, err := ds.Query(ctx, q)
+	entries, err := dht.getRecordWithPrefixFromDatastore(ctx, "/hrns")
 	if err != nil {
-		return fmt.Errorf("failed to query datastore: %v", err)
+		return fmt.Errorf("error processing result: %v", err)
 	}
-	defer results.Close()
+	log.Infof("republish hrns %d records", len(entries))
+	for _, r := range entries {
 
-	for r := range results.Next() {
-		if r.Error != nil {
-			log.Errorf("error processing result: %v", r.Error)
+		//var record pb.Record
+		//if err := proto.Unmarshal(r.Value, &record); err != nil {
+		//	log.Errorf("failed to unmarshal record: %v", err)
+		//		continue
+		//	}
+
+		namedValue, err := checkHRNSRecord(r.Value)
+		if err != nil {
+			log.Infof("record %s is not valid: %s", r.Key, err)
+			return err
+		}
+
+		str, err := url.QueryUnescape(string(r.Key))
+		if err != nil {
+			str = string(r.Key)
+		}
+
+		key, err := ParseName(str)
+		name := string(key.Value()[:bytes.IndexByte(key.Value(), 0)])
+
+		if name != dht.Node.Name() {
+			log.Infof("name in key (%s) is not the same as the node name(%s)", name, dht.Node.Name())
 			continue
 		}
 
-		var record pb.Record
-		if err := proto.Unmarshal(r.Value, &record); err != nil {
-			log.Errorf("failed to unmarshal record: %v", err)
-			continue
-		}
+		value := namedValue.Value
 
-		err := checkHRNSRecord(record.Value)
 		if err == nil {
-			log.Infof("republishing record %s", r.Key)
-			err := dht.PutNamedValue(ctx, r.Key, r.Value)
+			log.Infof("republishing record %s", str)
+			err := dht.PutNamedValue(ctx, name, value)
 			if err != nil {
-				log.Errorf("failed to republish record %s: %v", r.Key, err)
+				log.Errorf("failed to republish record %s: %v", str, err)
 			}
 		} else {
-			log.Infof("record %s is not valid", r.Key)
-			err := DeleteHRNSRecord(ctx, ds, r.Key)
+			log.Infof("record %s is not valid: %s", str, err)
+			err := DeleteHRNSRecord(ctx, ds, str)
 			if err != nil {
-				log.Errorf("failed to delete record %s: %v", r.Key, err)
+				log.Errorf("failed to delete record %s: %v", str, err)
 			}
 		}
 	}
