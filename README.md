@@ -36,7 +36,7 @@ Some experimental codes.
 ## IPFS/Kubo
 
 There's an experimental-version of Kubo that employs ByzSkip-DHT.
-You can see the implementation at [https://github.com/teranisi/kubo/tree/bsdht](https://github.com/teranisi/kubo/tree/bsdht).
+You can see the implementation at [https://github.com/piax/kubo/tree/bsdht](https://github.com/piax/kubo/tree/bsdht).
 To use this, our authority implementation (on-going work) is required. If you're interested in using this project, please contact us.
 
 ## License
