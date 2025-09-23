@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"math"
-
 	u "github.com/ipfs/boxo/util"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
@@ -31,12 +29,7 @@ import (
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 	bs "github.com/piax/go-byzskip/byzskip"
 	"go.opentelemetry.io/otel"
-	"go.uber.org/fx"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/ipfs/boxo/gateway"
-	config "github.com/ipfs/kubo/config"
-	doh "github.com/libp2p/go-doh-resolver"
 )
 
 var log = logging.Logger("byzskip/dht")
@@ -1163,85 +1156,4 @@ func ConvertMessage(mes *pb.Message, self *p2p.P2PNode, valid bool) ayame.SchedE
 
 	}
 	return bs.ConvertMessage(mes, self, valid)
-}
-
-// a DNS resolver by BSDHT, replace the default resolver by decorating the original resolver
-// This function waits for the BSDHT routing to be initialized before applying the resolver
-func WithBSDHTResolver() fx.Option {
-	return fx.Decorate(func(original *madns.Resolver) (*madns.Resolver, error) {
-		// Get BSDHT instance from global variable
-		// This avoids creating additional Host instances
-		bs := getGlobalBSDHT()
-		if bs == nil {
-			return original, nil
-		}
-
-		// Create a new resolver instance that delegates to BSDHT
-		newResolver, err := madns.NewResolver(
-			madns.WithDefaultResolver(bs),
-		)
-		if err != nil {
-			return original, nil // Fall back to original on error
-		}
-
-		return newResolver, nil
-	})
-}
-
-// getGlobalBSDHT returns the globally stored BSDHT instance
-func getGlobalBSDHT() *BSDHT {
-	// This function will be implemented in the routing.go file
-	// For now, return nil to avoid compilation errors
-	return nil
-}
-
-// BSDHTResolver creates a new DNS resolver that uses BSDHT as the default resolver
-// This function provides BSDHT as a resolver without using fx.Decorate
-func BSDHTResolver(bs *BSDHT) (*madns.Resolver, error) {
-	if bs == nil {
-		// Fall back to default resolver if BSDHT is not available
-		return madns.NewResolver()
-	}
-
-	// Create a new resolver instance that delegates to BSDHT
-	newResolver, err := madns.NewResolver(
-		madns.WithDefaultResolver(bs),
-	)
-	if err != nil {
-		// Fall back to default resolver on error
-		return madns.NewResolver()
-	}
-
-	return newResolver, nil
-}
-
-// BSDHTDNSResolver replaces the default DNSResolver function in Kubo
-// This function can be used to replace fx.Provide(DNSResolver) in the dependency injection
-func BSDHTDNSResolver(cfg *config.Config, bs *BSDHT) (*madns.Resolver, error) {
-	if bs == nil {
-		// Fall back to original DNSResolver if BSDHT is not available
-		return originalDNSResolver(cfg)
-	}
-
-	// Create a new resolver instance that delegates to BSDHT
-	newResolver, err := madns.NewResolver(
-		madns.WithDefaultResolver(bs),
-	)
-	if err != nil {
-		// Fall back to original DNSResolver on error
-		return originalDNSResolver(cfg)
-	}
-
-	return newResolver, nil
-}
-
-// originalDNSResolver is a copy of the original DNSResolver function from Kubo
-// This is used as a fallback when BSDHT is not available
-func originalDNSResolver(cfg *config.Config) (*madns.Resolver, error) {
-	var dohOpts []doh.Option
-	if !cfg.DNS.MaxCacheTTL.IsDefault() {
-		dohOpts = append(dohOpts, doh.WithMaxCacheTTL(cfg.DNS.MaxCacheTTL.WithDefault(time.Duration(math.MaxUint32)*time.Second)))
-	}
-
-	return gateway.NewDNSResolver(cfg.DNS.Resolvers, dohOpts...)
 }

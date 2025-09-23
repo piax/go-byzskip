@@ -59,7 +59,7 @@ const (
 	MAX_MESSAGE_FROM_FUTURE = 30 // 30 seconds
 )
 
-var log = logging.Logger("ayame:p2p")
+var log = logging.Logger("ayame/p2p")
 
 func New(h host.Host, key ayame.Key, name string, mv *ayame.MembershipVector, cert []byte,
 	converter func(*p2p.Message, *P2PNode, bool) ayame.SchedEvent,

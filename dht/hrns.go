@@ -1,17 +1,12 @@
 package dht
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"time"
 
 	"net/url"
 	"strings"
 
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/kubo/repo"
-	"go.uber.org/fx"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -19,11 +14,6 @@ import (
 	"github.com/piax/go-byzskip/ayame"
 	pb "github.com/piax/go-byzskip/ayame/p2p/pb"
 )
-
-// Human-Readable Name System
-// /hrns/<domain-name>:<peer-id>
-const VALIDITY_PERIOD = 24 * time.Hour
-const INITIAL_REPUBLISH_DELAY = 1 * time.Minute
 
 func Normalize(key string) (string, error) {
 	if strings.HasPrefix(key, "/ipns/") || strings.HasPrefix(key, "/ipfs/") || strings.HasPrefix(key, "/pk/") {
@@ -112,7 +102,7 @@ func (NamedValueValidator) Validate(key string, value []byte) error {
 		return fmt.Errorf("empty value not allowed")
 	}
 
-	_, err := checkHRNSRecord(value)
+	_, err := CheckHRNSRecord(value)
 	return err
 }
 
@@ -157,48 +147,8 @@ func (NamedValueValidator) Select(key string, values [][]byte) (int, error) {
 	return 0, nil
 }
 
-// HRNSRepublisher runs a service to republish HRNS records at specified intervals
-func HRNSRepublisher(repubPeriod time.Duration) func(lc fx.Lifecycle, dht *BSDHT, repo repo.Repo) error {
-	return func(lc fx.Lifecycle, dht *BSDHT, repo repo.Repo) error {
-		lc.Append(fx.Hook{
-			OnStart: func(ctx context.Context) error {
-				go func() {
-
-					timer := time.NewTimer(INITIAL_REPUBLISH_DELAY)
-					defer timer.Stop()
-					if repubPeriod < INITIAL_REPUBLISH_DELAY {
-						timer.Reset(repubPeriod)
-					}
-
-					for {
-						select {
-						case <-timer.C:
-							timer.Reset(repubPeriod)
-							err := RepublishHRNSRecords(ctx, repo.Datastore(), dht)
-							if err != nil {
-								log.Errorf("failed to republish records: %v", err)
-							}
-						case <-ctx.Done():
-							return
-						}
-					}
-				}()
-				return nil
-			},
-			OnStop: func(ctx context.Context) error {
-				// closethe repo and remove repo.lock file
-				if closer, ok := repo.(interface{ Close() error }); ok {
-					return closer.Close()
-				}
-				return nil
-			},
-		})
-		return nil
-	}
-}
-
 // The argument value is Record.Value
-func checkHRNSRecord(value []byte) (*pb.NamedValue, error) {
+func CheckHRNSRecord(value []byte) (*pb.NamedValue, error) {
 	var namedValue pb.NamedValue
 	if err := proto.Unmarshal(value, &namedValue); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal named value: %v", err)
@@ -227,71 +177,3 @@ func checkHRNSRecord(value []byte) (*pb.NamedValue, error) {
 	log.Debugf("record is not valid %s, %s, %s", now, validBefore, validAfter)
 	return nil, fmt.Errorf("record is not valid")
 }
-
-func RepublishHRNSRecords(ctx context.Context, ds datastore.Datastore, dht *BSDHT) error {
-	// Query all keys with prefix /hrns/
-	entries, err := dht.getRecordWithPrefixFromDatastore(ctx, "/hrns")
-	if err != nil {
-		return fmt.Errorf("error processing result: %v", err)
-	}
-	log.Infof("republish hrns %d records", len(entries))
-	for _, r := range entries {
-
-		//var record pb.Record
-		//if err := proto.Unmarshal(r.Value, &record); err != nil {
-		//	log.Errorf("failed to unmarshal record: %v", err)
-		//		continue
-		//	}
-
-		namedValue, err := checkHRNSRecord(r.Value)
-		if err != nil {
-			log.Infof("record %s is not valid: %s", r.Key, err)
-			return err
-		}
-
-		str, err := url.QueryUnescape(string(r.Key))
-		if err != nil {
-			str = string(r.Key)
-		}
-
-		key, err := ParseName(str)
-		name := string(key.Value()[:bytes.IndexByte(key.Value(), 0)])
-
-		if name != dht.Node.Name() {
-			log.Infof("name in key (%s) is not the same as the node name(%s)", name, dht.Node.Name())
-			continue
-		}
-
-		value := namedValue.Value
-
-		if err == nil {
-			log.Infof("republishing record %s", str)
-			err := dht.PutNamedValue(ctx, name, value)
-			if err != nil {
-				log.Errorf("failed to republish record %s: %v", str, err)
-			}
-		} else {
-			log.Infof("record %s is not valid: %s", str, err)
-			err := DeleteHRNSRecord(ctx, ds, str)
-			if err != nil {
-				log.Errorf("failed to delete record %s: %v", str, err)
-			}
-		}
-	}
-	return nil
-}
-
-func DeleteHRNSRecord(ctx context.Context, ds datastore.Datastore, key string) error {
-	if err := ds.Delete(ctx, datastore.NewKey(key)); err != nil {
-		return fmt.Errorf("failed to delete record: %v", err)
-	}
-	return nil
-}
-
-// trust name
-// byte-stream.abcde:id-1
-// byzskip.org:id-2
-// Suppose we have something like this.
-// The prefix "by" is not unique. In this case, suppose we trusted "byte-stream.abcde:id-1".
-// This means we trusted node id-1.
-// If we force resolution with "by", it would return "byte-stream.abcde".

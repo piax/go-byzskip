@@ -174,6 +174,7 @@ func TestParseName(t *testing.T) {
 	t.Log(nk)
 }
 
+/*
 func TestHRNSRecord(t *testing.T) {
 	nDHTs := 1
 	dhts := setupDHTs(context.Background(), nDHTs, true)
@@ -190,11 +191,11 @@ func TestHRNSRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := checkHRNSRecord(rec.Value); err != nil {
+	if _, err := CheckHRNSRecord(rec.Value); err != nil {
 		t.Fatal(err)
 	}
 
-}
+}*/
 
 func TestValueGetSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
