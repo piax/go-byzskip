@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 	"sync"
@@ -30,11 +29,6 @@ const (
 
 func MVIdFinder(ctx context.Context, dht *BSDHT, id string) ([]*bs.BSNode, error) {
 	return dht.Node.LookupMV(ctx, ayame.NewMembershipVectorFromId(id))
-}
-
-func (dht *BSDHT) LookupIPAddr(ctx context.Context, name string) ([]net.IPAddr, error) {
-	fmt.Printf("*** LookupIPAddr %s\n", name)
-	return net.DefaultResolver.LookupIPAddr(ctx, name)
 }
 
 func (dht *BSDHT) LookupLocal(ctx context.Context, name string) (bool, error) {
@@ -76,12 +70,6 @@ func (dht *BSDHT) LookupName(ctx context.Context, name string) ([]*bs.BSNode, er
 		log.Errorf(fmt.Sprintf("namespace error: %s", err))
 	}
 	return ps, nil
-}
-
-func (dht *BSDHT) LookupTXT(ctx context.Context, name string) (values []string, err error) {
-	fmt.Printf("***LookupTXT %s\n", name)
-	_, values, err = dht.LookupNames(ctx, name, false)
-	return values, err
 }
 
 // Not compatible with BasicResolver
@@ -167,7 +155,7 @@ func (dht *BSDHT) sendMultiPutValue(ctx context.Context, p ayame.Node, rec *pb.R
 			log.Info(errStr, "put-message", rec, "get-message", ev.Record)
 			return errors.New(errStr)
 		}
-		log.Debugf("exec multi put %s=%s successfully on: %s", rec.Key, rec.Value, p.Id())
+		log.Debugf("exec multi put %s len=%d successfully on: %s", rec.Key, len(rec.Value), p.Id())
 		return nil
 	}
 	if ev, ok := resp.(*bs.FailureResponse); ok {
@@ -729,12 +717,12 @@ func (dht *BSDHT) HandleMultiPutRequest(ctx context.Context, ev *BSMultiPutEvent
 	if err != nil {
 		rec = nil
 	}
-	recs, err := dht.getRecordWithPrefixFromDatastore(ctx, string(ev.Record.GetKey()))
-	log.Debugf("got prefixed recs after put=%v", recs)
-	if err != nil {
-		log.Warningf("failed to get record with prefix from datastore: %s", err)
-		rec = nil
-	}
+	//recs, err := dht.getRecordWithPrefixFromDatastore(ctx, string(ev.Record.GetKey()))
+	//log.Debugf("got prefixed recs after put=%v", recs)
+	//if err != nil {
+	//	log.Warningf("failed to get record with prefix from datastore: %s", err)
+	//	rec = nil
+	//}
 	if rec == nil {
 		return NewBSMultiPutEvent(dht.Node, ev.MessageId(), false, nil)
 	}
