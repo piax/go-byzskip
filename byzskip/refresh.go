@@ -73,15 +73,18 @@ func (n *BSNode) fixLowPeers(ctx context.Context) {
 		log.Debugf("%s: has sufficient neighbors", n)
 		return
 	}
-	introducer, err := n.IntroducerNode(ayame.PickRandomly(n.BootstrapAddrs))
 	clst, _ := n.RoutingTable.KClosestWithKey(n.Key())
-	if len(clst) < K && introducer.Id() != n.Id() {
-		log.Infof("%s: has insufficient neighbors, use introducer to refresh", n)
+	if len(clst) < K && len(n.BootstrapAddrs) > 0 {
+		introducer, err := n.IntroducerNode(ayame.PickRandomly(n.BootstrapAddrs))
 		if err != nil {
 			log.Errorf("%s: failed to get introducer", n)
-			return
+		} else if introducer.Id() != n.Id() {
+			log.Infof("%s: has insufficient neighbors, use introducer to refresh", n)
+			clst = []KeyMV{introducer}
 		}
-		clst = []KeyMV{introducer}
+	}
+	if len(clst) == 0 {
+		clst = []KeyMV{n}
 	}
 	log.Debugf("%s: refresh start nodes: %s", n, ayame.SliceString(clst))
 	n.stats = &JoinStats{runningQueries: 0,

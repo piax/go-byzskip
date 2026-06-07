@@ -516,8 +516,8 @@ func (rts *NeighborList) pickupKNodesMV(target *ayame.MembershipVector, src ayam
 		}
 	}
 
-	if len(matchRing) < K {
-		// not reached here?
+	if len(matchRing) < K || K == 1 {
+		// align with PickupKNodes: K==1 or too few MV matches cannot form a sliding window
 		log.Debugf("%s, key=%s, level=%d, src=%s, target=%s equals or less than k:\n%s", rts.owner.MV(), rts.owner.Key(), rts.level, src, target, MVString(matchRing))
 		lst = kMVClosest(rts.owner.Key(), nodes, target)
 		return lst, true

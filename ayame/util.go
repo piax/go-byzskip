@@ -140,6 +140,10 @@ func SliceString[T fmt.Stringer](args []T) string {
 }
 
 func PickRandomly[T any](arg []T) T {
+	if len(arg) == 0 {
+		var zero T
+		return zero
+	}
 	i := rand.Intn(len(arg))
 	return arg[i]
 }
